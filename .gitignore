@@ -156,6 +156,18 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+tmp/
+outputs/*.html
+outputs/figures/*
+outputs/animations/*
+outputs/runs/*
+data/raw/*
+data/processed/*
+!outputs/figures/.gitkeep
+!outputs/animations/.gitkeep
+!outputs/runs/.gitkeep
+!data/raw/.gitkeep
+!data/processed/.gitkeep
 
 # Spyder project settings
 .spyderproject

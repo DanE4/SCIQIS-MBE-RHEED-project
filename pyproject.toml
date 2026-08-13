@@ -1,0 +1,35 @@
+[project]
+name = "mbe-rheed"
+version = "0.1.0"
+description = "Minimal kinetic Monte Carlo model of epitaxial growth and a morphology-based RHEED proxy"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "marimo>=0.17",
+    "matplotlib>=3.9",
+    "numpy>=2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mbe_rheed_sim"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint.per-file-ignores]
+"notebooks/*.py" = ["B018", "PLR1711"]
