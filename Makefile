@@ -1,4 +1,4 @@
-.PHONY: setup notebook test check reproduce reproduce-figure3 figure3-parameters validate-acceleration validate-science validate-sweep convergence convergence-figure3 convergence-figure3-64 benchmark-sizes sweep export
+.PHONY: setup notebook test check reproduce publication reproduce-figure3 digitize-figure3 figure3-parameters validate-acceleration validate-science validate-sweep convergence convergence-figure3 convergence-figure3-64 benchmark-sizes sweep export
 
 NOTEBOOK := notebooks/mbe_rheed.py
 
@@ -24,6 +24,11 @@ figure3-parameters:
 
 reproduce-figure3:
 	uv run python scripts/reproduce_figure3.py
+
+publication: reproduce-figure3
+
+digitize-figure3:
+	uv run python scripts/extract_figure3_reference.py
 
 validate-acceleration:
 	uv run python scripts/validate_acceleration.py

@@ -13,6 +13,7 @@ def _():
     import matplotlib.pyplot as plt
     import numpy as np
     import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
 
     from mbe_rheed_sim import SimulationConfig, run
     from mbe_rheed_sim.paper import (
@@ -29,6 +30,7 @@ def _():
         figure3_parameters,
         go,
         json,
+        make_subplots,
         mo,
         np,
         plt,
@@ -694,98 +696,174 @@ def _(Path, json):
 
 
 @app.cell
-def _(figure3_data, go, mo, np):
-    _colors = [
-        ("#1f77b4", "rgba(31,119,180,0.16)"),
-        ("#ff7f0e", "rgba(255,127,14,0.16)"),
-        ("#2ca02c", "rgba(44,160,44,0.16)"),
-    ]
-    figure3_figure = go.Figure()
-    _metric_lines = []
+def _(figure3_data, go, make_subplots, mo, np):
+    figure3_figure = make_subplots(
+        rows=3,
+        cols=2,
+        shared_xaxes=True,
+        column_titles=("Figure-derived experimental RHEED", "Morphology-derived raw proxy"),
+        horizontal_spacing=0.10,
+        vertical_spacing=0.08,
+    )
+    _metric_rows = []
 
     def _format_metric(value, digits=3, signed=False):
         if value is None:
             return "n/a"
         return f"{value:+.{digits}f}" if signed else f"{value:.{digits}f}"
 
-    for _trace, (_line_color, _fill_color) in zip(figure3_data["traces"], _colors, strict=True):
+    for _row, (_trace, _comparison) in enumerate(
+        zip(figure3_data["traces"], figure3_data["comparisons"], strict=True), start=1
+    ):
         _time = np.asarray(_trace["time_s"])
         _mean = np.asarray(_trace["rheed_proxy_mean"])
         _std = np.asarray(_trace["rheed_proxy_std"])
         _ratio = _trace["nominal_ga_n_ratio"]
-        _metrics = _trace["oscillation_metrics"]
-        _metric_lines.append(
-            f"- **Ga/N = {_ratio:.2f}:** {int(_metrics['peak_count'])} peaks; "
-            f"period {_format_metric(_metrics['period_ml'])} ML "
-            f"(deviation {_format_metric(_metrics['period_deviation_ml'])} ML); "
-            f"detrended amplitude {_format_metric(_metrics['detrended_amplitude'])}; "
-            f"peak-to-trough {_format_metric(_metrics['peak_to_trough_amplitude'])}; "
-            f"near-1-ML spectral fraction "
-            f"{_format_metric(_metrics['spectral_power_fraction'])}; peak/trough phase "
-            f"{_format_metric(_metrics['peak_phase_ml'], 2)}/"
-            f"{_format_metric(_metrics['trough_phase_ml'], 2)} ML; damping rate "
-            f"{_format_metric(_metrics['damping_rate_per_ml'], signed=True)} per ML."
-        )
+        _reference = _comparison["reference"]
+        _simulation = _comparison["simulation"]
         figure3_figure.add_trace(
             go.Scatter(
-                x=_time,
-                y=np.clip(_mean - _std, 0, 1),
+                x=_trace["reference_time_s"],
+                y=_trace["reference_rheed_panel_coordinate"],
                 mode="lines",
-                line={"width": 0},
-                hoverinfo="skip",
-                showlegend=False,
-            )
+                line={"color": "#d62728", "width": 2},
+                name="figure-derived RHEED" if _row == 1 else None,
+                showlegend=_row == 1,
+                hovertemplate="time=%{x:.1f} s<br>figure coordinate=%{y:.3f}<extra></extra>",
+            ),
+            row=_row,
+            col=1,
         )
-        figure3_figure.add_trace(
-            go.Scatter(
-                x=_time,
-                y=np.clip(_mean + _std, 0, 1),
-                mode="lines",
-                line={"width": 0},
-                fill="tonexty",
-                fillcolor=_fill_color,
-                hoverinfo="skip",
-                showlegend=False,
+        for _values, _fill in (
+            (np.clip(_mean - _std, 0, 1), None),
+            (np.clip(_mean + _std, 0, 1), "tonexty"),
+        ):
+            figure3_figure.add_trace(
+                go.Scatter(
+                    x=_time,
+                    y=_values,
+                    mode="lines",
+                    line={"width": 0},
+                    fill=_fill,
+                    fillcolor="rgba(31,119,180,0.18)",
+                    hoverinfo="skip",
+                    showlegend=False,
+                ),
+                row=_row,
+                col=2,
             )
-        )
         figure3_figure.add_trace(
             go.Scatter(
                 x=_time,
                 y=_mean,
                 mode="lines",
-                line={"color": _line_color, "width": 2},
-                name=f"Ga/N = {_ratio:.2f} mean +/- 1 SD",
-                hovertemplate="time=%{x:.1f} s<br>proxy=%{y:.3f}<extra></extra>",
-            )
+                line={"color": "#1f77b4", "width": 2},
+                name="proxy mean +/- 1 SD" if _row == 1 else None,
+                showlegend=_row == 1,
+                hovertemplate="time=%{x:.1f} s<br>raw 1-Sd=%{y:.3f}<extra></extra>",
+            ),
+            row=_row,
+            col=2,
         )
+        figure3_figure.update_yaxes(
+            title_text=f"Ga/N={_ratio:.2f}<br>panel coordinate", range=[0, 1], row=_row, col=1
+        )
+        figure3_figure.update_yaxes(title_text="raw 1-Sd", range=[0, 1], row=_row, col=2)
+        _metric_rows.append(
+            f"| {_ratio:.2f} | {_format_metric(_reference['period_ml'])} / "
+            f"{_format_metric(_simulation['period_ml'])} | "
+            f"{_format_metric(_comparison['absolute_peak_phase_difference_ml'])} | "
+            f"{_format_metric(_reference['damping_rate_per_ml'], signed=True)} / "
+            f"{_format_metric(_simulation['damping_rate_per_ml'], signed=True)} | "
+            f"{_format_metric(_reference['relative_detrended_amplitude'])} / "
+            f"{_format_metric(_simulation['relative_detrended_amplitude'])} |"
+        )
+    figure3_figure.update_xaxes(title_text="time (s)", range=[0, 40], row=3, col=1)
+    figure3_figure.update_xaxes(title_text="time (s)", range=[0, 40], row=3, col=2)
     figure3_figure.update_layout(
-        height=470,
-        margin={"l": 60, "r": 20, "t": 65, "b": 105},
-        title="Figure 3 target: simulated step-density proxy",
-        xaxis_title="time (s)",
-        yaxis_title="normalized proxy",
-        yaxis_range=[0, 1.03],
-        hovermode="x unified",
-        legend={"orientation": "h", "x": 0, "y": -0.22},
+        height=800,
+        margin={"l": 80, "r": 20, "t": 95, "b": 80},
+        title="Figure 3 comparison: separate scales, shared time domain",
+        legend={"orientation": "h", "x": 0, "y": -0.08},
     )
+
+    _morphology = figure3_data["morphology_sequence"]
+    _frames = _morphology["frames"]
+    morphology_figure = make_subplots(
+        rows=1,
+        cols=len(_frames),
+        subplot_titles=[
+            f"target {frame['target_predicted_coverage_ml']:.1f} ML<br>"
+            f"actual {frame['predicted_coverage_ml']:.2f} ML"
+            for frame in _frames
+        ],
+        horizontal_spacing=0.03,
+    )
+    _maximum_height = max(np.max(frame["height_ml"]) for frame in _frames)
+    for _column, _frame_data in enumerate(_frames, start=1):
+        _heights = np.asarray(_frame_data["height_ml"])
+        _y, _x = np.indices(_heights.shape)
+        morphology_figure.add_trace(
+            go.Scatter(
+                x=(_x + 0.5 * _y).ravel(),
+                y=(np.sqrt(3.0) / 2.0 * _y).ravel(),
+                mode="markers",
+                marker={
+                    "symbol": "hexagon",
+                    "size": 16,
+                    "color": _heights.ravel(),
+                    "coloraxis": "coloraxis",
+                    "line": {"color": "white", "width": 0.5},
+                },
+                customdata=_heights.ravel(),
+                hovertemplate="height=%{customdata} ML<extra></extra>",
+                showlegend=False,
+            ),
+            row=1,
+            col=_column,
+        )
+        morphology_figure.update_xaxes(visible=False, row=1, col=_column)
+        morphology_figure.update_yaxes(visible=False, row=1, col=_column)
+    morphology_figure.update_layout(
+        height=320,
+        margin={"l": 10, "r": 50, "t": 90, "b": 20},
+        title="Figure 4-inspired layer-cycle morphology - no strain or SK claim",
+        coloraxis={
+            "colorscale": "Viridis",
+            "cmin": 0,
+            "cmax": max(1, _maximum_height),
+            "colorbar": {"title": "height (ML)"},
+        },
+    )
+    _provenance = figure3_data["provenance"]
     mo.vstack(
         [
-            mo.md("## 9. Paper Figure 3 smoke reproduction"),
+            mo.md("## 9. Publication comparison view"),
             figure3_figure,
             mo.md(
-                f"This committed result is a **{figure3_data['classification']}** on a "
-                f"{figure3_data['lattice_size']}x{figure3_data['lattice_size']} lattice "
-                f"with seeds `{figure3_data['seeds']}`. The repeated oscillations provide "
-                "the qualitative comparison; their amplitude is not paper-scale converged, "
-                "and no experimental curve has been silently digitized or normalized."
+                "The red curves are **figure-derived experimental RHEED panel coordinates**; "
+                "the blue curves are this model's raw morphology-derived `1-S_d` with a "
+                "three-seed standard-deviation band. They share time but intentionally use "
+                "separate panels and are not the same physical quantity."
             ),
             mo.md(
-                "### Layer-scale oscillation diagnostics\n\n"
-                + "\n".join(_metric_lines)
-                + "\n\nThe coverage axis for these diagnostics is paper-predicted growth rate "
-                "times time. Classification requires repeated detrended extrema with a "
-                "median period within 0.5–1.5 ML; it is a diagnostic, not proof of "
-                "experimental RHEED agreement."
+                "### Quantitative diagnostics\n\n"
+                "| Ga/N | period ref/sim (ML) | absolute peak-phase difference (ML) | "
+                "damping ref/sim (per ML) | relative amplitude ref/sim |\n"
+                "|---:|---:|---:|---:|---:|\n"
+                + "\n".join(_metric_rows)
+                + "\n\nRelative amplitude is referenced to Ga/N = 0.89 separately for each "
+                "signal. Diagnostics use paper-predicted coverage = growth rate x time after "
+                "linear detrending. Figure-derived normalization and 7x7 finite-size effects "
+                "prevent a quantitative agreement claim."
+            ),
+            morphology_figure,
+            mo.md(
+                f"The morphology sequence is **{_morphology['classification']}**. "
+                f"Artifacts were generated by `{_provenance['generated_by']}` at Git commit "
+                f"`{_provenance['code_version']['git_commit_at_generation']}` using lattice "
+                f"{_provenance['lattice_size']}x{_provenance['lattice_size']} and seeds "
+                f"`{_provenance['seeds']}`. Run `make publication` to regenerate them."
             ),
         ]
     )
@@ -799,17 +877,18 @@ def _(mo):
 
     The seed makes a run exactly reproducible, but one trajectory is not an uncertainty
     estimate. The scripted Stage 3 workflows now aggregate fixed seed ensembles: run
-    `make reproduce-figure3` for 40 s Figure 3 proxy bands, `make sweep` for the first
+    `make publication` for the Stage 5 comparison and morphology figures, `make sweep` for the first
     temperature/flux map, `make convergence` for the generic finite-size check, and
     `make convergence-figure3` for the practical paper-regime size check.
 
     The qualitative comparison target is the oscillation of surface step density shown
     alongside experimental RHEED traces in Figure 3 of Budagosky and Garcia-Cristobal.
     The separate Figure 3 workflow implements the paper's homoepitaxial flux-ratio
-    calibration and a validated isolated-adatom long-hop approximation. Quantitative
-    comparison is still deferred because paper-scale convergence and experimental-curve
-    normalization are unresolved. Strain is not needed for that homoepitaxial target and
-    remains outside the current model.
+    calibration and a validated isolated-adatom long-hop approximation. The publication view
+    reports figure-derived reference curves, period, phase, damping, relative amplitude, and
+    provenance. It remains a qualitative smoke comparison because the author normalization is
+    unavailable and simulation amplitude is not finite-size converged. Strain is not needed
+    for that homoepitaxial target and remains outside the current model.
 
     A defensible next RHEED stage is a kinematic layer-interference model. Full dynamical
     electron scattering remains outside the baseline.

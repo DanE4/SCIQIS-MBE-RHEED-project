@@ -9,8 +9,9 @@ experiment.
 
 ## Current state
 
-- **Active stage:** homoepitaxial validation and convergence before publication comparison.
-- **Estimated completion:** roughly 85% of the intended final project.
+- **Active stage:** Stage 5 smoke-scale publication workflow plus unresolved finite-size
+  convergence before final delivery.
+- **Estimated completion:** roughly 90% of the intended final project.
 - **Working baseline:** deterministic deposition/diffusion/desorption KMC and Marimo notebook.
 - **Main scientific gap:** finite-size convergence. Figure 3-like periodicity is reproduced at
   smoke scale, but proxy amplitude remains strongly lattice-size dependent and is not converged
@@ -19,9 +20,10 @@ experiment.
   stage. Current evidence does not isolate one obvious implementation bug. The remaining work
   is predominantly scale, convergence, oscillation analysis, quantitative comparison, and
   communication—not a missing fundamental KMC framework.
-- **Main presentation gap:** the teaching flow, explicit experiment-mode selector, controls,
-  playback, annotated synchronized layer-cycle view, hex-coordinate lattice view, and Figure 3
-  smoke panel work. The complete quantitative paper-comparison view remains.
+- **Presentation state:** the teaching flow, explicit experiment-mode selector, controls,
+  playback, annotated synchronized layer-cycle view, hex-coordinate lattice view, separate-scale
+  Figure 3 comparison, quantitative diagnostic table, and Figure 4-inspired morphology sequence
+  work. Replacing smoke-scale results with a converged ensemble remains.
 - **Current computational limit:** local event-catalogue updates reduce a paper-derived 64x64,
   4 s run from 131 s to about 38 s. An updateable rate tree reduces the 0.1 s envelope from
   10.6 to 6.1 s at 128x128 and from 105.8 to 24.8 s at 256x256 while preserving the existing
@@ -84,8 +86,8 @@ lattice, duration, and seed.
 Do not begin Stage 7 while these items remain unresolved:
 
 1. Reduce the remaining local-rate refresh cost before attempting a 128x128, 4 s ensemble.
-2. Finish the publication Figure 3 comparison.
-3. Finalize ensemble/statistical reporting at the accepted lattice size.
+2. Finalize ensemble/statistical reporting at the accepted lattice size.
+3. Replace the Stage 5 smoke traces without changing its comparison/provenance protocol.
 4. Only then reconsider Three.js.
 5. Only after homoepitaxial validation consider strain-driven GaN/AlN physics.
 
@@ -155,16 +157,20 @@ tolerance for the principal observable and morphology statistics, with ensemble 
 normalization, and provenance are compared without conflating physical quantities.
 
 **Current evidence:** all three paper parameter sets produce committed three-seed 7x7 proxy
-bands; raw experimental values and the paper's arbitrary-unit normalization are unavailable.
+bands. The CC BY PDF supplies vector paths for a figure-derived experimental visual reference;
+raw experimental values and the paper's arbitrary-unit normalization remain unavailable.
 
-**Implementation:** extend notebook Section 09 and the publication artifact workflow with the
-requirements in Stage 5 and `docs/VALIDATION.md`.
+**Implementation:** notebook Section 09 and `make publication` now provide separate reference
+and simulation panels, uncertainty bands, period/phase/damping/relative-amplitude diagnostics,
+a Figure 4-inspired no-strain morphology sequence, and provenance-rich JSON/CSV/NPZ artifacts.
 
 **Validation:** every Ga/N condition reports phase, period, damping, and relative amplitude;
 all curves have provenance and unambiguous labels; reference data use a documented legal and
-technical acquisition/normalization method.
+technical acquisition/normalization method. The comparison is still qualitative because the
+7x7 proxy amplitude is not finite-size converged.
 
-**Dependencies:** oscillation metrics, convergence, and the reference-curve protocol.
+**Dependencies:** the workflow and reference protocol are complete; accepted-size convergence
+remains the sole scientific gate.
 
 ## Roadmap overview
 
@@ -330,7 +336,7 @@ Matplotlib for static publication outputs. Do not begin Three.js work in this st
   control panel rather than a raw dictionary.
 - [x] **08 Parameter sweep.** Show the Stage 3 regime map and selected run.
 - [x] **09 Paper reproduction smoke view.** Present the committed Figure 3 simulation ensemble.
-- [ ] Upgrade Section 09 to the quantitative paper-comparison requirements in Stage 5.
+- [x] Upgrade Section 09 to the quantitative paper-comparison requirements in Stage 5.
 - [x] **10 Model limits.** State omitted physics and valid interpretation.
 
 #### 4B - Interactive morphology
@@ -372,26 +378,27 @@ not a sequence of unrelated controls and plots.
 
 ### Stage 5 - Publication figures and paper-comparison view
 
-- [ ] Keep Matplotlib for deterministic static figures and report-ready exports.
-- [ ] Build a Figure 3-style panel for every reported Ga/N condition with simulation mean,
+- [x] Keep Matplotlib for deterministic static figures and report-ready exports.
+- [x] Build a Figure 3-style panel for every reported Ga/N condition with simulation mean,
   ensemble uncertainty, and the experimental/reference curve when legally and technically
   available.
-- [ ] Document normalization and use identical or clearly related time/coverage domains.
-- [ ] Compare phase, period, damping, and relative amplitude explicitly.
-- [ ] Preserve configuration provenance for every curve and artifact.
-- [ ] Clearly distinguish experimental RHEED intensity, morphology-derived `1-S_d`, and every
+- [x] Document normalization and use identical or clearly related time/coverage domains.
+- [x] Compare phase, period, damping, and relative amplitude explicitly.
+- [x] Preserve configuration provenance for every curve and artifact.
+- [x] Clearly distinguish experimental RHEED intensity, morphology-derived `1-S_d`, and every
   normalized/detrended signal; never imply that they are the same physical quantity.
-- [ ] Build a Figure 4-inspired morphology sequence at selected coverages, while avoiding any
+- [x] Build a Figure 4-inspired morphology sequence at selected coverages, while avoiding any
   claim of the strain-driven transition until strain exists.
-- [ ] Include ensemble bands, units, parameter provenance, and model-limit captions.
+- [x] Include ensemble bands, units, parameter provenance, and model-limit captions.
 - [ ] Extend the paper-derived ensemble to 64x64 and the full 40 s window after further
   performance work or access to suitable compute.
 - [x] Benchmark 128x128 and the paper-reference 256x256; the optimized 0.1 s runtime envelope is
   documented, but no smaller size is accepted because convergence is not demonstrated.
-- [ ] Regenerate all main figures through `make reproduce` or a documented publication command.
+- [x] Regenerate all main figures through the documented `make publication` command.
 
 **Exit criteria:** every final figure is traceable to a configuration, seed set, code version,
-and generated data artifact.
+and generated data artifact. **Met for the smoke-scale publication artifacts; Stage 5 remains
+open only because the full-window accepted-size ensemble is not computationally established.**
 
 ### Stage 6 - Optional Three.js/AnyWidget `GrowthViewer`
 
@@ -438,9 +445,9 @@ Figure 3 is homoepitaxial GaN and does not require this physics.
 - [x] Run the full test, lint, strict Marimo, execution, export, and reproduction suite.
 - [x] Verify deterministic baselines and current sweep/convergence artifact provenance.
 - [ ] Review all scientific claims against implemented physics and cited sources.
-- [ ] Confirm all notebook plots distinguish proxy, kinematic model, and experiment.
+- [x] Confirm all notebook plots distinguish proxy, kinematic model, and experiment.
 - [ ] Recheck desktop/narrow interaction and exported HTML.
-- [ ] Update README, validation record, decisions, known limitations, and final status.
+- [x] Update README, validation record, decisions, known limitations, and final status.
 
 **Exit criteria:** a new contributor can reproduce the principal scientific result and launch
 the interactive notebook using only the documented commands.
@@ -448,7 +455,7 @@ the interactive notebook using only the documented commands.
 ## Current validation record
 
 - [x] `uv sync --locked`
-- [x] `make test` - 19 tests pass
+- [x] `make test` - 20 tests pass
 - [x] `make check` - Ruff, strict Marimo check, and notebook execution pass
 - [x] `make reproduce` - deterministic fingerprint matches
 - [x] `make export` - HTML export succeeds
@@ -459,6 +466,8 @@ the interactive notebook using only the documented commands.
 - [x] `make figure3-parameters` - Appendix A and Equation 8 values match hand-calculated checks
 - [x] `make validate-acceleration` - 100-seed exact/accelerated observable comparison passes
 - [x] `make reproduce-figure3` - three-seed 40 s bands for all three paper ratios generated
+- [x] `make publication` - separate-scale Figure 3 comparison, diagnostics, morphology sequence,
+  and provenance-rich JSON/CSV/NPZ artifacts generated
 - [x] `make sweep` - 16x16, 3x3, three-seed amplitude map generated
 - [x] `make validate-science` - five-seed smoothing/mounding ordering passes
 - [x] `make validate-sweep` - 24x24 low/high-flux direction passes at all three temperatures
@@ -487,6 +496,8 @@ repeatability, not scientific agreement.
 - A fixed seed gives repeatability; uncertainty claims require seed ensembles.
 - The generic reproducible baseline is too rough and does not show the target oscillation.
 - The 7x7 Figure 3 amplitude is a finite-size smoke result, not a publication observable.
+- The red Stage 5 reference is a CC BY figure-derived panel coordinate, not raw experimental
+  detector data; its source, extraction, axis mapping, and limitations are recorded.
 
 ## Tooling decisions
 
@@ -508,8 +519,9 @@ Marimo skill repository; `marimo-pair` was installed and used as the fallback.
   successive-size difference plus uncertainty to fit within a 10% relative margin.
 - [ ] Decide the minimum seed count/statistical interval for publication reporting after
   inspecting variance at larger sizes.
-- [ ] Resolve the legal/technical source and normalization protocol for the Figure 3
-  experimental curves.
+- [x] Resolve the legal/technical source and normalization protocol for the Figure 3
+  experimental curves: vector extraction from the tracked CC BY PDF with plotted-axis mapping
+  and an explicit figure-derived-data label.
 - [x] Keep Plotly for the Stage 4 height/hex-cell explanation; do not approve Three.js without
   a concrete remaining communication or performance requirement.
 
