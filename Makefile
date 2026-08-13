@@ -1,4 +1,4 @@
-.PHONY: setup notebook test check reproduce reproduce-figure3 figure3-parameters validate-acceleration validate-science convergence sweep export
+.PHONY: setup notebook test check reproduce reproduce-figure3 figure3-parameters validate-acceleration validate-science validate-sweep convergence convergence-figure3 sweep export
 
 NOTEBOOK := notebooks/mbe_rheed.py
 
@@ -31,8 +31,14 @@ validate-acceleration:
 validate-science:
 	uv run python scripts/validate_scientific_trends.py
 
+validate-sweep:
+	uv run python scripts/validate_sweep_lattice.py
+
 convergence:
 	uv run python scripts/check_lattice_convergence.py
+
+convergence-figure3:
+	uv run python scripts/check_figure3_convergence.py
 
 sweep:
 	uv run python scripts/run_parameter_sweep.py

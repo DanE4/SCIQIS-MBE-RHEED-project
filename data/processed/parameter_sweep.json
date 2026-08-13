@@ -1,0 +1,68 @@
+{
+  "base_config": {
+    "lattice_size": 16,
+    "target_coverage_ml": 2.0,
+    "target_time_s": null,
+    "temperature_k": 800.0,
+    "deposition_flux_ml_s": 0.5,
+    "attempt_frequency_hz": 1000.0,
+    "diffusion_barrier_ev": 0.15,
+    "lateral_bond_energy_ev": 0.05,
+    "step_barrier_ev": 0.05,
+    "desorption_barrier_ev": 0.65,
+    "max_isolated_hop_distance": 3,
+    "sample_every_ml": 0.05,
+    "seed": 0,
+    "max_events": 2000000
+  },
+  "temperatures_k": [
+    700.0,
+    850.0,
+    1000.0
+  ],
+  "fluxes_ml_s": [
+    0.25,
+    0.5,
+    0.75
+  ],
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "amplitude_definition": "half of the 95th-minus-5th percentile proxy range",
+  "mean_amplitude": [
+    [
+      0.25749866452991454,
+      0.26108640491452995,
+      0.272220219017094
+    ],
+    [
+      0.26208547008547006,
+      0.27142160790598296,
+      0.2729059829059829
+    ],
+    [
+      0.2538508279914529,
+      0.2784642094017094,
+      0.2785977564102564
+    ]
+  ],
+  "std_amplitude": [
+    [
+      0.0031021502643362787,
+      0.005453070317502909,
+      0.0008034431549560206
+    ],
+    [
+      0.009793215286967995,
+      0.007100984100164553,
+      0.002850918830373875
+    ],
+    [
+      0.013275818414078927,
+      0.005201056186823973,
+      0.009933159748930047
+    ]
+  ]
+}

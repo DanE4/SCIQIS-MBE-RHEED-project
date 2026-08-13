@@ -9,24 +9,25 @@ experiment.
 
 ## Current state
 
-- **Active stage:** Stage 3 - ensembles and parameter studies.
-- **Estimated completion:** roughly 40% of the intended final project.
+- **Active stage:** Stage 4 - polished Marimo virtual experiment.
+- **Estimated completion:** roughly 65% of the intended final project.
 - **Working baseline:** deterministic deposition/diffusion/desorption KMC and Marimo notebook.
-- **Main scientific gap:** Figure 3 behavior is reproduced qualitatively on a 7x7 smoke lattice,
-  but paper-scale convergence and experimental-curve normalization remain unresolved.
+- **Main scientific gap:** Figure 3 periodicity is reproduced on a 7x7 smoke lattice, but the
+  first paper-regime size study shows that its proxy amplitude is strongly finite-size affected;
+  paper-scale convergence and experimental-curve normalization remain unresolved.
 - **Main presentation gap:** plots are functional Matplotlib views, not yet the planned
   synchronized Plotly/Marimo experience.
-- **Current computational limit:** 8x8 is demonstrably finite-size affected; 16x16 and 24x24
-  agree for proxy amplitude within the initial three-seed uncertainty, but a 64x64 Figure 3
-  ensemble is not yet runtime-tested or converged.
+- **Current computational limit:** local event-catalogue updates reduce a paper-derived 64x64,
+  4 s run from 131 s to 39 s, but the practical three-seed check reaches 32x32 and is not
+  converged in proxy amplitude. Full 40 s, 64x64 publication convergence remains Stage 5 work.
 
 ## Roadmap overview
 
 - [x] Stage 0 - Reproducible project foundation
 - [x] Stage 1 - Correct generic KMC event catalogue
 - [x] Stage 2 - Reproduce Figure 3 homoepitaxial RHEED behavior
-- [ ] **Stage 3 - Ensembles and parameter studies (current)**
-- [ ] Stage 4 - Polished Marimo + Plotly virtual experiment
+- [x] Stage 3 - Ensembles and parameter studies
+- [ ] **Stage 4 - Polished Marimo + Plotly virtual experiment (current)**
 - [ ] Stage 5 - Publication figures and paper-comparison view
 - [ ] Stage 6 - Optional Three.js/AnyWidget `GrowthViewer`
 - [ ] Stage 7 - Optional strain-driven GaN/AlN extension
@@ -126,23 +127,28 @@ smoke scale; publication convergence remains Stage 3 work.**
 #### 3B - Uncertainty and convergence
 
 - [x] Add reusable interpolation of seeded RHEED-proxy ensembles.
-- [x] Run three independent seeds per point in the initial small sweep.
+- [x] Run three independent seeds per point in the 16x16 sweep.
 - [x] Plot mean +/- standard deviation for the initial sweep and lattice-size morphology metric.
 - [x] Plot three-seed mean +/- standard deviation traces for the Figure 3 smoke ensemble.
 - [x] Run an initial 8x8/16x16/24x24 lattice-size and three-seed sensitivity check.
-- [ ] Extend convergence to the paper-derived regime and the 64x64 publication candidate.
+- [x] Run a three-seed, 4 s paper-derived size check through 32x32.
+- [x] Benchmark the 64x64 paper-derived candidate over 0.5, 1, and 4 s.
+- [x] Establish the 64x64 runtime ceiling and defer its full 40 s ensemble to publication work.
 - [x] Repeat the diffusion-smoothing sanity check with the corrected event catalogue.
 
 #### 3C - Parameter study
 
 - [x] Choose `(T, F) -> RHEED oscillation amplitude` as the first sweep.
 - [x] Define amplitude as half the 95th-minus-5th percentile proxy range.
-- [x] Generate a reproducible 3x3 heatmap with configuration and seed provenance via
+- [x] Generate a reproducible 16x16, 3x3 heatmap with configuration and seed provenance via
   `make sweep`.
-- [ ] Let a selected heatmap point drive its morphology and RHEED views in Marimo.
+- [x] Let a selected heatmap point drive its morphology and RHEED views in Marimo.
+- [x] Check the high-flux versus low-flux direction at 24x24 via `make validate-sweep`.
+- [x] Record that the 700 K endpoint overlaps in uncertainty and that no monotonic temperature
+  trend is supported.
 
 **Exit criteria:** the reported trend survives multiple seeds and a documented lattice-size
-check; the sweep regenerates without manual notebook interaction.
+check; the sweep regenerates without manual notebook interaction. **Met.**
 
 ### Stage 4 - Polished Marimo + Plotly virtual experiment
 
@@ -159,7 +165,7 @@ Matplotlib for static publication outputs. Do not begin Three.js work in this st
 - [ ] **06 Surface <-> RHEED.** Synchronize morphology and proxy trace.
 - [ ] **07 Experiment.** Present temperature, flux, barriers, size, and seed as a designed
   control panel rather than a raw dictionary.
-- [ ] **08 Parameter sweep.** Show the Stage 3 regime map and selected run.
+- [x] **08 Parameter sweep.** Show the Stage 3 regime map and selected run.
 - [ ] **09 Paper reproduction.** Present Figure 3 simulation/comparison results.
 - [ ] **10 Model limits.** State omitted physics and valid interpretation.
 
@@ -200,6 +206,8 @@ not a sequence of unrelated controls and plots.
 - [ ] Build a Figure 4-inspired morphology sequence at selected coverages, while avoiding any
   claim of the strain-driven transition until strain exists.
 - [ ] Include ensemble bands, units, parameter provenance, and model-limit captions.
+- [ ] Extend the paper-derived ensemble to 64x64 and the full 40 s window after further
+  performance work or access to suitable compute.
 - [ ] Regenerate all main figures through `make reproduce` or a documented publication command.
 
 **Exit criteria:** every final figure is traceable to a configuration, seed set, code version,
@@ -255,7 +263,7 @@ the interactive notebook using only the documented commands.
 ## Current validation record
 
 - [x] `uv sync --locked`
-- [x] `make test` - 13 tests pass
+- [x] `make test` - 15 tests pass
 - [x] `make check` - Ruff, strict Marimo check, and notebook execution pass
 - [x] `make reproduce` - deterministic fingerprint matches
 - [x] `make export` - HTML export succeeds
@@ -266,9 +274,12 @@ the interactive notebook using only the documented commands.
 - [x] `make figure3-parameters` - Appendix A and Equation 8 values match hand-calculated checks
 - [x] `make validate-acceleration` - 100-seed exact/accelerated observable comparison passes
 - [x] `make reproduce-figure3` - three-seed 40 s bands for all three paper ratios generated
-- [x] `make sweep` - initial 3x3, three-seed amplitude map generated
+- [x] `make sweep` - 16x16, 3x3, three-seed amplitude map generated
 - [x] `make validate-science` - five-seed smoothing/mounding ordering passes
+- [x] `make validate-sweep` - 24x24 low/high-flux direction passes at all three temperatures
 - [x] `make convergence` - 8x8/16x16/24x24, three-seed sensitivity artifacts generated
+- [x] `make convergence-figure3` - 8x8/16x16/32x32, three-seed 4 s bands generated
+- [x] Browser-check sweep selection plus desktop/narrow rendering with zero console errors
 
 The canonical 8x8, 1 ML software baseline records 67 deposition, 1,416 diffusion, and 3
 desorption events. Its final-height SHA-256 is checked by `make reproduce`. This proves
@@ -286,7 +297,8 @@ repeatability, not scientific agreement.
   documented small-lattice ensemble observables; exact nearest-neighbor KMC remains available.
 - Figure 3 homoepitaxial GaN is the near-term target because it does not require `E_str`.
 - A fixed seed gives repeatability; uncertainty claims require seed ensembles.
-- The current reproducible baseline is too rough and does not yet show the target oscillation.
+- The generic reproducible baseline is too rough and does not show the target oscillation.
+- The 7x7 Figure 3 amplitude is a finite-size smoke result, not a publication observable.
 
 ## Tooling decisions
 
@@ -302,7 +314,8 @@ Marimo skill repository; `marimo-pair` was installed and used as the fallback.
 ## Open decisions
 
 - [x] Use `(T, F)` RHEED amplitude for the first ensemble map.
-- [ ] Set publication lattice size from measured convergence/runtime rather than appearance.
+- [x] Retain 64x64 only as a publication candidate: measured runtime and non-convergence rule
+  out promoting it to a validated preset yet.
 - [ ] Decide whether Plotly is sufficient before approving the custom Three.js stage.
 
 ## Important commands
@@ -313,12 +326,13 @@ make reproduce
 make notebook
 make test
 make check
+make validate-sweep
+make convergence-figure3
 make export
 ```
 
 ## Last meaningful update
 
-2026-08-13 - Completed the qualitative Figure 3 smoke stage with validated isolated-adatom
-acceleration and three-seed 40 s uncertainty bands; Stage 3 now includes vectorized event
-catalogues, runtime presets, a reproducible temperature/flux amplitude map, corrected-model
-trend validation, and an initial 8x8--24x24 finite-size check.
+2026-08-13 - Completed Stage 3. Local accelerated-catalogue invalidation preserves full-rebuild
+rates and reduces the 64x64, 4 s benchmark from 131 s to 39 s. The 16x16 sweep, 24x24 trend
+check, paper-regime convergence record, and selectable Marimo views are reproducible.

@@ -168,6 +168,7 @@ data/processed/*
 !outputs/runs/.gitkeep
 !data/raw/.gitkeep
 !data/processed/.gitkeep
+!data/processed/parameter_sweep.json
 
 # Spyder project settings
 .spyderproject

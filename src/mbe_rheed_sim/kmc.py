@@ -1,6 +1,7 @@
 import json
 import math
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 
 import numpy as np
@@ -12,14 +13,10 @@ from mbe_rheed_sim.lattice import (
     HeightField,
     deposit,
     empty_lattice,
-    hop_allowed,
-    lateral_bonds,
     long_hop,
-    open_terrace_hop_distance,
 )
-from mbe_rheed_sim.lattice import neighbors as lattice_neighbors
 from mbe_rheed_sim.observables import coverage_ml, island_density_per_site, rms_roughness_ml
-from mbe_rheed_sim.rates import BOLTZMANN_EV_PER_K, diffusion_rate
+from mbe_rheed_sim.rates import BOLTZMANN_EV_PER_K
 from mbe_rheed_sim.rheed import step_density_proxy
 
 
@@ -71,6 +68,23 @@ class _DiffusionCatalogue:
         return float(self.cumulative_rates[-1]) if self.cumulative_rates.size else 0.0
 
 
+@cache
+def _hex_ring_offsets(radius: int) -> tuple[tuple[int, int], ...]:
+    return tuple(
+        (dy, dx)
+        for dy in range(-radius, radius + 1)
+        for dx in range(-radius, radius + 1)
+        if max(abs(dx), abs(dy), abs(dx + dy)) == radius
+    )
+
+
+@cache
+def _hex_disk_offsets(radius: int) -> tuple[tuple[int, int], ...]:
+    return ((0, 0),) + tuple(
+        offset for ring in range(1, radius + 1) for offset in _hex_ring_offsets(ring)
+    )
+
+
 def _bond_counts(heights: HeightField) -> NDArray[np.int64]:
     counts = np.zeros_like(heights)
     for dy, dx in HEX_DIRECTIONS:
@@ -81,10 +95,11 @@ def _bond_counts(heights: HeightField) -> NDArray[np.int64]:
 
 
 def _exact_diffusion_catalogue(
-    heights: HeightField, config: SimulationConfig
+    heights: HeightField,
+    config: SimulationConfig,
+    bonds: NDArray[np.int64],
 ) -> _DiffusionCatalogue:
     size = config.lattice_size
-    bonds = _bond_counts(heights)
     rates = np.zeros((*heights.shape, 6), dtype=float)
     for index, (dy, dx) in enumerate(HEX_DIRECTIONS):
         target_heights = np.roll(heights, shift=(-dy, -dx), axis=(0, 1))
@@ -115,80 +130,154 @@ def _exact_diffusion_catalogue(
     )
 
 
-def _long_hop_diffusion_catalogue(
-    heights: HeightField, config: SimulationConfig
-) -> _DiffusionCatalogue:
-    events: list[tuple[float, tuple[int, int], tuple[int, int], int]] = []
-    cumulative_rate = 0.0
-    size = config.lattice_size
+def _long_hop_site_rates(
+    heights: HeightField,
+    config: SimulationConfig,
+    sources: NDArray[np.int64],
+) -> tuple[NDArray[np.float64], NDArray[np.int64], NDArray[np.float64]]:
+    if not len(sources):
+        return (
+            np.empty((0, 6), dtype=float),
+            np.array([], dtype=np.int64),
+            np.array([], dtype=float),
+        )
 
-    for y, x in zip(*np.nonzero(heights), strict=True):
-        source = int(y), int(x)
-        bonds = lateral_bonds(heights, *source)
-        distance = open_terrace_hop_distance(
-            heights, *source, config.max_isolated_hop_distance
+    size = config.lattice_size
+    source_y, source_x = sources.T
+    source_heights = heights[source_y, source_x]
+    bonds = np.zeros(len(sources), dtype=np.int64)
+    for dy, dx in HEX_DIRECTIONS:
+        bonds += heights[(source_y + dy) % size, (source_x + dx) % size] >= source_heights
+    bonds[source_heights == 0] = 0
+    distances = np.ones(len(sources), dtype=np.int64)
+    open_sites = (source_heights > 0) & (bonds == 0)
+    distances[open_sites] = config.max_isolated_hop_distance
+    for radius in range(1, config.max_isolated_hop_distance):
+        ring_open = np.ones_like(open_sites)
+        for dy, dx in _hex_ring_offsets(radius):
+            ring_open &= (
+                heights[(source_y + dy) % size, (source_x + dx) % size]
+                == source_heights - 1
+            )
+        blocked = open_sites & ~ring_open
+        distances[blocked] = max(1, radius - 1)
+        open_sites &= ring_open
+
+    rates = np.zeros((len(sources), 6), dtype=float)
+    for index, (dy, dx) in enumerate(HEX_DIRECTIONS):
+        target_heights = heights[(source_y + dy) % size, (source_x + dx) % size]
+        short_hop = distances == 1
+        allowed = (source_heights > 0) & (
+            ~short_hop | (np.abs(source_heights - (target_heights + 1)) <= 1)
         )
-        if distance > 1:
-            directional_rate = diffusion_rate(
-                config.attempt_frequency_hz,
-                config.diffusion_barrier_ev,
-                config.lateral_bond_energy_ev,
-                bonds,
-                config.temperature_k,
-            ) / (6.0 * distance**2)
-            for direction in HEX_DIRECTIONS:
-                cumulative_rate += directional_rate
-                events.append((cumulative_rate, source, direction, distance))
-            continue
-        for direction, target in zip(
-            HEX_DIRECTIONS, lattice_neighbors(*source, size), strict=True
-        ):
-            if hop_allowed(heights, source, target):
-                downward = heights[source] > heights[target] + 1
-                directional_rate = diffusion_rate(
-                    config.attempt_frequency_hz,
-                    config.diffusion_barrier_ev,
-                    config.lateral_bond_energy_ev,
-                    bonds,
-                    config.temperature_k,
-                    config.step_barrier_ev if downward else 0.0,
-                ) / 6.0
-                cumulative_rate += directional_rate
-                events.append((cumulative_rate, source, direction, 1))
-    if not events:
-        return _DiffusionCatalogue(
-            cumulative_rates=np.array([], dtype=float),
-            sources=np.empty((0, 2), dtype=np.int64),
-            directions=np.array([], dtype=np.int64),
-            distances=np.array([], dtype=np.int64),
+        downward = short_hop & (source_heights > target_heights + 1)
+        barriers = (
+            config.diffusion_barrier_ev
+            + bonds * config.lateral_bond_energy_ev
+            + downward * config.step_barrier_ev
         )
-    direction_indices = {direction: index for index, direction in enumerate(HEX_DIRECTIONS)}
+        rates[..., index] = np.where(
+            allowed,
+            config.attempt_frequency_hz
+            * np.exp(-barriers / (BOLTZMANN_EV_PER_K * config.temperature_k))
+            / (6.0 * distances**2),
+            0.0,
+        )
+    desorption_rates = np.where(
+        source_heights > 0,
+        config.attempt_frequency_hz
+        * np.exp(
+            -(config.desorption_barrier_ev + bonds * config.lateral_bond_energy_ev)
+            / (BOLTZMANN_EV_PER_K * config.temperature_k)
+        ),
+        0.0,
+    )
+    return rates, distances, desorption_rates
+
+
+def _long_hop_diffusion_catalogue(
+    heights: HeightField,
+    config: SimulationConfig,
+    sources: NDArray[np.int64],
+) -> _DiffusionCatalogue:
+    rates, distances, _ = _long_hop_site_rates(heights, config, sources)
+
+    selected = np.flatnonzero(rates)
+    source_indices, directions = np.divmod(selected, 6)
+    selected_rates = rates.ravel()[selected]
     return _DiffusionCatalogue(
-        cumulative_rates=np.array([event[0] for event in events]),
-        sources=np.array([event[1] for event in events], dtype=np.int64),
-        directions=np.array([direction_indices[event[2]] for event in events], dtype=np.int64),
-        distances=np.array([event[3] for event in events], dtype=np.int64),
+        cumulative_rates=np.cumsum(selected_rates),
+        sources=sources[source_indices],
+        directions=directions.astype(np.int64),
+        distances=np.repeat(distances.ravel(), 6)[selected],
     )
 
 
-def _diffusion_events(heights: HeightField, config: SimulationConfig) -> _DiffusionCatalogue:
+def _diffusion_events(
+    heights: HeightField,
+    config: SimulationConfig,
+    bond_counts: NDArray[np.int64] | None = None,
+    sources: NDArray[np.int64] | None = None,
+) -> _DiffusionCatalogue:
     if config.max_isolated_hop_distance == 1:
-        return _exact_diffusion_catalogue(heights, config)
-    return _long_hop_diffusion_catalogue(heights, config)
+        if bond_counts is None:
+            bond_counts = _bond_counts(heights)
+        return _exact_diffusion_catalogue(heights, config, bond_counts)
+    if sources is None:
+        sources = np.argwhere(heights > 0).astype(np.int64)
+    return _long_hop_diffusion_catalogue(heights, config, sources)
 
 
 def _desorption_events(
-    heights: HeightField, config: SimulationConfig
+    heights: HeightField,
+    config: SimulationConfig,
+    bond_counts: NDArray[np.int64] | None = None,
+    sources: NDArray[np.int64] | None = None,
 ) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
-    sources = np.argwhere(heights > 0).astype(np.int64)
+    if sources is None:
+        sources = np.argwhere(heights > 0).astype(np.int64)
     if not len(sources):
         return np.array([], dtype=float), sources
-    bonds = _bond_counts(heights)[tuple(sources.T)]
+    if bond_counts is None:
+        bond_counts = _bond_counts(heights)
+    bonds = bond_counts[tuple(sources.T)]
     barriers = config.desorption_barrier_ev + bonds * config.lateral_bond_energy_ev
     rates = config.attempt_frequency_hz * np.exp(
         -barriers / (BOLTZMANN_EV_PER_K * config.temperature_k)
     )
     return np.cumsum(rates), sources
+
+
+class _LocalLongHopCatalogue:
+    """Locally update accelerated rates after a surface mutation."""
+
+    def __init__(self, heights: HeightField, config: SimulationConfig) -> None:
+        self.heights = heights
+        self.config = config
+        self.diffusion_rates = np.zeros((*heights.shape, 6), dtype=float)
+        self.distances = np.ones_like(heights)
+        self.desorption_rates = np.zeros_like(heights, dtype=float)
+        coordinates = np.indices(heights.shape).reshape(2, -1).T
+        self._refresh_sources(coordinates)
+
+    def _refresh_sources(self, sources: NDArray[np.int64]) -> None:
+        rates, distances, desorption_rates = _long_hop_site_rates(
+            self.heights, self.config, sources
+        )
+        y, x = sources.T
+        self.diffusion_rates[y, x] = rates
+        self.distances[y, x] = distances
+        self.desorption_rates[y, x] = desorption_rates
+
+    def refresh_near(self, changed_sites: tuple[tuple[int, int], ...]) -> None:
+        size = self.config.lattice_size
+        radius = max(1, self.config.max_isolated_hop_distance - 1)
+        affected = {
+            ((y + dy) % size, (x + dx) % size)
+            for y, x in changed_sites
+            for dy, dx in _hex_disk_offsets(radius)
+        }
+        self._refresh_sources(np.asarray(sorted(affected), dtype=np.int64))
 
 
 def run(config: SimulationConfig) -> SimulationResult:
@@ -225,15 +314,34 @@ def run(config: SimulationConfig) -> SimulationResult:
         rheed_history.append(step_density_proxy(heights))
         snapshots.append(heights.copy())
 
+    local_catalogue = (
+        _LocalLongHopCatalogue(heights, config)
+        if config.max_isolated_hop_distance > 1
+        else None
+    )
     record()
     for _ in range(config.max_events):
         if target_atoms is not None and deposited - desorbed >= target_atoms:
             break
 
-        diffusion_events = _diffusion_events(heights, config)
-        desorption_rates, desorption_sources = _desorption_events(heights, config)
-        total_diffusion_rate = diffusion_events.total_rate
-        total_desorption_rate = float(desorption_rates[-1]) if desorption_rates.size else 0.0
+        if local_catalogue is None:
+            bond_counts = _bond_counts(heights)
+            occupied_sources = np.argwhere(heights > 0).astype(np.int64)
+            diffusion_events = _diffusion_events(
+                heights, config, bond_counts, occupied_sources
+            )
+            desorption_rates, desorption_sources = _desorption_events(
+                heights, config, bond_counts, occupied_sources
+            )
+            total_diffusion_rate = diffusion_events.total_rate
+            total_desorption_rate = (
+                float(desorption_rates[-1]) if desorption_rates.size else 0.0
+            )
+        else:
+            diffusion_rates = np.cumsum(local_catalogue.diffusion_rates.ravel())
+            desorption_rates = np.cumsum(local_catalogue.desorption_rates.ravel())
+            total_diffusion_rate = float(diffusion_rates[-1])
+            total_desorption_rate = float(desorption_rates[-1])
         total_rate = deposition_rate + total_diffusion_rate + total_desorption_rate
         next_time = time - math.log(
             max(float(rng.random()), np.finfo(float).tiny)
@@ -248,25 +356,48 @@ def run(config: SimulationConfig) -> SimulationResult:
         if selected_rate < deposition_rate:
             y, x = rng.integers(0, config.lattice_size, size=2)
             deposit(heights, int(y), int(x))
+            changed_sites = ((int(y), int(x)),)
             deposited += 1
         elif selected_rate < deposition_rate + total_diffusion_rate:
             selected_rate -= deposition_rate
-            event_index = int(
-                np.searchsorted(diffusion_events.cumulative_rates, selected_rate, side="right")
+            if local_catalogue is None:
+                event_index = int(
+                    np.searchsorted(
+                        diffusion_events.cumulative_rates, selected_rate, side="right"
+                    )
+                )
+                source = tuple(diffusion_events.sources[event_index])
+                direction = HEX_DIRECTIONS[diffusion_events.directions[event_index]]
+                distance = int(diffusion_events.distances[event_index])
+            else:
+                event_index = int(np.searchsorted(diffusion_rates, selected_rate, side="right"))
+                site_index, direction_index = divmod(event_index, 6)
+                source = divmod(site_index, config.lattice_size)
+                direction = HEX_DIRECTIONS[direction_index]
+                distance = int(local_catalogue.distances[source])
+            target = (
+                (source[0] + distance * direction[0]) % config.lattice_size,
+                (source[1] + distance * direction[1]) % config.lattice_size,
             )
-            source = tuple(diffusion_events.sources[event_index])
-            direction = HEX_DIRECTIONS[diffusion_events.directions[event_index]]
-            distance = int(diffusion_events.distances[event_index])
             long_hop(heights, source, direction, distance)
+            changed_sites = source, target
             diffused += distance**2
             if distance > 1:
                 long_hops += 1
         else:
             selected_rate -= deposition_rate + total_diffusion_rate
             event_index = int(np.searchsorted(desorption_rates, selected_rate, side="right"))
-            source = tuple(desorption_sources[event_index])
+            source = (
+                tuple(desorption_sources[event_index])
+                if local_catalogue is None
+                else divmod(event_index, config.lattice_size)
+            )
             heights[source] -= 1
+            changed_sites = (source,)
             desorbed += 1
+
+        if local_catalogue is not None:
+            local_catalogue.refresh_near(changed_sites)
 
         if deposited - desorbed >= next_sample:
             record()

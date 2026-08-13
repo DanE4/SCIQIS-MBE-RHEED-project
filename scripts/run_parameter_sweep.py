@@ -16,11 +16,12 @@ from mbe_rheed_sim.analysis import oscillation_amplitude, rheed_proxy_ensemble
 ROOT = Path(__file__).resolve().parents[1]
 RUN_DIR = ROOT / "outputs" / "runs"
 FIGURE_DIR = ROOT / "outputs" / "figures"
+PROCESSED_DATA = ROOT / "data" / "processed" / "parameter_sweep.json"
 TEMPERATURES_K = (700.0, 850.0, 1_000.0)
 FLUXES_ML_S = (0.25, 0.5, 0.75)
 SEEDS = (0, 1, 2)
 BASE = SimulationConfig(
-    lattice_size=7,
+    lattice_size=16,
     target_coverage_ml=2.0,
     sample_every_ml=0.05,
     max_isolated_hop_distance=3,
@@ -51,7 +52,9 @@ def main() -> None:
     }
     RUN_DIR.mkdir(parents=True, exist_ok=True)
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
-    (RUN_DIR / "parameter_sweep.json").write_text(json.dumps(summary, indent=2) + "\n")
+    serialized = json.dumps(summary, indent=2) + "\n"
+    (RUN_DIR / "parameter_sweep.json").write_text(serialized)
+    PROCESSED_DATA.write_text(serialized)
 
     figure, axis = plt.subplots(figsize=(6.5, 4.5), constrained_layout=True)
     image = axis.imshow(mean_amplitude, origin="lower", cmap="magma", aspect="auto")

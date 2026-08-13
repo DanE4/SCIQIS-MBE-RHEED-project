@@ -6,13 +6,18 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    import json
+    from pathlib import Path
+
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
 
     from mbe_rheed_sim import SimulationConfig, run
 
-    return SimulationConfig, mo, np, plt, run
+    return Path, SimulationConfig, go, json, make_subplots, mo, np, plt, run
 
 
 @app.cell
@@ -155,29 +160,84 @@ def _(mo, simulation):
 
 
 @app.cell
-def _(plt, simulation, snapshot_slider):
+def _(go, make_subplots, simulation, snapshot_slider):
     _frame = snapshot_slider.value
     _heights = simulation.snapshots[_frame]
-    evolution_figure, _axes = plt.subplots(1, 2, figsize=(10, 3.8), constrained_layout=True)
-    _image = _axes[0].imshow(_heights, origin="lower", cmap="viridis", vmin=0)
-    _axes[0].set(
-        title=f"Surface at {simulation.coverage_ml[_frame]:.2f} ML",
-        xlabel="lattice x",
-        ylabel="lattice y",
+    _coverage = simulation.coverage_ml[_frame]
+    _proxy = simulation.rheed_proxy[_frame]
+    _zmax = max(1, int(simulation.snapshots.max()))
+    evolution_figure = make_subplots(
+        rows=1,
+        cols=2,
+        specs=[[{"type": "surface"}, {"type": "xy"}]],
+        column_widths=[0.56, 0.44],
+        horizontal_spacing=0.08,
     )
-    evolution_figure.colorbar(_image, ax=_axes[0], label="height (ML)")
-    _axes[1].plot(simulation.coverage_ml, simulation.rheed_proxy, color="tab:red")
-    _axes[1].scatter(
-        simulation.coverage_ml[_frame],
-        simulation.rheed_proxy[_frame],
-        color="black",
-        zorder=3,
+    evolution_figure.add_trace(
+        go.Surface(
+            z=_heights,
+            colorscale="Viridis",
+            cmin=0,
+            cmax=_zmax,
+            colorbar={"title": "height (ML)", "len": 0.7, "x": 0.49},
+            hovertemplate="x=%{x}<br>y=%{y}<br>height=%{z} ML<extra></extra>",
+            name="surface",
+        ),
+        row=1,
+        col=1,
     )
-    _axes[1].set(
-        xlabel="film coverage (ML)",
-        ylabel=r"$1 - S_d$ (dimensionless)",
-        title="Normalized step-density RHEED proxy",
-        ylim=(0, 1.03),
+    evolution_figure.add_trace(
+        go.Scatter(
+            x=simulation.coverage_ml,
+            y=simulation.rheed_proxy,
+            mode="lines",
+            line={"color": "#d62728", "width": 3},
+            name="normalized step-density RHEED proxy",
+        ),
+        row=1,
+        col=2,
+    )
+    evolution_figure.add_trace(
+        go.Scatter(
+            x=[_coverage, _coverage],
+            y=[0, 1.03],
+            mode="lines",
+            line={"color": "#111827", "dash": "dot"},
+            name="current frame",
+            hoverinfo="skip",
+        ),
+        row=1,
+        col=2,
+    )
+    evolution_figure.add_trace(
+        go.Scatter(
+            x=[_coverage],
+            y=[_proxy],
+            mode="markers",
+            marker={"color": "#111827", "size": 10},
+            name="current proxy",
+            hovertemplate="coverage=%{x:.2f} ML<br>proxy=%{y:.3f}<extra></extra>",
+        ),
+        row=1,
+        col=2,
+    )
+    evolution_figure.update_layout(
+        height=500,
+        margin={"l": 20, "r": 20, "t": 70, "b": 20},
+        title=f"Surface and RHEED proxy at {_coverage:.2f} ML",
+        legend={"orientation": "h", "y": -0.12},
+        scene={
+            "xaxis_title": "lattice x",
+            "yaxis_title": "lattice y",
+            "zaxis_title": "height (ML)",
+            "zaxis": {"range": [0, _zmax]},
+            "aspectmode": "data",
+            "camera": {"eye": {"x": 1.4, "y": 1.4, "z": 1.0}},
+        },
+    )
+    evolution_figure.update_xaxes(title_text="film coverage (ML)", row=1, col=2)
+    evolution_figure.update_yaxes(
+        title_text="normalized proxy", range=[0, 1.03], row=1, col=2
     )
     evolution_figure
     return
@@ -213,32 +273,120 @@ def _(plt, simulation):
 
 
 @app.cell
-def _(np, plt, simulation):
-    _size = simulation.config.lattice_size
-    _x, _y = np.meshgrid(np.arange(_size), np.arange(_size))
-    morphology_3d, _axis = plt.subplots(figsize=(7, 5), subplot_kw={"projection": "3d"})
-    _surface = _axis.plot_surface(
-        _x,
-        _y,
-        simulation.final_heights,
-        cmap="viridis",
-        edgecolor="none",
+def _(Path, json, mo):
+    sweep_data = json.loads(
+        (Path(__file__).resolve().parents[1] / "data/processed/parameter_sweep.json").read_text()
     )
-    _axis.set(xlabel="lattice x", ylabel="lattice y", zlabel="height (ML)", title="Final morphology")
-    morphology_3d.colorbar(_surface, ax=_axis, shrink=0.65, label="height (ML)")
-    morphology_3d
+    _temperatures = sweep_data["temperatures_k"]
+    _fluxes = sweep_data["fluxes_ml_s"]
+    _default = {"temperature_k": _temperatures[1], "flux_ml_s": _fluxes[1]}
+    get_sweep_selection, _set_sweep_selection = mo.state(_default)
+    sweep_form = mo.ui.dictionary(
+        {
+            "temperature_k": mo.ui.dropdown(
+                {f"{value:.0f} K": value for value in _temperatures},
+                value=f"{_default['temperature_k']:.0f} K",
+                label="Temperature",
+            ),
+            "flux_ml_s": mo.ui.dropdown(
+                {f"{value:.2f} ML/s": value for value in _fluxes},
+                value=f"{_default['flux_ml_s']:.2f} ML/s",
+                label="Deposition flux",
+            ),
+        }
+    ).form(
+        submit_button_label="Run selected point",
+        bordered=True,
+        on_change=lambda value: _set_sweep_selection(value or _default),
+    )
+    mo.vstack(
+        [
+            mo.md(
+                "## 5. Temperature/flux regime map\n"
+                "Select one point from the reproducible three-seed sweep. The linked run "
+                "uses seed 0 on the same 16x16 lattice."
+            ),
+            sweep_form,
+        ]
+    )
+    return get_sweep_selection, sweep_data
+
+
+@app.cell
+def _(SimulationConfig, get_sweep_selection, run):
+    sweep_selection = get_sweep_selection()
+    selected_sweep_result = run(
+        SimulationConfig(
+            lattice_size=16,
+            target_coverage_ml=2.0,
+            temperature_k=float(sweep_selection["temperature_k"]),
+            deposition_flux_ml_s=float(sweep_selection["flux_ml_s"]),
+            max_isolated_hop_distance=3,
+            sample_every_ml=0.05,
+            seed=0,
+        )
+    )
+    return selected_sweep_result, sweep_selection
+
+
+@app.cell
+def _(mo, np, plt, selected_sweep_result, sweep_data, sweep_selection):
+    _temperatures = np.asarray(sweep_data["temperatures_k"])
+    _fluxes = np.asarray(sweep_data["fluxes_ml_s"])
+    _amplitudes = np.asarray(sweep_data["mean_amplitude"])
+    _amplitude_stds = np.asarray(sweep_data["std_amplitude"])
+    _temperature_index = int(np.flatnonzero(_temperatures == sweep_selection["temperature_k"])[0])
+    _flux_index = int(np.flatnonzero(_fluxes == sweep_selection["flux_ml_s"])[0])
+    sweep_figure, _axes = plt.subplots(1, 3, figsize=(12, 3.5), constrained_layout=True)
+    _heatmap = _axes[0].imshow(_amplitudes, origin="lower", cmap="magma", aspect="auto")
+    _axes[0].scatter(_flux_index, _temperature_index, marker="s", s=120, facecolors="none", edgecolors="cyan", linewidths=2)
+    _axes[0].set(
+        title="Mean proxy amplitude",
+        xlabel="flux (ML/s)",
+        ylabel="temperature (K)",
+        xticks=range(len(_fluxes)),
+        xticklabels=_fluxes,
+        yticks=range(len(_temperatures)),
+        yticklabels=_temperatures,
+    )
+    sweep_figure.colorbar(_heatmap, ax=_axes[0], shrink=0.8)
+    _surface = _axes[1].imshow(selected_sweep_result.final_heights, origin="lower", cmap="viridis")
+    _axes[1].set(title="Selected final morphology", xlabel="lattice x", ylabel="lattice y")
+    sweep_figure.colorbar(_surface, ax=_axes[1], shrink=0.8, label="height (ML)")
+    _axes[2].plot(
+        selected_sweep_result.coverage_ml,
+        selected_sweep_result.rheed_proxy,
+        color="tab:red",
+    )
+    _axes[2].set(
+        title="Selected proxy trace",
+        xlabel="coverage (ML)",
+        ylabel=r"$1-S_d$",
+        ylim=(0, 1.03),
+    )
+    mo.vstack(
+        [
+            sweep_figure,
+            mo.md(
+                f"Selected ensemble amplitude: **{_amplitudes[_temperature_index, _flux_index]:.3f} "
+                f"+/- {_amplitude_stds[_temperature_index, _flux_index]:.3f}**; "
+                f"single-run final roughness: **{selected_sweep_result.roughness_ml[-1]:.3f} ML**."
+            ),
+        ]
+    )
     return
 
 
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 5. Repeatability, comparison, and next physics
+    ## 6. Repeatability, comparison, and next physics
 
     The seed makes a run exactly reproducible, but one trajectory is not an uncertainty
     estimate. The scripted Stage 3 workflows now aggregate fixed seed ensembles: run
     `make reproduce-figure3` for 40 s Figure 3 proxy bands, `make sweep` for the first
-    temperature/flux map, and `make convergence` for the initial finite-size check.
+    temperature/flux map, `make convergence` for the generic finite-size check, and
+    `make convergence-figure3` for the practical paper-regime size check.
 
     The qualitative comparison target is the oscillation of surface step density shown
     alongside experimental RHEED traces in Figure 3 of Budagosky and Garcia-Cristobal.
