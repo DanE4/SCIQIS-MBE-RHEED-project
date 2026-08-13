@@ -2,62 +2,308 @@
 
 ## Project goal
 
-Build a validated, interactive KMC model of epitaxial growth and progressively connect its
-surface morphology to RHEED intensity.
+Build a validated kinetic Monte Carlo model of molecular-beam epitaxy, connect simulated
+surface morphology to a carefully labelled step-density RHEED proxy, reproduce the paper's
+Figure 3 homoepitaxial behavior, and present the result as a polished interactive Marimo
+experiment.
 
-## Current phase
+## Current state
 
-Initial vertical slice complete and ready for review.
+- **Active stage:** Stage 3 - ensembles and parameter studies.
+- **Estimated completion:** roughly 40% of the intended final project.
+- **Working baseline:** deterministic deposition/diffusion/desorption KMC and Marimo notebook.
+- **Main scientific gap:** Figure 3 behavior is reproduced qualitatively on a 7x7 smoke lattice,
+  but paper-scale convergence and experimental-curve normalization remain unresolved.
+- **Main presentation gap:** plots are functional Matplotlib views, not yet the planned
+  synchronized Plotly/Marimo experience.
+- **Current computational limit:** 8x8 is demonstrably finite-size affected; 16x16 and 24x24
+  agree for proxy amplitude within the initial three-seed uncertainty, but a 64x64 Figure 3
+  ensemble is not yet runtime-tested or converged.
 
-## Working
+## Roadmap overview
 
-- Primary-paper model, equations, figures, and limitations reviewed in `docs/PAPER_NOTES.md`.
-- Additional RHEED/step-density/kinematic references recorded in `docs/REFERENCES.md`.
-- Project scope and parameter provenance defined in `docs/SCIENCE_MODEL.md`.
-- Official `marimo-pair` agent skill installed for live notebook inspection.
-- Seeded residence-time KMC implements deposition and thermally activated diffusion.
-- Coverage, roughness, island statistics, step density, snapshots, and serialization work.
-- The Marimo notebook provides 2D/3D morphology, growth plots, and a RHEED proxy.
-- Python 3.12.0, the uv environment, and all dependencies are locked for clean setup.
-- `make reproduce` regenerates a deterministic 8x8, 1 ML baseline and checks its fingerprint.
-- GitHub Actions tests, checks, executes/exports the notebook, and runs the baseline smoke test.
-- Tests, Ruff, strict Marimo check, script execution, HTML export, and visual checks pass.
+- [x] Stage 0 - Reproducible project foundation
+- [x] Stage 1 - Correct generic KMC event catalogue
+- [x] Stage 2 - Reproduce Figure 3 homoepitaxial RHEED behavior
+- [ ] **Stage 3 - Ensembles and parameter studies (current)**
+- [ ] Stage 4 - Polished Marimo + Plotly virtual experiment
+- [ ] Stage 5 - Publication figures and paper-comparison view
+- [ ] Stage 6 - Optional Three.js/AnyWidget `GrowthViewer`
+- [ ] Stage 7 - Optional strain-driven GaN/AlN extension
+- [ ] Stage 8 - Final validation and delivery
 
-## In progress
+## Detailed staged plan
 
-- None. Awaiting review of the initial milestone.
+### Stage 0 - Reproducible project foundation (complete)
 
-## Next
+- [x] Pin Python 3.12.0 with `.python-version`.
+- [x] Manage and lock dependencies with `uv`, `pyproject.toml`, and `uv.lock`.
+- [x] Provide `make setup`, `make notebook`, `make test`, `make check`, `make reproduce`, and
+  `make export`.
+- [x] Add deterministic baseline JSON, NPZ, and PNG generation.
+- [x] Add CI for locked sync, tests, Ruff, strict Marimo checking, notebook execution/export,
+  and baseline reproduction.
+- [x] Document setup, repository structure, commands, and troubleshooting.
 
-1. Validate qualitative layer-by-layer trends across controlled parameter sweeps.
-2. Add desorption and an Ehrlich-Schwoebel barrier only after baseline validation.
-3. Add a kinematic diffraction model before making quantitative RHEED claims.
-4. Consider strain and GaN/AlN calibration only as a separate advanced milestone.
+**Exit criteria:** a new contributor can run `uv sync`, `make reproduce`, and `make notebook`
+without local paths or undocumented dependencies. **Met.**
 
-## Scientific assumptions
+### Stage 1 - Correct generic KMC event catalogue (complete)
 
-- Baseline is a single-species, periodic, solid-on-solid lattice with no overhangs.
-- The hexagonal neighbor topology follows the primary paper; energies are demo parameters.
-- `1 - step density` is a morphology proxy, not a diffraction calculation.
+- [x] Implement seeded residence-time KMC on a periodic six-neighbor SOS lattice.
+- [x] Implement deposition, surface diffusion, nucleation/island formation, and observables.
+- [x] Allow single-step upward and downward nearest-neighbor hops; forbid multi-step jumps.
+- [x] Apply
+  `E_diff = E_diff^(0) + n E_b + m E_step`, with `m = 1` only for downward crossings.
+- [x] Add Arrhenius desorption and enforce
+  `film mass = deposited events - desorbed events`.
+- [x] Expose temperature, flux, diffusion, step, and desorption controls using explicitly
+  uncalibrated demonstration defaults.
+- [x] Define the normalized step-density RHEED proxy as `I_proxy = 1 - S_d`, where `S_d` is
+  the fraction of unique neighbor bonds with unequal endpoint heights.
+- [x] Keep the proxy labelled as morphology-based, not as electron diffraction.
 
-## Validation status
+**Exit criteria:** focused invariants, seeded reproducibility, strict notebook checking, export,
+and the canonical baseline all pass. **Met.**
 
-All seven tests pass. A five-seed check at 2 ML gave mean final roughness 1.3135 ML for
-deposition-only growth and 0.4056 ML with diffusion; diffusion was smoother for all five
-seeds. The notebook passes strict checking, executes, exports, and has no kernel/browser errors.
+### Stage 2 - Figure 3 homoepitaxial reproduction (complete at smoke scale)
 
-## Known limitations
+Goal: establish `KMC growth -> step density -> 1-S_d -> Figure 3 comparison` without the
+GaN/AlN strain model. Figure 3 is the main target because the homoepitaxial calculation omits
+`E_str`.
 
-No desorption, step-edge barrier, strain, multiple species, reconstruction, or electron
-scattering. The baseline is not quantitatively calibrated to GaN/AlN.
+#### 2A - Paper data and provenance
 
-The requested `marimo-notebook` and `implement-paper` skills were not available in the
-official Marimo skill repository; `marimo-pair` was installed and used as the fallback.
+- [x] Record Figure 3 temperature, fluxes, Ga/N ratios, time axis, normalization limits, and
+  initial conditions in `docs/PAPER_NOTES.md`.
+- [x] Determine which experimental curves can be digitized or compared qualitatively under
+  copyright and available-data constraints.
+- [x] Record every fitted parameter equation, unit, validity range, and paper source.
+- [x] Distinguish paper values, inferred values, demonstration values, and numerical controls.
 
-## Open questions
+#### 2B - GaN homoepitaxy parameterization
 
-- Which experimental system and RHEED geometry should anchor quantitative validation?
-- Should the next physics milestone prioritize desorption/step barriers or diffraction?
+- [x] Implement the paper's Appendix A effective-flux conversion.
+- [x] Implement the paper's Ga/N-ratio-dependent `E_diff^(0)`, `E_b`, `E_des^(0)`, and
+  `E_step` expressions in tested source code.
+- [x] Add named Figure 3 parameter sets separate from the fast demonstration preset.
+- [x] Add `make figure3-parameters` to reproduce the conversion and rate diagnostics.
+- [x] Verify rate magnitudes and competing deposition/diffusion/desorption timescales before
+  running large simulations.
+- [x] Document unavailable raw curves, arbitrary-unit normalization, seed, and initialization
+  details instead of silently choosing them.
+- [x] Implement conservative multiscale isolated-adatom acceleration with spatial/rate
+  rescaling and an exact-mode fallback.
+- [x] Validate accelerated ensemble means against exact KMC over 100 seeds with
+  `make validate-acceleration`.
+- [x] Connect the paper-derived parameters to an executable 40 s Figure 3 run preset.
+
+#### 2C - Scientific reproduction
+
+- [x] Reproduce simulated `1-S_d` traces for the reported Ga/N ratios with
+  `make reproduce-figure3`.
+- [x] Replace the rough generic regime for Figure 3 work with the paper-derived parameter sets;
+  retain the generic baseline only as a software fingerprint.
+- [x] Demonstrate the expected roughening near partial-layer coverage and smoothing near layer
+  completion.
+- [x] Compare phase, damping, and relative oscillation amplitude qualitatively with Figure 3:
+  periodicity is reproduced; damping and amplitude remain finite-size/normalization limited.
+- [x] Classify the result as a qualitative smoke reproduction, not quantitative agreement.
+
+**Exit criteria:** at least one documented homoepitaxial configuration shows defensible
+layer-by-layer oscillations, and the comparison can be rerun from one command. **Met at 7x7
+smoke scale; publication convergence remains Stage 3 work.**
+
+### Stage 3 - Ensembles and parameter studies
+
+#### 3A - Runtime presets
+
+- [x] Add and benchmark a 16x16 interactive preset (about 1.3 s for the current 2 ML demo).
+- [x] Add a 64x64 publication candidate preset.
+- [ ] Consider 128x128 only after measuring runtime and memory use.
+- [x] Keep CI and baseline simulations small and fast.
+
+#### 3B - Uncertainty and convergence
+
+- [x] Add reusable interpolation of seeded RHEED-proxy ensembles.
+- [x] Run three independent seeds per point in the initial small sweep.
+- [x] Plot mean +/- standard deviation for the initial sweep and lattice-size morphology metric.
+- [x] Plot three-seed mean +/- standard deviation traces for the Figure 3 smoke ensemble.
+- [x] Run an initial 8x8/16x16/24x24 lattice-size and three-seed sensitivity check.
+- [ ] Extend convergence to the paper-derived regime and the 64x64 publication candidate.
+- [x] Repeat the diffusion-smoothing sanity check with the corrected event catalogue.
+
+#### 3C - Parameter study
+
+- [x] Choose `(T, F) -> RHEED oscillation amplitude` as the first sweep.
+- [x] Define amplitude as half the 95th-minus-5th percentile proxy range.
+- [x] Generate a reproducible 3x3 heatmap with configuration and seed provenance via
+  `make sweep`.
+- [ ] Let a selected heatmap point drive its morphology and RHEED views in Marimo.
+
+**Exit criteria:** the reported trend survives multiple seeds and a documented lattice-size
+check; the sweep regenerates without manual notebook interaction.
+
+### Stage 4 - Polished Marimo + Plotly virtual experiment
+
+Use Marimo for reactive state/layout, Plotly for browser-interactive 3D and curves, and
+Matplotlib for static publication outputs. Do not begin Three.js work in this stage.
+
+#### 4A - Notebook narrative
+
+- [ ] **01 What is MBE?** Show Ga source -> beam -> substrate -> growing surface.
+- [ ] **02 What does an atom do?** Explain deposition, diffusion, attachment, and desorption.
+- [ ] **03 How does KMC work?** Show event rates, selected event, and residence-time advance.
+- [ ] **04 Grow a surface.** Add play/pause and coverage/time scrubbing.
+- [ ] **05 What does RHEED see?** Explain grazing incidence and the step-density relationship.
+- [ ] **06 Surface <-> RHEED.** Synchronize morphology and proxy trace.
+- [ ] **07 Experiment.** Present temperature, flux, barriers, size, and seed as a designed
+  control panel rather than a raw dictionary.
+- [ ] **08 Parameter sweep.** Show the Stage 3 regime map and selected run.
+- [ ] **09 Paper reproduction.** Present Figure 3 simulation/comparison results.
+- [ ] **10 Model limits.** State omitted physics and valid interpretation.
+
+#### 4B - Interactive morphology
+
+- [ ] Replace the small Matplotlib 3D notebook view with a Plotly 3D height surface.
+- [ ] Support rotation, zoom, hover height, stable color limits, and a readable camera default.
+- [ ] Add `Atoms | Height field | Step edges` display modes where they remain accurate and
+  performant.
+- [ ] Render the six-neighbor topology with hexagonal geometry where the lattice itself is
+  shown; do not imply the rectangular array rendering is the physical metric geometry.
+- [ ] Add morphology snapshots at 0.5 ML intervals.
+
+#### 4C - Synchronized morphology and RHEED
+
+- [ ] Use one coverage/frame control for both surface and RHEED views.
+- [ ] Add a vertical current-coverage marker to the full RHEED trace.
+- [ ] Label the curve **normalized step-density RHEED proxy**.
+- [ ] Show the flat-surface maximum versus partial-layer minimum mechanism visually.
+- [ ] Keep expensive simulations behind an explicit run action; frame scrubbing must reuse
+  stored snapshots.
+
+#### 4D - Visual and interaction validation
+
+- [ ] Verify first-load output, control changes, play/pause, scrubbing, and parameter selection.
+- [ ] Inspect desktop and narrow layouts.
+- [ ] Check browser console and notebook kernel for errors.
+- [ ] Confirm notebook execution and static HTML export remain automated.
+
+**Exit criteria:** the notebook reads as one numerical experiment and physics explanation,
+not a sequence of unrelated controls and plots.
+
+### Stage 5 - Publication figures and paper-comparison view
+
+- [ ] Keep Matplotlib for deterministic static figures and report-ready exports.
+- [ ] Build a Figure 3-style panel comparing experimental RHEED and simulated `1-S_d` for the
+  documented flux ratios.
+- [ ] Build a Figure 4-inspired morphology sequence at selected coverages, while avoiding any
+  claim of the strain-driven transition until strain exists.
+- [ ] Include ensemble bands, units, parameter provenance, and model-limit captions.
+- [ ] Regenerate all main figures through `make reproduce` or a documented publication command.
+
+**Exit criteria:** every final figure is traceable to a configuration, seed set, code version,
+and generated data artifact.
+
+### Stage 6 - Optional Three.js/AnyWidget `GrowthViewer`
+
+This stage has a go/no-go gate. Start it only if the Stage 4 Plotly view cannot communicate the
+atomic/hexagonal/event story well enough.
+
+- [ ] Document the specific Plotly limitation that justifies a custom widget.
+- [ ] Add `anywidget` and Three.js only after the KMC and Plotly interface are stable.
+- [ ] Keep Python authoritative for positions, heights, event data, atom types, step edges,
+  coverage, and simulation time; JavaScript owns rendering only.
+- [ ] Put widget Python, JavaScript, and CSS in separate `src/mbe_rheed_sim/widgets/` files.
+- [ ] Add orbit/zoom, spherical atoms, hexagonal substrate, and highlighted step edges.
+- [ ] Add incoming deposition and hop animation only if event-history storage is bounded and
+  does not compromise reproducibility.
+- [ ] Add beam/detector geometry as explanatory visualization, not simulated diffraction.
+- [ ] Verify widget fallback/export behavior in Marimo and CI.
+
+K3D-jupyter is not planned as a central dependency. Reconsider it only if measured particle
+counts make Plotly and the custom widget inadequate.
+
+**Exit criteria:** the custom view adds clear explanatory value without moving scientific
+logic into JavaScript or breaking notebook portability.
+
+### Stage 7 - Optional strain-driven GaN/AlN extension
+
+- [ ] Add `E_str` only after homoepitaxial validation is complete.
+- [ ] Specify and validate the elastic/strain approximation before implementation.
+- [ ] Investigate the reported 2D-to-3D transition near 2.25 ML.
+- [ ] Attempt temperature-dependent morphology panels only with calibrated conditions.
+- [ ] Keep full dynamical electron scattering and the complete multiscale paper model outside
+  scope unless separately justified.
+
+**Exit criteria:** any claimed Stranski-Krastanov behavior depends on an implemented, documented,
+and tested strain model—not merely on mound formation in the generic KMC.
+
+### Stage 8 - Final validation and delivery
+
+- [ ] Run locked setup from a clean clone/worktree.
+- [ ] Run the full test, lint, strict Marimo, execution, export, and reproduction suite.
+- [ ] Verify deterministic baselines and ensemble artifact provenance.
+- [ ] Review all scientific claims against implemented physics and cited sources.
+- [ ] Confirm all notebook plots distinguish proxy, kinematic model, and experiment.
+- [ ] Recheck desktop/narrow interaction and exported HTML.
+- [ ] Update README, validation record, decisions, known limitations, and final status.
+
+**Exit criteria:** a new contributor can reproduce the principal scientific result and launch
+the interactive notebook using only the documented commands.
+
+## Current validation record
+
+- [x] `uv sync --locked`
+- [x] `make test` - 13 tests pass
+- [x] `make check` - Ruff, strict Marimo check, and notebook execution pass
+- [x] `make reproduce` - deterministic fingerprint matches
+- [x] `make export` - HTML export succeeds
+- [x] Validate Figure 3-like oscillatory behavior at smoke scale
+- [x] Validate corrected-model smoothing and step-barrier mounding trends
+- [x] Run an initial generic-regime lattice-size sensitivity check
+- [ ] Re-inspect desktop and narrow layouts after the visual redesign
+- [x] `make figure3-parameters` - Appendix A and Equation 8 values match hand-calculated checks
+- [x] `make validate-acceleration` - 100-seed exact/accelerated observable comparison passes
+- [x] `make reproduce-figure3` - three-seed 40 s bands for all three paper ratios generated
+- [x] `make sweep` - initial 3x3, three-seed amplitude map generated
+- [x] `make validate-science` - five-seed smoothing/mounding ordering passes
+- [x] `make convergence` - 8x8/16x16/24x24, three-seed sensitivity artifacts generated
+
+The canonical 8x8, 1 ML software baseline records 67 deposition, 1,416 diffusion, and 3
+desorption events. Its final-height SHA-256 is checked by `make reproduce`. This proves
+repeatability, not scientific agreement.
+
+## Scientific guardrails and known limitations
+
+- The baseline is a single-species, periodic, solid-on-solid model with no overhangs.
+- Six-neighbor connectivity is hexagonal; the current array image is not a hexagonal metric
+  rendering.
+- Energetic defaults are demonstration parameters, not calibrated GaN values.
+- `1-S_d` is a normalized morphology proxy, not an electron-diffraction calculation.
+- No strain, multiple species, reconstruction, or electron scattering is implemented.
+- Optional isolated-adatom long-hop acceleration is implemented and validated only for the
+  documented small-lattice ensemble observables; exact nearest-neighbor KMC remains available.
+- Figure 3 homoepitaxial GaN is the near-term target because it does not require `E_str`.
+- A fixed seed gives repeatability; uncertainty claims require seed ensembles.
+- The current reproducible baseline is too rough and does not yet show the target oscillation.
+
+## Tooling decisions
+
+- [x] Use Marimo for controls, reactive state, layouts, and the notebook application.
+- [x] Keep Matplotlib for deterministic static/publication figures.
+- [ ] Add Plotly in Stage 4 for interactive 3D morphology, RHEED curves, and sweep views.
+- [ ] Evaluate AnyWidget + Three.js only after Plotly and the KMC interface are stable.
+- [x] Do not add K3D-jupyter without a measured rendering-scale need.
+
+The requested `marimo-notebook` and `implement-paper` skills were unavailable in the official
+Marimo skill repository; `marimo-pair` was installed and used as the fallback.
+
+## Open decisions
+
+- [x] Use `(T, F)` RHEED amplitude for the first ensemble map.
+- [ ] Set publication lattice size from measured convergence/runtime rather than appearance.
+- [ ] Decide whether Plotly is sufficient before approving the custom Three.js stage.
 
 ## Important commands
 
@@ -72,4 +318,7 @@ make export
 
 ## Last meaningful update
 
-2026-08-13 - Added locked uv onboarding, deterministic reproduction, and clean-environment CI.
+2026-08-13 - Completed the qualitative Figure 3 smoke stage with validated isolated-adatom
+acceleration and three-seed 40 s uncertainty bands; Stage 3 now includes vectorized event
+catalogues, runtime presets, a reproducible temperature/flux amplitude map, corrected-model
+trend validation, and an initial 8x8--24x24 finite-size check.

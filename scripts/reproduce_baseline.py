@@ -23,14 +23,17 @@ CONFIG = SimulationConfig(
     attempt_frequency_hz=1_000.0,
     diffusion_barrier_ev=0.15,
     lateral_bond_energy_ev=0.05,
+    step_barrier_ev=0.05,
+    desorption_barrier_ev=0.65,
     sample_every_ml=0.125,
     seed=2026,
     max_events=100_000,
 )
 EXPECTED = {
-    "deposited_events": 64,
-    "diffusion_events": 777,
-    "height_sha256": "7986adeaf41fe2b06b43b7b0d6aaecf7aec52128c8811820eb79ca25ef04a47a",
+    "deposited_events": 67,
+    "diffusion_events": 1_416,
+    "desorbed_events": 3,
+    "height_sha256": "be1e5258db1f41a314c8d281b229f8cec68c6856d66573c62854297d1be81679",
 }
 
 
@@ -40,6 +43,7 @@ def main() -> None:
     actual = {
         "deposited_events": result.deposited_events,
         "diffusion_events": result.diffusion_events,
+        "desorbed_events": result.desorbed_events,
         "height_sha256": height_sha256,
     }
     if actual != EXPECTED:
@@ -75,4 +79,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

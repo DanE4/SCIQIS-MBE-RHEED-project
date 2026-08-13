@@ -42,8 +42,8 @@ def _(mo):
 
     $$\Delta t = -\frac{\ln u}{R}, \qquad R=\sum_i r_i.$$
 
-    This lets deposition and diffusion share one clock while preserving a reproducible
-    stochastic trajectory when the random seed is fixed.
+    This lets deposition, diffusion, and desorption share one clock while preserving a
+    reproducible stochastic trajectory when the random seed is fixed.
     """)
     return
 
@@ -55,16 +55,21 @@ def _(mo):
 
     The state is an integer solid-on-solid height field on a periodic lattice with six
     neighbors per site. One deposition event adds one generic growth unit. A top particle
-    may diffuse laterally or down one monolayer; upward and multi-step hops are omitted.
+    may diffuse laterally or cross one step upward or downward; multi-step hops are forbidden.
+    A downward crossing pays an Ehrlich-Schwoebel step barrier. Desorption removes a top
+    particle.
 
     The global deposition rate and local diffusion rate are
 
     $$r_{\mathrm{dep}} = F N, \qquad
-    r_{\mathrm{diff}} = \nu\exp\left[-\frac{E_{\mathrm{diff}} + nE_b}{k_B T}\right].$$
+    r_{\mathrm{diff}} = \nu\exp\left[-\frac{E_{\mathrm{diff}} + nE_b + mE_{\mathrm{step}}}{k_B T}\right],$$
+
+    $$r_{\mathrm{des}} = \nu\exp\left[-\frac{E_{\mathrm{des}} + nE_b}{k_B T}\right].$$
 
     $F$ is flux in ML/s, $N$ is the number of sites, $\nu$ is an effective attempt
-    frequency, $E_{\mathrm{diff}}$ the isolated-particle barrier, and $nE_b$ the lateral
-    bond contribution. The energetic defaults below are demonstration parameters.
+    frequency, $E_{\mathrm{diff}}$ and $E_{\mathrm{des}}$ isolated-particle barriers, and
+    $nE_b$ the lateral bond contribution. $m=1$ only for a downward crossing. The energetic
+    defaults below are demonstration parameters.
     """)
     return
 
@@ -75,7 +80,9 @@ def _(mo):
         "temperature_k": 800,
         "flux_ml_s": 0.5,
         "barrier_ev": 0.15,
-        "size": 12,
+        "step_barrier_ev": 0.05,
+        "desorption_barrier_ev": 0.65,
+        "size": 16,
         "coverage_ml": 2.0,
         "seed": 7,
     }
@@ -85,7 +92,9 @@ def _(mo):
             "temperature_k": mo.ui.slider(600, 1_100, step=25, value=800, label="Temperature (K)"),
             "flux_ml_s": mo.ui.slider(0.1, 1.0, step=0.1, value=0.5, label="Flux (ML/s)"),
             "barrier_ev": mo.ui.slider(0.10, 0.40, step=0.01, value=0.15, label="Diffusion barrier (eV)"),
-            "size": mo.ui.slider(8, 20, step=2, value=12, label="Lattice size"),
+            "step_barrier_ev": mo.ui.slider(0.0, 0.20, step=0.01, value=0.05, label="Down-step barrier (eV)"),
+            "desorption_barrier_ev": mo.ui.slider(0.4, 0.9, step=0.01, value=0.65, label="Desorption barrier (eV)"),
+            "size": mo.ui.slider(8, 24, step=2, value=16, label="Lattice size"),
             "coverage_ml": mo.ui.slider(0.5, 3.0, step=0.5, value=2.0, label="Target coverage (ML)"),
             "seed": mo.ui.number(start=0, stop=10_000, value=7, label="RNG seed"),
         }
@@ -112,6 +121,8 @@ def _(SimulationConfig, get_parameters, run):
         temperature_k=float(selected_parameters["temperature_k"]),
         deposition_flux_ml_s=float(selected_parameters["flux_ml_s"]),
         diffusion_barrier_ev=float(selected_parameters["barrier_ev"]),
+        step_barrier_ev=float(selected_parameters["step_barrier_ev"]),
+        desorption_barrier_ev=float(selected_parameters["desorption_barrier_ev"]),
         seed=int(selected_parameters["seed"]),
     )
     simulation = run(simulation_config)
@@ -122,7 +133,8 @@ def _(SimulationConfig, get_parameters, run):
 def _(mo, simulation):
     mo.md(f"""
     **Completed:** {simulation.deposited_events} deposition events and
-    {simulation.diffusion_events} diffusion events; simulated time
+    {simulation.diffusion_events} diffusion events, with {simulation.desorbed_events}
+    desorption events; simulated time
     {simulation.time_s[-1]:.3f} s; final RMS roughness
     {simulation.roughness_ml[-1]:.3f} ML.
     """)
@@ -162,9 +174,9 @@ def _(plt, simulation, snapshot_slider):
         zorder=3,
     )
     _axes[1].set(
-        xlabel="deposited coverage (ML)",
+        xlabel="film coverage (ML)",
         ylabel=r"$1 - S_d$ (dimensionless)",
-        title="Step-density RHEED proxy",
+        title="Normalized step-density RHEED proxy",
         ylim=(0, 1.03),
     )
     evolution_figure
@@ -194,7 +206,7 @@ def _(plt, simulation):
     )
     _axes[1].set_ylabel("islands / site")
     _axes[2].plot(simulation.coverage_ml, simulation.rheed_proxy, color="tab:red")
-    _axes[2].set(xlabel="deposited coverage (ML)", ylabel=r"$1-S_d$ proxy")
+    _axes[2].set(xlabel="film coverage (ML)", ylabel=r"$1-S_d$ proxy")
     observable_figure.suptitle("Growth observables")
     observable_figure
     return
@@ -224,12 +236,17 @@ def _(mo):
     ## 5. Repeatability, comparison, and next physics
 
     The seed makes a run exactly reproducible, but one trajectory is not an uncertainty
-    estimate. A later parameter sweep should aggregate independent seeds and report bands.
+    estimate. The scripted Stage 3 workflows now aggregate fixed seed ensembles: run
+    `make reproduce-figure3` for 40 s Figure 3 proxy bands, `make sweep` for the first
+    temperature/flux map, and `make convergence` for the initial finite-size check.
 
     The qualitative comparison target is the oscillation of surface step density shown
     alongside experimental RHEED traces in Figure 3 of Budagosky and Garcia-Cristobal.
-    Quantitative comparison is intentionally deferred because this baseline omits their
-    GaN/AlN flux calibration, desorption, step barrier, strain field, and multiscale hops.
+    The separate Figure 3 workflow implements the paper's homoepitaxial flux-ratio
+    calibration and a validated isolated-adatom long-hop approximation. Quantitative
+    comparison is still deferred because paper-scale convergence and experimental-curve
+    normalization are unresolved. Strain is not needed for that homoepitaxial target and
+    remains outside the current model.
 
     A defensible next RHEED stage is a kinematic layer-interference model. Full dynamical
     electron scattering remains outside the baseline.

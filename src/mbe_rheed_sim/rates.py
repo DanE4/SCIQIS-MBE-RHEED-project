@@ -16,11 +16,28 @@ def diffusion_rate(
     lateral_bond_energy_ev: float,
     bonds: int,
     temperature_k: float,
+    step_barrier_ev: float = 0.0,
 ) -> float:
     if not 0 <= bonds <= 6:
         raise ValueError("a hexagonal site has between zero and six lateral bonds")
     return arrhenius_rate(
         attempt_frequency_hz,
-        diffusion_barrier_ev + bonds * lateral_bond_energy_ev,
+        diffusion_barrier_ev + bonds * lateral_bond_energy_ev + step_barrier_ev,
+        temperature_k,
+    )
+
+
+def desorption_rate(
+    attempt_frequency_hz: float,
+    desorption_barrier_ev: float,
+    lateral_bond_energy_ev: float,
+    bonds: int,
+    temperature_k: float,
+) -> float:
+    if not 0 <= bonds <= 6:
+        raise ValueError("a hexagonal site has between zero and six lateral bonds")
+    return arrhenius_rate(
+        attempt_frequency_hz,
+        desorption_barrier_ev + bonds * lateral_bond_energy_ev,
         temperature_k,
     )

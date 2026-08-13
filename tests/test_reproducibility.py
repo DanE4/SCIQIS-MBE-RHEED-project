@@ -12,6 +12,7 @@ def test_seeded_runs_are_identical() -> None:
     assert np.array_equal(first.final_heights, second.final_heights)
     assert np.array_equal(first.time_s, second.time_s)
     assert first.diffusion_events == second.diffusion_events
+    assert first.desorbed_events == second.desorbed_events
 
 
 def test_result_serializes_without_pickle(tmp_path) -> None:
