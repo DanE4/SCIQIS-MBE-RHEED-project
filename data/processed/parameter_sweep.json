@@ -64,5 +64,437 @@
       0.005201056186823973,
       0.009933159748930047
     ]
+  ],
+  "principal_observable": {
+    "name": "detrended_amplitude",
+    "reason": "measures the periodic component after removing linear drift"
+  },
+  "mean_detrended_amplitude": [
+    [
+      0.09602844617413818,
+      0.09423089200419328,
+      0.09997664869933244
+    ],
+    [
+      0.09227068169799768,
+      0.09978802159978033,
+      0.09844769742682023
+    ],
+    [
+      0.09705663956841042,
+      0.1022708646353278,
+      0.10185356311554794
+    ]
+  ],
+  "std_detrended_amplitude": [
+    [
+      0.005299050861001297,
+      0.003873164561556036,
+      0.0014949264942663834
+    ],
+    [
+      0.011020137153848407,
+      0.0024244161826251593,
+      0.010649948220755118
+    ],
+    [
+      0.004583768600778168,
+      0.0035566184451757566,
+      0.005231429558174152
+    ]
+  ],
+  "oscillatory_fraction": [
+    [
+      1.0,
+      1.0,
+      1.0
+    ],
+    [
+      0.6666666666666666,
+      1.0,
+      1.0
+    ],
+    [
+      1.0,
+      1.0,
+      0.6666666666666666
+    ]
+  ],
+  "oscillation_metrics_per_seed": [
+    [
+      [
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.09713878640056163,
+          "peak_count": 2,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": 0.0410455171249222,
+          "period_ml": 0.53,
+          "period_deviation_ml": 0.47,
+          "spectral_power_fraction": 0.08476480559726396,
+          "peak_phase_ml": 0.765,
+          "trough_phase_ml": 0.3300000000000001,
+          "damping_rate_per_ml": null
+        },
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.0902622014631426,
+          "peak_count": 2,
+          "trough_count": 3,
+          "peak_to_trough_amplitude": 0.079783138764795,
+          "period_ml": 1.0100000000000002,
+          "period_deviation_ml": 0.010000000000000231,
+          "spectral_power_fraction": 0.18181364487571175,
+          "peak_phase_ml": 0.895,
+          "trough_phase_ml": 0.529697817195518,
+          "damping_rate_per_ml": null
+        },
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.10068435065871027,
+          "peak_count": 3,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": 0.0055831778445137314,
+          "period_ml": 0.655,
+          "period_deviation_ml": 0.345,
+          "spectral_power_fraction": 0.11776691173522816,
+          "peak_phase_ml": 0.8570094519054703,
+          "trough_phase_ml": 0.6449999999999998,
+          "damping_rate_per_ml": 0.3409437765406523
+        }
+      ],
+      [
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.09694877365492402,
+          "peak_count": 2,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": 0.018980219527047443,
+          "period_ml": 0.8099999999999999,
+          "period_deviation_ml": 0.19000000000000006,
+          "spectral_power_fraction": 0.08944512980626931,
+          "peak_phase_ml": 0.7949999999999999,
+          "trough_phase_ml": 0.77,
+          "damping_rate_per_ml": null
+        },
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.09594786457493638,
+          "peak_count": 3,
+          "trough_count": 3,
+          "peak_to_trough_amplitude": 0.007635007530496098,
+          "period_ml": 0.6900000000000001,
+          "period_deviation_ml": 0.30999999999999994,
+          "spectral_power_fraction": 0.057351874521048785,
+          "peak_phase_ml": 0.2933211774095684,
+          "trough_phase_ml": 0.8199999999999998,
+          "damping_rate_per_ml": 0.24015646284644546
+        },
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.08979603778271947,
+          "peak_count": 2,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": 0.02925276863413953,
+          "period_ml": 0.9299999999999999,
+          "period_deviation_ml": 0.07000000000000006,
+          "spectral_power_fraction": 0.05147944546098516,
+          "peak_phase_ml": 0.525,
+          "trough_phase_ml": 0.53,
+          "damping_rate_per_ml": null
+        }
+      ],
+      [
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.10163271475623792,
+          "peak_count": 2,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": 0.04512579495598454,
+          "period_ml": 1.25,
+          "period_deviation_ml": 0.25,
+          "spectral_power_fraction": 0.1671574293458418,
+          "peak_phase_ml": 0.675,
+          "trough_phase_ml": 0.6499999999999999,
+          "damping_rate_per_ml": null
+        },
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.09872684661720964,
+          "peak_count": 2,
+          "trough_count": 3,
+          "peak_to_trough_amplitude": 0.07045651360170467,
+          "period_ml": 1.0,
+          "period_deviation_ml": 0.0,
+          "spectral_power_fraction": 0.09556821156185595,
+          "peak_phase_ml": 0.7199999999999999,
+          "trough_phase_ml": 0.8112848116215936,
+          "damping_rate_per_ml": null
+        },
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.09957038472454978,
+          "peak_count": 3,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": 0.02286502429462236,
+          "period_ml": 0.59,
+          "period_deviation_ml": 0.41000000000000003,
+          "spectral_power_fraction": 0.1809555086816601,
+          "peak_phase_ml": 0.9018820698332033,
+          "trough_phase_ml": 0.8099999999999999,
+          "damping_rate_per_ml": 0.8740631852896581
+        }
+      ]
+    ],
+    [
+      [
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.08635115214352569,
+          "peak_count": 3,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": -0.0220660387027008,
+          "period_ml": 0.76,
+          "period_deviation_ml": 0.24,
+          "spectral_power_fraction": 0.12344903304236213,
+          "peak_phase_ml": 0.04338477869040517,
+          "trough_phase_ml": 0.855,
+          "damping_rate_per_ml": 1.1024855701291143
+        },
+        {
+          "is_oscillatory": false,
+          "detrended_amplitude": 0.08547530422717142,
+          "peak_count": 2,
+          "trough_count": 1,
+          "peak_to_trough_amplitude": 0.044637542879503236,
+          "period_ml": 0.66,
+          "period_deviation_ml": 0.33999999999999997,
+          "spectral_power_fraction": 0.14454652442993907,
+          "peak_phase_ml": 0.71,
+          "trough_phase_ml": 0.06999999999999998,
+          "damping_rate_per_ml": null
+        },
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.10498558872329597,
+          "peak_count": 3,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": 0.006047466351758589,
+          "period_ml": 0.59,
+          "period_deviation_ml": 0.41000000000000003,
+          "spectral_power_fraction": 0.17375826059610136,
+          "peak_phase_ml": 0.6583345947830366,
+          "trough_phase_ml": 0.695,
+          "damping_rate_per_ml": 0.027719155576839564
+        }
+      ],
+      [
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.0996897196112364,
+          "peak_count": 2,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": 0.08372797568370863,
+          "period_ml": 0.56,
+          "period_deviation_ml": 0.43999999999999995,
+          "spectral_power_fraction": 0.16865411434135105,
+          "peak_phase_ml": 0.12,
+          "trough_phase_ml": 0.5949999999999998,
+          "damping_rate_per_ml": null
+        },
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.10226009363400816,
+          "peak_count": 2,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": 0.015252850868862723,
+          "period_ml": 0.78,
+          "period_deviation_ml": 0.21999999999999997,
+          "spectral_power_fraction": 0.12254936239530059,
+          "peak_phase_ml": 0.9099999999999999,
+          "trough_phase_ml": 0.8450000000000001,
+          "damping_rate_per_ml": null
+        },
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.09741425155409636,
+          "peak_count": 2,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": 0.023273878040932682,
+          "period_ml": 0.9299999999999999,
+          "period_deviation_ml": 0.07000000000000006,
+          "spectral_power_fraction": 0.16393884803681896,
+          "peak_phase_ml": 0.5150000000000001,
+          "trough_phase_ml": 0.675,
+          "damping_rate_per_ml": null
+        }
+      ],
+      [
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.10012508081989667,
+          "peak_count": 2,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": 0.0085161618325294,
+          "period_ml": 0.72,
+          "period_deviation_ml": 0.28,
+          "spectral_power_fraction": 0.16578504751410278,
+          "peak_phase_ml": 0.6099999999999999,
+          "trough_phase_ml": 0.72,
+          "damping_rate_per_ml": null
+        },
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.10815941737245212,
+          "peak_count": 2,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": 0.04213738986269464,
+          "period_ml": 1.0300000000000002,
+          "period_deviation_ml": 0.03000000000000025,
+          "spectral_power_fraction": 0.11845206613624551,
+          "peak_phase_ml": 0.625,
+          "trough_phase_ml": 0.635,
+          "damping_rate_per_ml": null
+        },
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.0870585940881119,
+          "peak_count": 3,
+          "trough_count": 3,
+          "peak_to_trough_amplitude": 0.015858951661311314,
+          "period_ml": 0.7649999999999999,
+          "period_deviation_ml": 0.2350000000000001,
+          "spectral_power_fraction": 0.08992434152224736,
+          "peak_phase_ml": 0.14395069503930835,
+          "trough_phase_ml": 0.9599999999999995,
+          "damping_rate_per_ml": 0.5518200119218188
+        }
+      ]
+    ],
+    [
+      [
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.09192819836268194,
+          "peak_count": 3,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": -0.024133237099362968,
+          "period_ml": 0.5700000000000001,
+          "period_deviation_ml": 0.42999999999999994,
+          "spectral_power_fraction": 0.15674589600361527,
+          "peak_phase_ml": 0.5245527181546439,
+          "trough_phase_ml": 0.865,
+          "damping_rate_per_ml": -0.17357282697006976
+        },
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.09848717031729357,
+          "peak_count": 3,
+          "trough_count": 3,
+          "peak_to_trough_amplitude": 0.01501984285067421,
+          "period_ml": 0.595,
+          "period_deviation_ml": 0.405,
+          "spectral_power_fraction": 0.09260483680287793,
+          "peak_phase_ml": 0.54,
+          "trough_phase_ml": 0.87,
+          "damping_rate_per_ml": 0.49510643012742245
+        },
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.10075455002525571,
+          "peak_count": 3,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": 0.04986281913235454,
+          "period_ml": 0.76,
+          "period_deviation_ml": 0.24,
+          "spectral_power_fraction": 0.12271979842394912,
+          "peak_phase_ml": 0.4203097358722382,
+          "trough_phase_ml": 0.615,
+          "damping_rate_per_ml": 0.17060871285941387
+        }
+      ],
+      [
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.10508029020422673,
+          "peak_count": 2,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": 0.028085342631654818,
+          "period_ml": 0.72,
+          "period_deviation_ml": 0.28,
+          "spectral_power_fraction": 0.14479952500640034,
+          "peak_phase_ml": 0.67,
+          "trough_phase_ml": 0.44499999999999995,
+          "damping_rate_per_ml": null
+        },
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.09827195048163631,
+          "peak_count": 2,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": 0.03640445736142214,
+          "period_ml": 0.9400000000000002,
+          "period_deviation_ml": 0.05999999999999983,
+          "spectral_power_fraction": 0.17923896065123188,
+          "peak_phase_ml": 0.41000000000000003,
+          "trough_phase_ml": 0.5899999999999999,
+          "damping_rate_per_ml": null
+        },
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.1034603532201203,
+          "peak_count": 2,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": 0.024371288740078816,
+          "period_ml": 0.74,
+          "period_deviation_ml": 0.26,
+          "spectral_power_fraction": 0.1311146640875673,
+          "peak_phase_ml": 0.66,
+          "trough_phase_ml": 0.735,
+          "damping_rate_per_ml": null
+        }
+      ],
+      [
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.09694890295587988,
+          "peak_count": 2,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": 0.031250938316241275,
+          "period_ml": 1.1099999999999999,
+          "period_deviation_ml": 0.10999999999999988,
+          "spectral_power_fraction": 0.15809614877814654,
+          "peak_phase_ml": 0.7149999999999999,
+          "trough_phase_ml": 0.7649999999999997,
+          "damping_rate_per_ml": null
+        },
+        {
+          "is_oscillatory": false,
+          "detrended_amplitude": 0.1073597574295551,
+          "peak_count": 1,
+          "trough_count": 1,
+          "peak_to_trough_amplitude": 0.01950367136652674,
+          "period_ml": null,
+          "period_deviation_ml": null,
+          "spectral_power_fraction": 0.08461838383617697,
+          "peak_phase_ml": 0.6,
+          "trough_phase_ml": 0.75,
+          "damping_rate_per_ml": null
+        },
+        {
+          "is_oscillatory": true,
+          "detrended_amplitude": 0.1012520289612088,
+          "peak_count": 2,
+          "trough_count": 2,
+          "peak_to_trough_amplitude": 0.05114741042305293,
+          "period_ml": 0.97,
+          "period_deviation_ml": 0.030000000000000027,
+          "spectral_power_fraction": 0.08052580712694156,
+          "peak_phase_ml": 0.4749999999999999,
+          "trough_phase_ml": 0.485,
+          "damping_rate_per_ml": null
+        }
+      ]
+    ]
   ]
 }

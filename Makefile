@@ -1,4 +1,4 @@
-.PHONY: setup notebook test check reproduce reproduce-figure3 figure3-parameters validate-acceleration validate-science validate-sweep convergence convergence-figure3 sweep export
+.PHONY: setup notebook test check reproduce reproduce-figure3 figure3-parameters validate-acceleration validate-science validate-sweep convergence convergence-figure3 convergence-figure3-64 benchmark-sizes sweep export
 
 NOTEBOOK := notebooks/mbe_rheed.py
 
@@ -39,6 +39,12 @@ convergence:
 
 convergence-figure3:
 	uv run python scripts/check_figure3_convergence.py
+
+convergence-figure3-64:
+	uv run python scripts/check_figure3_convergence.py --include-64
+
+benchmark-sizes:
+	uv run python scripts/benchmark_large_lattices.py
 
 sweep:
 	uv run python scripts/run_parameter_sweep.py

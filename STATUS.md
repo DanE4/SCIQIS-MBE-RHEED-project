@@ -9,25 +9,170 @@ experiment.
 
 ## Current state
 
-- **Active stage:** Stage 4 - polished Marimo virtual experiment.
-- **Estimated completion:** roughly 77% of the intended final project.
+- **Active stage:** homoepitaxial validation and convergence before publication comparison.
+- **Estimated completion:** roughly 85% of the intended final project.
 - **Working baseline:** deterministic deposition/diffusion/desorption KMC and Marimo notebook.
-- **Main scientific gap:** Figure 3 periodicity is reproduced on a 7x7 smoke lattice, but the
-  first paper-regime size study shows that its proxy amplitude is strongly finite-size affected;
-  paper-scale convergence and experimental-curve normalization remain unresolved.
-- **Main presentation gap:** the teaching flow, designed controls, playback, and synchronized
-  Plotly view are working; accurate alternate display modes and the paper-results view remain.
+- **Main scientific gap:** finite-size convergence. Figure 3-like periodicity is reproduced at
+  smoke scale, but proxy amplitude remains strongly lattice-size dependent and is not converged
+  through 64x64. This prevents publication-quality amplitude claims.
+- **Interpretation:** the imperfect/noisy morphology and RHEED proxy are expected at this
+  stage. Current evidence does not isolate one obvious implementation bug. The remaining work
+  is predominantly scale, convergence, oscillation analysis, quantitative comparison, and
+  communication—not a missing fundamental KMC framework.
+- **Main presentation gap:** the teaching flow, explicit experiment-mode selector, controls,
+  playback, annotated synchronized layer-cycle view, hex-coordinate lattice view, and Figure 3
+  smoke panel work. The complete quantitative paper-comparison view remains.
 - **Current computational limit:** local event-catalogue updates reduce a paper-derived 64x64,
-  4 s run from 131 s to 39 s, but the practical three-seed check reaches 32x32 and is not
-  converged in proxy amplitude. Full 40 s, 64x64 publication convergence remains Stage 5 work.
+  4 s run from 131 s to about 38 s. An updateable rate tree reduces the 0.1 s envelope from
+  10.6 to 6.1 s at 128x128 and from 105.8 to 24.8 s at 256x256 while preserving the existing
+  small-lattice path. The three-seed 4 s check now reaches 64x64 and remains unconverged;
+  algorithmic efficiency is still the bottleneck for the next size.
+- **Size policy:** 16x16 is for responsive teaching, 64x64 is the current publication candidate,
+  and 128x128/256x256 are benchmarks if runtime permits. Matching 256x256 exactly is not the
+  objective; demonstrated convergence of reported observables is.
+
+## What is already scientifically strong
+
+The working framework includes residence-time/event-based KMC; deposition; nearest-neighbor
+diffusion; upward/downward single-step motion; an Ehrlich-Schwoebel barrier; desorption; mass
+accounting; seeded reproducibility; paper-derived Figure 3 parameterization and effective-flux
+conversion; multiscale acceleration validated against exact-KMC ensembles; ensemble
+uncertainty; parameter sweeps; convergence runners; synchronized Plotly/Marimo visualization;
+and automated test, check, export, and reproduction commands.
+
+## Why the current result does not yet look like the paper
+
+1. **Finite-size/statistical effects:** smoke lattices exaggerate fluctuations, and the measured
+   proxy signal changes strongly through 64x64. Three seeds are enough to expose
+   sensitivity, not to establish publication convergence.
+2. **Demonstration parameters:** the generic interactive model uses fast effective values and
+   often produces rough/island-like growth. That is useful teaching behavior, not GaN
+   calibration.
+3. **Paper-derived Figure 3 parameters:** these correctly use the paper's effective-flux and
+   activation-energy equations, but correct inputs alone do not remove finite-size,
+   acceleration, seed, initialization, or normalization uncertainty.
+4. **Model limitations:** `1-S_d` is morphology-derived, not electron diffraction. The model
+   omits beam geometry, reconstruction, multiple scattering, and other experimental physics.
+   Strain is irrelevant to this homoepitaxial target and must not be added as a patch.
+5. **Visualization limitations:** the continuous height field is drawn in rectangular index
+   space. The optional axial-coordinate view shows the six-neighbor geometry, but the final
+   annotated morphology/RHEED cycle and paper comparison are unfinished.
+
+## Simulation modes
+
+### Generic interactive experiment
+
+Purpose: teaching, fast interaction, parameter-dependence demonstrations, and a software/debug
+baseline. It normally uses a 16x16 lattice and uncalibrated demonstration/effective parameters.
+It may produce rough or island-like growth, is not expected to reproduce Figure 3
+quantitatively, and must never be used as evidence of paper reproduction.
+
+### Paper Figure 3 reproduction
+
+Purpose: scientific comparison with the homoepitaxial GaN RHEED result. It uses paper-derived
+effective-flux conversion and activation energies, the documented initial condition,
+temperature and flux ratios, seed ensembles, and convergence studies. Its comparison targets
+are phase, period, damping, and relative amplitude.
+
+The Marimo UI exposes an obvious `Generic demonstration | Paper Figure 3 preset` selector.
+Figure 3 mode loads the complete scientific preset through `figure3_config`, ignores generic
+demonstration sliders, and reports the selected ratio, effective flux, predicted growth rate,
+lattice, duration, and seed.
+
+## Near-term priority order
+
+Do not begin Stage 7 while these items remain unresolved:
+
+1. Reduce the remaining local-rate refresh cost before attempting a 128x128, 4 s ensemble.
+2. Finish the publication Figure 3 comparison.
+3. Finalize ensemble/statistical reporting at the accepted lattice size.
+4. Only then reconsider Three.js.
+5. Only after homoepitaxial validation consider strain-driven GaN/AlN physics.
+
+## Major unfinished milestones
+
+### Meaningful RHEED oscillation metrics
+
+**Why:** the current percentile half-range can be large for a monotonic decay and therefore
+cannot support an oscillation or convergence claim.
+
+**Current evidence:** Figure 3-like periodicity is visible at 7x7, while both the historical
+range metric and detrended amplitude remain size-sensitive through 64x64.
+
+**Implementation:** the reusable detrended, peak, period, spectral, damping, and phase
+diagnostics now exist and are included in the Figure 3, sweep, and both convergence artifact
+schemas. Detrended amplitude is the principal convergence observable.
+
+**Validation:** known monotonic traces fail the oscillation classification and a damped
+1-ML-period reference is recovered. The notebook exposes the actual morphology and proxy at
+annotated 0/0.5/1/1.5/2 ML milestones without relabeling deviations as ideal behavior.
+
+**Dependencies:** none; this is the first implementation task.
+
+### Dedicated Figure 3 Marimo mode
+
+**Why:** generic controls make it too easy to confuse a teaching run with a scientific preset.
+
+**Current evidence:** the notebook has working generic controls, a read-only committed Figure 3
+ensemble, and a top-level mode selector that launches a selected paper configuration.
+
+**Implementation:** `notebooks/mbe_rheed.py` reuses `figure3_config` and paper parameter helpers.
+The selected Ga/N condition, duration, acceleration, coverage axis, and provenance load
+together; generic sliders cannot leak into the paper configuration.
+
+**Validation:** a browser run loaded Ga/N = 0.82 at 1003.15 K, effective Ga flux 0.2450 ML/s,
+predicted growth rate 0.2282 ML/s, 7x7, 40 s, and seed 7. The 1.0 ML shortcut synchronized both
+views at 0.99 predicted ML with zero browser-console errors.
+
+**Dependencies:** improved oscillation metrics for the scientific summary; the selector and
+preset wiring may be developed independently.
+
+### Larger-size Figure 3 convergence
+
+**Why:** finite-size dependence currently prevents quantitative amplitude and morphology
+claims.
+
+**Current evidence:** 7x7 reproduces periodicity. Mean detrended amplitude over 4 s is 0.09309,
+0.04111, 0.02765, and 0.03231 at 8x8, 16x16, 32x32, and 64x64. No successive-size pair passes
+the documented criterion. After the rate-tree and cached-rate optimizations, the 0.1 s runtime
+envelope is 1.5, 6.1, and 24.8 wall seconds at 64x64, 128x128, and 256x256, respectively.
+
+**Implementation:** `scripts/check_figure3_convergence.py` now records full per-seed traces,
+event counts, result-array footprint, oscillation metrics, final roughness/step density, and
+morphology summaries through an opt-in 64x64 run. An updateable rate tree removes whole-lattice
+cumulative scans at 128x128 and above; batched updates and cached discrete Arrhenius tables
+remove additional bookkeeping. Further local-rate-refresh work is required before a 128x128
+ensemble; parallel process orchestration is deferred because it would not reduce per-run cost.
+
+**Validation:** successive sufficiently large lattices agree within a justified, documented
+tolerance for the principal observable and morphology statistics, with ensemble uncertainty.
+
+**Dependencies:** meaningful oscillation metrics and a decision on convergence tolerance.
+
+### Publication Figure 3 comparison
+
+**Why:** visible periodicity is only qualitative until simulation, uncertainty, reference data,
+normalization, and provenance are compared without conflating physical quantities.
+
+**Current evidence:** all three paper parameter sets produce committed three-seed 7x7 proxy
+bands; raw experimental values and the paper's arbitrary-unit normalization are unavailable.
+
+**Implementation:** extend notebook Section 09 and the publication artifact workflow with the
+requirements in Stage 5 and `docs/VALIDATION.md`.
+
+**Validation:** every Ga/N condition reports phase, period, damping, and relative amplitude;
+all curves have provenance and unambiguous labels; reference data use a documented legal and
+technical acquisition/normalization method.
+
+**Dependencies:** oscillation metrics, convergence, and the reference-curve protocol.
 
 ## Roadmap overview
 
 - [x] Stage 0 - Reproducible project foundation
 - [x] Stage 1 - Correct generic KMC event catalogue
 - [x] Stage 2 - Reproduce Figure 3 homoepitaxial RHEED behavior
-- [x] Stage 3 - Ensembles and parameter studies
-- [ ] **Stage 4 - Polished Marimo + Plotly virtual experiment (current)**
+- [x] Stage 3 - Initial ensembles and parameter studies
+- [x] Stage 4 - Polished Marimo + Plotly virtual experiment
 - [ ] Stage 5 - Publication figures and paper-comparison view
 - [ ] Stage 6 - Optional Three.js/AnyWidget `GrowthViewer`
 - [ ] Stage 7 - Optional strain-driven GaN/AlN extension
@@ -121,7 +266,9 @@ smoke scale; publication convergence remains Stage 3 work.**
 
 - [x] Add and benchmark a 16x16 interactive preset (about 1.3 s for the current 2 ML demo).
 - [x] Add a 64x64 publication candidate preset.
-- [ ] Consider 128x128 only after measuring runtime and memory use.
+- [x] Benchmark 128x128 and 256x256 after measuring the 64x64 single-run envelope: after the
+  rate-tree optimization the 0.1 s envelope takes 1.5, 6.1, and 24.8 wall seconds at 64x64,
+  128x128, and 256x256.
 - [x] Keep CI and baseline simulations small and fast.
 
 #### 3B - Uncertainty and convergence
@@ -131,15 +278,27 @@ smoke scale; publication convergence remains Stage 3 work.**
 - [x] Plot mean +/- standard deviation for the initial sweep and lattice-size morphology metric.
 - [x] Plot three-seed mean +/- standard deviation traces for the Figure 3 smoke ensemble.
 - [x] Run an initial 8x8/16x16/24x24 lattice-size and three-seed sensitivity check.
-- [x] Run a three-seed, 4 s paper-derived size check through 32x32.
+- [x] Run the default three-seed, 4 s paper-derived size check through 32x32.
+- [x] Run the opt-in three-seed, 4 s paper-derived 64x64 check; 32x32 -> 64x64 does not pass.
 - [x] Benchmark the 64x64 paper-derived candidate over 0.5, 1, and 4 s.
 - [x] Establish the 64x64 runtime ceiling and defer its full 40 s ensemble to publication work.
 - [x] Repeat the diffusion-smoothing sanity check with the corrected event catalogue.
+- [x] Record runtime, event count, relevant memory use, seed count, full proxy trace,
+  period/amplitude, RMS roughness, step density, and final morphology statistics at every size.
+- [x] Choose and justify a preliminary numerical successive-size convergence tolerance: the
+  difference plus 1.96 pooled standard errors must fit inside 10% of the larger-size mean
+  detrended amplitude. This is a finite-size numerical criterion, not experimental accuracy.
+- [x] Consider CPU-parallel independent seeds/parameter points and defer orchestration until
+  the single-run algorithm improves; parallelism cannot fix the measured per-run scaling.
 
 #### 3C - Parameter study
 
-- [x] Choose `(T, F) -> RHEED oscillation amplitude` as the first sweep.
-- [x] Define amplitude as half the 95th-minus-5th percentile proxy range.
+- [x] Choose `(T, F) -> proxy signal range` as the first sweep.
+- [x] Define the compatibility metric as half the 95th-minus-5th percentile proxy range.
+- [x] Add dedicated oscillation metrics: detrended amplitude, peak count, peak-to-trough
+  amplitude, period and 1 ML deviation, spectral power near 1 cycle/ML, damping, and phase.
+- [x] Propagate the dedicated metrics through sweep and convergence artifact schemas and select
+  one justified principal convergence observable.
 - [x] Generate a reproducible 16x16, 3x3 heatmap with configuration and seed provenance via
   `make sweep`.
 - [x] Let a selected heatmap point drive its morphology and RHEED views in Marimo.
@@ -147,8 +306,9 @@ smoke scale; publication convergence remains Stage 3 work.**
 - [x] Record that the 700 K endpoint overlaps in uncertainty and that no monotonic temperature
   trend is supported.
 
-**Exit criteria:** the reported trend survives multiple seeds and a documented lattice-size
-check; the sweep regenerates without manual notebook interaction. **Met.**
+**Exit criteria:** the reported signal-range trend survives multiple seeds and a documented
+lattice-size check; the sweep regenerates without manual notebook interaction. **Met.** The
+percentile range alone does not establish an oscillation.
 
 ### Stage 4 - Polished Marimo + Plotly virtual experiment
 
@@ -156,6 +316,9 @@ Use Marimo for reactive state/layout, Plotly for browser-interactive 3D and curv
 Matplotlib for static publication outputs. Do not begin Three.js work in this stage.
 
 #### 4A - Notebook narrative
+
+- [x] Add an explicit `Generic demonstration | Paper Figure 3 preset` selector; load the full
+  paper configuration and provenance through the existing paper helpers.
 
 - [x] **01 What is MBE?** Show Ga source -> beam -> substrate -> growing surface.
 - [x] **02 What does an atom do?** Explain deposition, diffusion, attachment, and desorption.
@@ -166,7 +329,8 @@ Matplotlib for static publication outputs. Do not begin Three.js work in this st
 - [x] **07 Experiment.** Present temperature, flux, barriers, size, and seed as a designed
   control panel rather than a raw dictionary.
 - [x] **08 Parameter sweep.** Show the Stage 3 regime map and selected run.
-- [ ] **09 Paper reproduction.** Present Figure 3 simulation/comparison results.
+- [x] **09 Paper reproduction smoke view.** Present the committed Figure 3 simulation ensemble.
+- [ ] Upgrade Section 09 to the quantitative paper-comparison requirements in Stage 5.
 - [x] **10 Model limits.** State omitted physics and valid interpretation.
 
 #### 4B - Interactive morphology
@@ -175,16 +339,24 @@ Matplotlib for static publication outputs. Do not begin Three.js work in this st
 - [x] Support rotation, zoom, hover height, stable color limits, and a readable camera default.
 - [ ] Add `Atoms | Height field | Step edges` display modes where they remain accurate and
   performant.
-- [ ] Render the six-neighbor topology with hexagonal geometry where the lattice itself is
-  shown; do not imply the rectangular array rendering is the physical metric geometry.
-- [ ] Add morphology snapshots at 0.5 ML intervals.
+- [x] Add a Plotly axial-to-Cartesian hex-cell view for the six-neighbor topology; retain the
+  rectangular height field with an explicit index-space label.
+- [x] Add direct selection of stored morphology snapshots at 0.5 ML intervals.
+- [x] Validate that the current hex-cell representation is sufficient for the Stage 4 lattice
+  explanation; reserve atom columns and explicit step edges for a separately justified view.
 
 #### 4C - Synchronized morphology and RHEED
 
 - [x] Use one coverage/frame control for both surface and RHEED views.
 - [x] Add a vertical current-coverage marker to the full RHEED trace.
 - [x] Label the curve **normalized step-density RHEED proxy**.
-- [ ] Show the flat-surface maximum versus partial-layer minimum mechanism visually.
+- [x] Add an annotated synchronized sequence: 0 ML flat surface; 0.5 ML many islands/steps and
+  proxy minimum; 1.0 ML completed layer and proxy maximum; 1.5 ML renewed roughening; 2.0 ML
+  next layer completion. Show morphology and trace side by side with one coverage marker, and
+  label these as ideal expectations while displaying the actual simulated values.
+- [x] Mark the initial flat-surface proxy maximum and most stepped stored frame through 1 ML
+  on the synchronized trace without claiming that the generic demonstration completes ideal
+  layers.
 - [x] Keep expensive simulations behind an explicit run action; frame scrubbing must reuse
   stored snapshots.
 
@@ -201,13 +373,21 @@ not a sequence of unrelated controls and plots.
 ### Stage 5 - Publication figures and paper-comparison view
 
 - [ ] Keep Matplotlib for deterministic static figures and report-ready exports.
-- [ ] Build a Figure 3-style panel comparing experimental RHEED and simulated `1-S_d` for the
-  documented flux ratios.
+- [ ] Build a Figure 3-style panel for every reported Ga/N condition with simulation mean,
+  ensemble uncertainty, and the experimental/reference curve when legally and technically
+  available.
+- [ ] Document normalization and use identical or clearly related time/coverage domains.
+- [ ] Compare phase, period, damping, and relative amplitude explicitly.
+- [ ] Preserve configuration provenance for every curve and artifact.
+- [ ] Clearly distinguish experimental RHEED intensity, morphology-derived `1-S_d`, and every
+  normalized/detrended signal; never imply that they are the same physical quantity.
 - [ ] Build a Figure 4-inspired morphology sequence at selected coverages, while avoiding any
   claim of the strain-driven transition until strain exists.
 - [ ] Include ensemble bands, units, parameter provenance, and model-limit captions.
 - [ ] Extend the paper-derived ensemble to 64x64 and the full 40 s window after further
   performance work or access to suitable compute.
+- [x] Benchmark 128x128 and the paper-reference 256x256; the optimized 0.1 s runtime envelope is
+  documented, but no smaller size is accepted because convergence is not demonstrated.
 - [ ] Regenerate all main figures through `make reproduce` or a documented publication command.
 
 **Exit criteria:** every final figure is traceable to a configuration, seed set, code version,
@@ -237,7 +417,8 @@ logic into JavaScript or breaking notebook portability.
 
 ### Stage 7 - Optional strain-driven GaN/AlN extension
 
-- [ ] Add `E_str` only after homoepitaxial validation is complete.
+- [ ] Add `E_str` only after homoepitaxial Figure 3 convergence and quantitative validation are
+  complete; imperfect current morphology is not justification to add strain.
 - [ ] Specify and validate the elastic/strain approximation before implementation.
 - [ ] Investigate the reported 2D-to-3D transition near 2.25 ML.
 - [ ] Attempt temperature-dependent morphology panels only with calibrated conditions.
@@ -247,11 +428,15 @@ logic into JavaScript or breaking notebook portability.
 **Exit criteria:** any claimed Stranski-Krastanov behavior depends on an implemented, documented,
 and tested strain model—not merely on mound formation in the generic KMC.
 
+This stage is specifically for GaN/AlN heteroepitaxy, Stranski-Krastanov growth, the 2D-to-3D
+transition, quantum-dot formation, and critical thickness near the reported 2.25 ML regime.
+Figure 3 is homoepitaxial GaN and does not require this physics.
+
 ### Stage 8 - Final validation and delivery
 
 - [ ] Run locked setup from a clean clone/worktree.
-- [ ] Run the full test, lint, strict Marimo, execution, export, and reproduction suite.
-- [ ] Verify deterministic baselines and ensemble artifact provenance.
+- [x] Run the full test, lint, strict Marimo, execution, export, and reproduction suite.
+- [x] Verify deterministic baselines and current sweep/convergence artifact provenance.
 - [ ] Review all scientific claims against implemented physics and cited sources.
 - [ ] Confirm all notebook plots distinguish proxy, kinematic model, and experiment.
 - [ ] Recheck desktop/narrow interaction and exported HTML.
@@ -263,7 +448,7 @@ the interactive notebook using only the documented commands.
 ## Current validation record
 
 - [x] `uv sync --locked`
-- [x] `make test` - 15 tests pass
+- [x] `make test` - 19 tests pass
 - [x] `make check` - Ruff, strict Marimo check, and notebook execution pass
 - [x] `make reproduce` - deterministic fingerprint matches
 - [x] `make export` - HTML export succeeds
@@ -279,6 +464,8 @@ the interactive notebook using only the documented commands.
 - [x] `make validate-sweep` - 24x24 low/high-flux direction passes at all three temperatures
 - [x] `make convergence` - 8x8/16x16/24x24, three-seed sensitivity artifacts generated
 - [x] `make convergence-figure3` - 8x8/16x16/32x32, three-seed 4 s bands generated
+- [x] `make convergence-figure3-64` - opt-in 64x64 point generated; 32x32 -> 64x64 fails
+- [x] `make benchmark-sizes` - controlled 64x64/128x128/256x256 runtime envelope generated
 - [x] Browser-check synchronized frame scrubbing plus responsive desktop/narrow rendering
   with zero console errors
 
@@ -289,8 +476,8 @@ repeatability, not scientific agreement.
 ## Scientific guardrails and known limitations
 
 - The baseline is a single-species, periodic, solid-on-solid model with no overhangs.
-- Six-neighbor connectivity is hexagonal; the current array image is not a hexagonal metric
-  rendering.
+- Six-neighbor connectivity is hexagonal; the continuous height-field view is rectangular
+  index space, while the optional lattice view maps axial coordinates to hexagonal geometry.
 - Energetic defaults are demonstration parameters, not calibrated GaN values.
 - `1-S_d` is a normalized morphology proxy, not an electron-diffraction calculation.
 - No strain, multiple species, reconstruction, or electron scattering is implemented.
@@ -317,7 +504,14 @@ Marimo skill repository; `marimo-pair` was installed and used as the fallback.
 - [x] Use `(T, F)` RHEED amplitude for the first ensemble map.
 - [x] Retain 64x64 only as a publication candidate: measured runtime and non-convergence rule
   out promoting it to a validated preset yet.
-- [ ] Decide whether Plotly is sufficient before approving the custom Three.js stage.
+- [x] Select detrended amplitude as the principal convergence observable and require the
+  successive-size difference plus uncertainty to fit within a 10% relative margin.
+- [ ] Decide the minimum seed count/statistical interval for publication reporting after
+  inspecting variance at larger sizes.
+- [ ] Resolve the legal/technical source and normalization protocol for the Figure 3
+  experimental curves.
+- [x] Keep Plotly for the Stage 4 height/hex-cell explanation; do not approve Three.js without
+  a concrete remaining communication or performance requirement.
 
 ## Important commands
 
@@ -329,14 +523,16 @@ make test
 make check
 make validate-sweep
 make convergence-figure3
+make convergence-figure3-64
+make benchmark-sizes
 make export
 ```
 
 ## Last meaningful update
 
-2026-08-13 - Continued Stage 4. Added the source-to-film and atom-event teaching sequence,
-replaced raw dictionary controls with labelled Marimo form tables, and linked responsive
-Plotly surface/RHEED views to one stored-snapshot slider. Native timed playback advances the
-same stored frame state and pauses cleanly. Desktop and 390 px layouts, form submission,
-manual/timed scrubbing, and browser console output were verified; no custom widget is needed
-yet.
+2026-08-13 - Added uncertainty-aware oscillation metrics and convergence schemas, the dedicated
+Figure 3 notebook mode, annotated synchronized layer milestones, and large-lattice benchmarks.
+An updateable rate tree and cached rate tables cut the 256x256 short-run benchmark from 105.8
+to 24.8 s. The opt-in
+three-seed 64x64 convergence run completes but fails the predeclared 32x32 -> 64x64 criterion,
+so 64x64 remains a candidate rather than a publication preset.

@@ -11,7 +11,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from mbe_rheed_sim import SimulationConfig
-from mbe_rheed_sim.analysis import oscillation_amplitude, rheed_proxy_ensemble
+from mbe_rheed_sim.analysis import (
+    oscillation_amplitude,
+    rheed_oscillation_metrics,
+    rheed_proxy_ensemble,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 RUN_DIR = ROOT / "outputs" / "runs"
@@ -31,15 +35,29 @@ BASE = SimulationConfig(
 def main() -> None:
     mean_amplitude = np.empty((len(TEMPERATURES_K), len(FLUXES_ML_S)))
     std_amplitude = np.empty_like(mean_amplitude)
+    mean_detrended_amplitude = np.empty_like(mean_amplitude)
+    std_detrended_amplitude = np.empty_like(mean_amplitude)
+    oscillatory_fraction = np.empty_like(mean_amplitude)
+    metrics_by_point = []
     for temperature_index, temperature in enumerate(TEMPERATURES_K):
+        temperature_metrics = []
         for flux_index, flux in enumerate(FLUXES_ML_S):
-            _, traces = rheed_proxy_ensemble(
+            coverage_ml, traces = rheed_proxy_ensemble(
                 replace(BASE, temperature_k=temperature, deposition_flux_ml_s=flux),
                 SEEDS,
             )
             amplitudes = np.array([oscillation_amplitude(trace) for trace in traces])
+            metrics = [rheed_oscillation_metrics(coverage_ml, trace) for trace in traces]
+            detrended = np.array([metric.detrended_amplitude for metric in metrics])
             mean_amplitude[temperature_index, flux_index] = amplitudes.mean()
             std_amplitude[temperature_index, flux_index] = amplitudes.std()
+            mean_detrended_amplitude[temperature_index, flux_index] = detrended.mean()
+            std_detrended_amplitude[temperature_index, flux_index] = detrended.std(ddof=1)
+            oscillatory_fraction[temperature_index, flux_index] = np.mean(
+                [metric.is_oscillatory for metric in metrics]
+            )
+            temperature_metrics.append([metric.as_dict() for metric in metrics])
+        metrics_by_point.append(temperature_metrics)
 
     summary = {
         "base_config": BASE.as_dict(),
@@ -49,6 +67,14 @@ def main() -> None:
         "amplitude_definition": "half of the 95th-minus-5th percentile proxy range",
         "mean_amplitude": mean_amplitude.tolist(),
         "std_amplitude": std_amplitude.tolist(),
+        "principal_observable": {
+            "name": "detrended_amplitude",
+            "reason": "measures the periodic component after removing linear drift",
+        },
+        "mean_detrended_amplitude": mean_detrended_amplitude.tolist(),
+        "std_detrended_amplitude": std_detrended_amplitude.tolist(),
+        "oscillatory_fraction": oscillatory_fraction.tolist(),
+        "oscillation_metrics_per_seed": metrics_by_point,
     }
     RUN_DIR.mkdir(parents=True, exist_ok=True)
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
