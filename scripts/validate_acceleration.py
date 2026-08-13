@@ -1,5 +1,6 @@
 """Compare accelerated and exact KMC ensemble observables on a small lattice."""
 
+import argparse
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -7,10 +8,10 @@ from pathlib import Path
 import numpy as np
 
 from mbe_rheed_sim import SimulationConfig, run
+from mbe_rheed_sim.workflows import artifact_root, parse_int_values, resolve_workers, run_parallel
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "outputs" / "runs" / "acceleration_validation.json"
-SEEDS = range(100)
+SEEDS = tuple(range(100))
 BASE = SimulationConfig(
     lattice_size=7,
     target_coverage_ml=0.5,
@@ -18,7 +19,7 @@ BASE = SimulationConfig(
 )
 
 
-def ensemble(maximum_hop: int) -> np.ndarray:
+def ensemble(results) -> np.ndarray:
     return np.array(
         [
             (
@@ -26,17 +27,25 @@ def ensemble(maximum_hop: int) -> np.ndarray:
                 result.island_density_per_site[-1],
                 result.rheed_proxy[-1],
             )
-            for seed in SEEDS
-            for result in [
-                run(replace(BASE, seed=seed, max_isolated_hop_distance=maximum_hop))
-            ]
+            for result in results
         ]
     )
 
 
-def main() -> None:
-    exact = ensemble(1)
-    accelerated = ensemble(3)
+def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
+    configurations = [
+        replace(BASE, seed=seed, max_isolated_hop_distance=maximum_hop)
+        for maximum_hop in (1, 3)
+        for seed in seeds
+    ]
+    results = run_parallel(
+        run,
+        configurations,
+        workers=workers,
+        description="exact/accelerated validation",
+    )
+    exact = ensemble(results[: len(seeds)])
+    accelerated = ensemble(results[len(seeds) :])
     exact_mean = exact.mean(axis=0)
     accelerated_mean = accelerated.mean(axis=0)
     exact_std = exact.std(axis=0)
@@ -51,7 +60,8 @@ def main() -> None:
     summary = {
         "lattice_size": BASE.lattice_size,
         "target_coverage_ml": BASE.target_coverage_ml,
-        "seeds": len(SEEDS),
+        "seeds": list(seeds),
+        "effective_workers": min(resolve_workers(workers), len(configurations)),
         "maximum_hop_distance": 3,
         "acceptance_tolerance": "absolute mean difference <= 0.25 exact-model standard deviation",
         "metrics": {
@@ -65,10 +75,18 @@ def main() -> None:
             for index, name in enumerate(names)
         },
     }
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(json.dumps(summary, indent=2) + "\n")
+    output = artifact_root(ROOT) / "outputs" / "runs" / "acceleration_validation.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--workers", type=int)
+    parser.add_argument("--seeds")
+    arguments = parser.parse_args()
+    main(
+        workers=resolve_workers(arguments.workers),
+        seeds=parse_int_values(arguments.seeds, SEEDS),
+    )

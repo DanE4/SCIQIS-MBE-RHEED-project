@@ -10,10 +10,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from mbe_rheed_sim import SimulationConfig, run
+from mbe_rheed_sim.workflows import artifact_root, update_progress
 
 ROOT = Path(__file__).resolve().parents[1]
-RUN_DIR = ROOT / "outputs" / "runs"
-FIGURE_DIR = ROOT / "outputs" / "figures"
 
 CONFIG = SimulationConfig(
     lattice_size=8,
@@ -38,6 +37,7 @@ EXPECTED = {
 
 
 def main() -> None:
+    update_progress(stage="deterministic baseline", completed=0, total=1, effective_workers=1)
     result = run(CONFIG)
     height_sha256 = hashlib.sha256(result.final_heights.tobytes()).hexdigest()
     actual = {
@@ -49,9 +49,12 @@ def main() -> None:
     if actual != EXPECTED:
         raise RuntimeError(f"baseline changed: expected {EXPECTED}, got {actual}")
 
-    RUN_DIR.mkdir(parents=True, exist_ok=True)
-    FIGURE_DIR.mkdir(parents=True, exist_ok=True)
-    result.save_npz(RUN_DIR / "baseline.npz")
+    output_root = artifact_root(ROOT)
+    run_dir = output_root / "outputs" / "runs"
+    figure_dir = output_root / "outputs" / "figures"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    figure_dir.mkdir(parents=True, exist_ok=True)
+    result.save_npz(run_dir / "baseline.npz")
 
     summary = {
         "config": CONFIG.as_dict(),
@@ -61,7 +64,7 @@ def main() -> None:
         "island_density_per_site": float(result.island_density_per_site[-1]),
         "rheed_proxy": float(result.rheed_proxy[-1]),
     }
-    (RUN_DIR / "baseline.json").write_text(json.dumps(summary, indent=2) + "\n")
+    (run_dir / "baseline.json").write_text(json.dumps(summary, indent=2) + "\n")
 
     figure, axes = plt.subplots(1, 3, figsize=(11, 3.2), constrained_layout=True)
     image = axes[0].imshow(result.final_heights, origin="lower", cmap="viridis", vmin=0)
@@ -71,9 +74,10 @@ def main() -> None:
     axes[1].set(xlabel="coverage (ML)", ylabel="RMS roughness (ML)")
     axes[2].plot(result.coverage_ml, result.rheed_proxy, color="tab:red")
     axes[2].set(xlabel="coverage (ML)", ylabel=r"$1-S_d$ proxy", ylim=(0, 1.03))
-    figure.savefig(FIGURE_DIR / "baseline.png", dpi=150)
+    figure.savefig(figure_dir / "baseline.png", dpi=150)
     plt.close(figure)
 
+    update_progress(stage="deterministic baseline", completed=1, total=1)
     print(json.dumps(summary, indent=2))
 
 

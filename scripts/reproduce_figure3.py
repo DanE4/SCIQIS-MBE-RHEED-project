@@ -1,5 +1,6 @@
 """Regenerate the Stage 5 Figure 3 comparison and morphology artifacts."""
 
+import argparse
 import csv
 import hashlib
 import json
@@ -15,11 +16,9 @@ import numpy as np
 from mbe_rheed_sim import run
 from mbe_rheed_sim.analysis import rheed_oscillation_metrics
 from mbe_rheed_sim.paper import FIGURE3_NOMINAL_GA_N_RATIOS, figure3_config, figure3_parameters
+from mbe_rheed_sim.workflows import artifact_root, parse_int_values, resolve_workers, run_parallel
 
 ROOT = Path(__file__).resolve().parents[1]
-RUN_DIR = ROOT / "outputs" / "runs"
-FIGURE_DIR = ROOT / "outputs" / "figures"
-PROCESSED_DIR = ROOT / "data" / "processed"
 REFERENCE_PATH = ROOT / "data" / "reference" / "figure3_experimental_digitized.json"
 SOURCE_PDF = ROOT / "nanomaterials-12-03052.pdf"
 LATTICE_SIZE = 7
@@ -65,7 +64,7 @@ def _circular_difference(left: float | None, right: float | None) -> float | Non
     return min(difference, 1.0 - difference)
 
 
-def _plot_comparison(traces: list[dict[str, object]]) -> None:
+def _plot_comparison(traces: list[dict[str, object]], figure_dir: Path) -> None:
     figure, axes = plt.subplots(
         len(traces), 2, figsize=(10, 7.5), sharex=True, constrained_layout=True
     )
@@ -101,11 +100,11 @@ def _plot_comparison(traces: list[dict[str, object]]) -> None:
         "Figure 3 comparison — separate scales, shared time domain\n"
         "Reference is figure-derived; proxy amplitude is not finite-size converged"
     )
-    figure.savefig(FIGURE_DIR / "figure3_publication_comparison.png", dpi=180)
+    figure.savefig(figure_dir / "figure3_publication_comparison.png", dpi=180)
     plt.close(figure)
 
 
-def _plot_metrics(comparisons: list[dict[str, object]]) -> None:
+def _plot_metrics(comparisons: list[dict[str, object]], figure_dir: Path) -> None:
     ratios = np.asarray([item["nominal_ga_n_ratio"] for item in comparisons])
     figure, axes = plt.subplots(2, 2, figsize=(9, 6.5), constrained_layout=True)
     specifications = (
@@ -125,11 +124,13 @@ def _plot_metrics(comparisons: list[dict[str, object]]) -> None:
         axis.grid(alpha=0.25)
     axes[0, 0].legend()
     figure.suptitle("Figure 3 diagnostics (reference is figure-derived, simulation is raw proxy)")
-    figure.savefig(FIGURE_DIR / "figure3_metric_comparison.png", dpi=180)
+    figure.savefig(figure_dir / "figure3_metric_comparison.png", dpi=180)
     plt.close(figure)
 
 
-def _morphology_sequence(result, growth_rate: float) -> dict[str, object]:
+def _morphology_sequence(
+    result, growth_rate: float, figure_dir: Path, morphology_seed: int
+) -> dict[str, object]:
     predicted = result.time_s * growth_rate
     indices = [int(np.argmin(np.abs(predicted - target))) for target in MORPHOLOGY_TARGETS_ML]
     frames = [
@@ -169,23 +170,28 @@ def _morphology_sequence(result, growth_rate: float) -> dict[str, object]:
         axis.set_axis_off()
     figure.colorbar(image, ax=axes, shrink=0.7, label="column height (ML)")
     figure.suptitle(
-        "Figure 4-inspired homoepitaxial morphology sequence — Ga/N=0.82, seed 2026; no strain"
+        "Figure 4-inspired homoepitaxial morphology sequence — "
+        f"Ga/N=0.82, seed {morphology_seed}; no strain"
     )
-    figure.savefig(FIGURE_DIR / "figure4_inspired_morphology.png", dpi=180)
+    figure.savefig(figure_dir / "figure4_inspired_morphology.png", dpi=180)
     plt.close(figure)
     return {
         "classification": "homoepitaxial layer-cycle illustration; not a strain/SK reproduction",
         "nominal_ga_n_ratio": MORPHOLOGY_RATIO,
-        "seed": SEEDS[0],
+        "seed": morphology_seed,
         "coordinate": "paper-predicted coverage = predicted growth rate times time",
         "frames": frames,
     }
 
 
-def main() -> None:
-    RUN_DIR.mkdir(parents=True, exist_ok=True)
-    FIGURE_DIR.mkdir(parents=True, exist_ok=True)
-    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
+    output_root = artifact_root(ROOT)
+    run_dir = output_root / "outputs" / "runs"
+    figure_dir = output_root / "outputs" / "figures"
+    processed_dir = output_root / "data" / "processed"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    figure_dir.mkdir(parents=True, exist_ok=True)
+    processed_dir.mkdir(parents=True, exist_ok=True)
     reference_data = json.loads(REFERENCE_PATH.read_text())
     code_version = _git_version()
     references = {
@@ -196,11 +202,22 @@ def main() -> None:
     morphology_result = None
     morphology_growth_rate = None
 
-    for ratio in FIGURE3_NOMINAL_GA_N_RATIOS:
+    configurations = [
+        figure3_config(ratio, lattice_size=LATTICE_SIZE, seed=seed)
+        for ratio in FIGURE3_NOMINAL_GA_N_RATIOS
+        for seed in seeds
+    ]
+    all_results = run_parallel(
+        run,
+        configurations,
+        workers=workers,
+        description="Figure 3 publication ensemble",
+    )
+
+    for ratio_index, ratio in enumerate(FIGURE3_NOMINAL_GA_N_RATIOS):
         parameters = figure3_parameters(ratio)
-        results = [
-            run(figure3_config(ratio, lattice_size=LATTICE_SIZE, seed=seed)) for seed in SEEDS
-        ]
+        start = ratio_index * len(seeds)
+        results = all_results[start : start + len(seeds)]
         proxy_traces = np.vstack(
             [np.interp(TIME_GRID_S, result.time_s, result.rheed_proxy) for result in results]
         )
@@ -219,7 +236,7 @@ def main() -> None:
                 "nominal_ga_n_ratio": ratio,
                 "paper_parameters": parameters.as_dict(),
                 "simulation_config": results[0].config.as_dict(),
-                "seeds": SEEDS,
+                "seeds": seeds,
                 "time_s": TIME_GRID_S.tolist(),
                 "predicted_coverage_ml": predicted_coverage.tolist(),
                 "rheed_proxy_mean": mean.tolist(),
@@ -232,9 +249,9 @@ def main() -> None:
         )
         ratio_label = f"{ratio:.2f}".replace(".", "")
         np.savez_compressed(
-            RUN_DIR / f"figure3_ratio_{ratio_label}.npz",
+            run_dir / f"figure3_ratio_{ratio_label}.npz",
             config_json=json.dumps(results[0].config.as_dict(), sort_keys=True),
-            seeds=np.asarray(SEEDS),
+            seeds=np.asarray(seeds),
             code_version_json=json.dumps(code_version, sort_keys=True),
             time_s=TIME_GRID_S,
             predicted_coverage_ml=predicted_coverage,
@@ -248,7 +265,7 @@ def main() -> None:
             {
                 "paper_parameters": parameters.as_dict(),
                 "simulation_config": results[0].config.as_dict(),
-                "seeds": SEEDS,
+                "seeds": seeds,
                 "simulation_metrics": simulation_metrics.as_dict(),
                 "reference_metrics": reference_metrics.as_dict(),
                 "runs": [
@@ -300,9 +317,11 @@ def main() -> None:
 
     if morphology_result is None or morphology_growth_rate is None:
         raise RuntimeError("representative morphology run was not produced")
-    morphology = _morphology_sequence(morphology_result, morphology_growth_rate)
-    _plot_comparison(traces)
-    _plot_metrics(comparisons)
+    morphology = _morphology_sequence(
+        morphology_result, morphology_growth_rate, figure_dir, seeds[0]
+    )
+    _plot_comparison(traces, figure_dir)
+    _plot_metrics(comparisons, figure_dir)
 
     provenance = {
         "generated_by": "scripts/reproduce_figure3.py",
@@ -310,7 +329,8 @@ def main() -> None:
         "source_pdf_sha256": _sha256(SOURCE_PDF),
         "reference_json_sha256": _sha256(REFERENCE_PATH),
         "lattice_size": LATTICE_SIZE,
-        "seeds": SEEDS,
+        "seeds": seeds,
+        "effective_workers": min(resolve_workers(workers), len(configurations)),
         "classification": "qualitative finite-size smoke comparison; amplitude not converged",
     }
     artifact = {
@@ -332,12 +352,12 @@ def main() -> None:
             "outputs/figures/figure4_inspired_morphology.png",
         ],
     }
-    (RUN_DIR / "figure3_publication.json").write_text(json.dumps(artifact, indent=2) + "\n")
-    (RUN_DIR / "figure3_run_summaries.json").write_text(json.dumps(summaries, indent=2) + "\n")
-    (PROCESSED_DIR / "figure3_simulated_smoke.json").write_text(
+    (run_dir / "figure3_publication.json").write_text(json.dumps(artifact, indent=2) + "\n")
+    (run_dir / "figure3_run_summaries.json").write_text(json.dumps(summaries, indent=2) + "\n")
+    (processed_dir / "figure3_simulated_smoke.json").write_text(
         json.dumps(artifact, separators=(",", ":")) + "\n"
     )
-    with (RUN_DIR / "figure3_metric_comparison.csv").open("w", newline="") as output:
+    with (run_dir / "figure3_metric_comparison.csv").open("w", newline="") as output:
         writer = csv.DictWriter(
             output,
             fieldnames=(
@@ -368,4 +388,11 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--workers", type=int)
+    parser.add_argument("--seeds")
+    arguments = parser.parse_args()
+    main(
+        workers=resolve_workers(arguments.workers),
+        seeds=parse_int_values(arguments.seeds, SEEDS),
+    )

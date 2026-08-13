@@ -161,11 +161,13 @@ outputs/*.html
 outputs/figures/*
 outputs/animations/*
 outputs/runs/*
+outputs/batches/*
 data/raw/*
 data/processed/*
 !outputs/figures/.gitkeep
 !outputs/animations/.gitkeep
 !outputs/runs/.gitkeep
+!outputs/batches/.gitkeep
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/processed/parameter_sweep.json

@@ -1,5 +1,6 @@
 """Measure short paper-regime runs before scheduling large ensembles."""
 
+import argparse
 import json
 from pathlib import Path
 from time import perf_counter
@@ -8,18 +9,21 @@ import numpy as np
 
 from mbe_rheed_sim import run
 from mbe_rheed_sim.paper import figure3_config
+from mbe_rheed_sim.workflows import artifact_root, parse_int_values, update_progress
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "outputs" / "runs" / "large_lattice_benchmark.json"
 RATIO = 0.82
 DURATION_S = 0.1
 SIZES = (64, 128, 256)
 SEED = 0
 
 
-def main() -> None:
+def main(*, sizes: tuple[int, ...] = SIZES) -> None:
+    if any(size < 2 for size in sizes):
+        raise ValueError("lattice sizes must be at least 2")
     measurements = []
-    for size in SIZES:
+    update_progress(stage="sequential lattice benchmark", completed=0, total=len(sizes), effective_workers=1)
+    for completed, size in enumerate(sizes, start=1):
         started = perf_counter()
         result = run(figure3_config(RATIO, lattice_size=size, duration_s=DURATION_S, seed=SEED))
         elapsed = perf_counter() - started
@@ -55,6 +59,7 @@ def main() -> None:
                 "occupied_site_fraction": float(np.mean(result.final_heights > 0)),
             }
         )
+        update_progress(stage=f"sequential benchmark {size}x{size}", completed=completed, total=len(sizes))
 
     output = {
         "purpose": "short runtime envelope only; not a convergence or physical-duration run",
@@ -63,10 +68,14 @@ def main() -> None:
         "seed": SEED,
         "measurements": measurements,
     }
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(json.dumps(output, indent=2) + "\n")
+    destination = artifact_root(ROOT) / "outputs" / "runs" / "large_lattice_benchmark.json"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(output, indent=2) + "\n")
     print(json.dumps(output, indent=2))
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--sizes")
+    arguments = parser.parse_args()
+    main(sizes=parse_int_values(arguments.sizes, SIZES))

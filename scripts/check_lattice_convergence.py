@@ -1,9 +1,9 @@
 """Measure small-lattice sensitivity for the current uncalibrated demonstration regime."""
 
+import argparse
 import json
 from dataclasses import replace
 from pathlib import Path
-from time import perf_counter
 
 import matplotlib
 
@@ -11,24 +11,36 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mbe_rheed_sim import SimulationConfig, run
+from mbe_rheed_sim import SimulationConfig
 from mbe_rheed_sim.analysis import (
     oscillation_amplitude,
     result_array_bytes,
     rheed_oscillation_metrics,
     successive_size_check,
 )
+from mbe_rheed_sim.workflows import (
+    artifact_root,
+    parse_int_values,
+    resolve_workers,
+    run_parallel,
+    run_timed,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
-RUN_DIR = ROOT / "outputs" / "runs"
-FIGURE_DIR = ROOT / "outputs" / "figures"
 SIZES = (8, 16, 24)
 SEEDS = (0, 1, 2)
 BASE = SimulationConfig(target_coverage_ml=2.0, sample_every_ml=0.05, step_barrier_ev=0)
 RELATIVE_TOLERANCE = 0.10
 
 
-def main() -> None:
+def main(
+    *, workers: int = 4, seeds: tuple[int, ...] = SEEDS, sizes: tuple[int, ...] = SIZES
+) -> None:
+    if any(size < 2 for size in sizes):
+        raise ValueError("lattice sizes must be at least 2")
+    output_root = artifact_root(ROOT)
+    run_dir = output_root / "outputs" / "runs"
+    figure_dir = output_root / "outputs" / "figures"
     roughness_means = []
     roughness_stds = []
     amplitude_means = []
@@ -36,13 +48,17 @@ def main() -> None:
     detrended_means = []
     detrended_stds = []
     size_summaries = []
-    for size in SIZES:
+    for size in sizes:
         results = []
         runs = []
-        for seed in SEEDS:
-            started = perf_counter()
-            result = run(replace(BASE, lattice_size=size, seed=seed))
-            elapsed = perf_counter() - started
+        configurations = [replace(BASE, lattice_size=size, seed=seed) for seed in seeds]
+        timed_results = run_parallel(
+            run_timed,
+            configurations,
+            workers=workers,
+            description=f"generic convergence {size}x{size}",
+        )
+        for (result, elapsed), seed in zip(timed_results, seeds, strict=True):
             metrics = rheed_oscillation_metrics(result.coverage_ml, result.rheed_proxy)
             results.append(result)
             runs.append(
@@ -87,31 +103,32 @@ def main() -> None:
         size_summaries.append(
             {
                 "lattice_size": size,
-                "seed_count": len(SEEDS),
+                "seed_count": len(seeds),
                 "elapsed_s": float(sum(run_summary["elapsed_s"] for run_summary in runs)),
                 "runs": runs,
             }
         )
 
     successive_checks = []
-    for index in range(1, len(SIZES)):
+    for index in range(1, len(sizes)):
         successive_checks.append(
             successive_size_check(
-                SIZES[index - 1],
-                SIZES[index],
+                sizes[index - 1],
+                sizes[index],
                 detrended_means[index - 1],
                 detrended_means[index],
                 detrended_stds[index - 1],
                 detrended_stds[index],
-                len(SEEDS),
+                len(seeds),
                 relative_tolerance=RELATIVE_TOLERANCE,
             )
         )
 
     summary = {
         "base_config": BASE.as_dict(),
-        "lattice_sizes": SIZES,
-        "seeds": SEEDS,
+        "lattice_sizes": sizes,
+        "seeds": seeds,
+        "effective_workers": min(resolve_workers(workers), len(seeds)),
         "roughness_mean_ml": roughness_means,
         "roughness_std_ml": roughness_stds,
         "proxy_amplitude_mean": amplitude_means,
@@ -129,20 +146,29 @@ def main() -> None:
         "successive_size_checks": successive_checks,
         "sizes": size_summaries,
     }
-    RUN_DIR.mkdir(parents=True, exist_ok=True)
-    FIGURE_DIR.mkdir(parents=True, exist_ok=True)
-    (RUN_DIR / "lattice_convergence.json").write_text(json.dumps(summary, indent=2) + "\n")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    figure_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "lattice_convergence.json").write_text(json.dumps(summary, indent=2) + "\n")
 
     figure, axes = plt.subplots(1, 2, figsize=(9, 3.8), constrained_layout=True)
-    axes[0].errorbar(SIZES, roughness_means, yerr=roughness_stds, marker="o", capsize=4)
+    axes[0].errorbar(sizes, roughness_means, yerr=roughness_stds, marker="o", capsize=4)
     axes[0].set(xlabel="lattice side", ylabel="final RMS roughness (ML)")
-    axes[1].errorbar(SIZES, amplitude_means, yerr=amplitude_stds, marker="o", capsize=4)
+    axes[1].errorbar(sizes, amplitude_means, yerr=amplitude_stds, marker="o", capsize=4)
     axes[1].set(xlabel="lattice side", ylabel="RHEED-proxy amplitude")
     figure.suptitle("Small-lattice sensitivity (mean +/- SD, 3 seeds)")
-    figure.savefig(FIGURE_DIR / "lattice_convergence.png", dpi=160)
+    figure.savefig(figure_dir / "lattice_convergence.png", dpi=160)
     plt.close(figure)
     print(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--workers", type=int)
+    parser.add_argument("--seeds")
+    parser.add_argument("--sizes")
+    arguments = parser.parse_args()
+    main(
+        workers=resolve_workers(arguments.workers),
+        seeds=parse_int_values(arguments.seeds, SEEDS),
+        sizes=parse_int_values(arguments.sizes, SIZES),
+    )

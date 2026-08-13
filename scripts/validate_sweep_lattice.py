@@ -1,16 +1,17 @@
 """Check the sweep's high-versus-low flux trend on a 24x24 lattice."""
 
+import argparse
 import json
 from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
 
-from mbe_rheed_sim import SimulationConfig
-from mbe_rheed_sim.analysis import oscillation_amplitude, rheed_proxy_ensemble
+from mbe_rheed_sim import SimulationConfig, run
+from mbe_rheed_sim.analysis import oscillation_amplitude
+from mbe_rheed_sim.workflows import artifact_root, parse_int_values, resolve_workers, run_parallel
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "outputs" / "runs" / "sweep_lattice_validation.json"
 TEMPERATURES_K = (700.0, 850.0, 1_000.0)
 LOW_FLUX_ML_S = 0.25
 HIGH_FLUX_ML_S = 0.75
@@ -23,20 +24,34 @@ BASE = SimulationConfig(
 )
 
 
-def mean_amplitude(config: SimulationConfig) -> tuple[float, float]:
-    _, traces = rheed_proxy_ensemble(config, SEEDS)
+def mean_amplitude(results) -> tuple[float, float]:
+    coverage = np.linspace(0.0, float(BASE.target_coverage_ml), 201)
+    traces = np.vstack(
+        [np.interp(coverage, result.coverage_ml, result.rheed_proxy) for result in results]
+    )
     amplitudes = np.array([oscillation_amplitude(trace) for trace in traces])
     return float(amplitudes.mean()), float(amplitudes.std())
 
 
-def main() -> None:
+def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
+    configurations = [
+        replace(BASE, temperature_k=temperature, deposition_flux_ml_s=flux, seed=seed)
+        for temperature in TEMPERATURES_K
+        for flux in (LOW_FLUX_ML_S, HIGH_FLUX_ML_S)
+        for seed in seeds
+    ]
+    results = run_parallel(
+        run,
+        configurations,
+        workers=workers,
+        description="cross-lattice sweep validation",
+    )
     comparisons = []
-    for temperature in TEMPERATURES_K:
-        low_mean, low_std = mean_amplitude(
-            replace(BASE, temperature_k=temperature, deposition_flux_ml_s=LOW_FLUX_ML_S)
-        )
+    for index, temperature in enumerate(TEMPERATURES_K):
+        start = index * 2 * len(seeds)
+        low_mean, low_std = mean_amplitude(results[start : start + len(seeds)])
         high_mean, high_std = mean_amplitude(
-            replace(BASE, temperature_k=temperature, deposition_flux_ml_s=HIGH_FLUX_ML_S)
+            results[start + len(seeds) : start + 2 * len(seeds)]
         )
         comparisons.append(
             {
@@ -54,15 +69,24 @@ def main() -> None:
         raise RuntimeError(f"high-flux amplitude trend did not survive at 24x24: {failed}")
     summary = {
         "config": BASE.as_dict(),
-        "seeds": SEEDS,
+        "seeds": seeds,
+        "effective_workers": min(resolve_workers(workers), len(configurations)),
         "low_flux_ml_s": LOW_FLUX_ML_S,
         "high_flux_ml_s": HIGH_FLUX_ML_S,
         "comparisons": comparisons,
     }
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(json.dumps(summary, indent=2) + "\n")
+    output = artifact_root(ROOT) / "outputs" / "runs" / "sweep_lattice_validation.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--workers", type=int)
+    parser.add_argument("--seeds")
+    arguments = parser.parse_args()
+    main(
+        workers=resolve_workers(arguments.workers),
+        seeds=parse_int_values(arguments.seeds, SEEDS),
+    )

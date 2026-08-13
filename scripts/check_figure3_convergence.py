@@ -4,7 +4,6 @@ import argparse
 import json
 from itertools import pairwise
 from pathlib import Path
-from time import perf_counter
 
 import matplotlib
 
@@ -12,7 +11,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mbe_rheed_sim import run
 from mbe_rheed_sim.analysis import (
     oscillation_amplitude,
     result_array_bytes,
@@ -20,10 +18,15 @@ from mbe_rheed_sim.analysis import (
     successive_size_check,
 )
 from mbe_rheed_sim.paper import figure3_config, figure3_parameters
+from mbe_rheed_sim.workflows import (
+    artifact_root,
+    parse_int_values,
+    resolve_workers,
+    run_parallel,
+    run_timed,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
-RUN_DIR = ROOT / "outputs" / "runs"
-FIGURE_DIR = ROOT / "outputs" / "figures"
 RATIO = 0.82
 DURATION_S = 4.0
 SIZES = (8, 16, 32)
@@ -32,18 +35,36 @@ TIME_S = np.linspace(0.0, DURATION_S, 101)
 RELATIVE_TOLERANCE = 0.10
 
 
-def main(*, include_64: bool = False) -> None:
-    sizes = (*SIZES, 64) if include_64 else SIZES
+def main(
+    *,
+    include_64: bool = False,
+    workers: int = 4,
+    seeds: tuple[int, ...] = SEEDS,
+    requested_sizes: tuple[int, ...] | None = None,
+) -> None:
+    sizes = requested_sizes or ((*SIZES, 64) if include_64 else SIZES)
+    if len(sizes) < 2 or any(size < 2 for size in sizes):
+        raise ValueError("at least two lattice sizes of 2 or greater are required")
+    output_root = artifact_root(ROOT)
+    run_dir = output_root / "outputs" / "runs"
+    figure_dir = output_root / "outputs" / "figures"
     summaries = []
     parameters = figure3_parameters(RATIO)
     figure, axes = plt.subplots(1, len(sizes), figsize=(4 * len(sizes), 3.5), sharey=True)
     for axis, size in zip(axes, sizes, strict=True):
         results = []
         runs = []
-        for seed in SEEDS:
-            started = perf_counter()
-            result = run(figure3_config(RATIO, lattice_size=size, duration_s=DURATION_S, seed=seed))
-            elapsed = perf_counter() - started
+        configurations = [
+            figure3_config(RATIO, lattice_size=size, duration_s=DURATION_S, seed=seed)
+            for seed in seeds
+        ]
+        timed_results = run_parallel(
+            run_timed,
+            configurations,
+            workers=workers,
+            description=f"Figure 3 convergence {size}x{size}",
+        )
+        for (result, elapsed), seed in zip(timed_results, seeds, strict=True):
             predicted_coverage = result.time_s * parameters.predicted_growth_rate_ml_s
             metrics = rheed_oscillation_metrics(predicted_coverage, result.rheed_proxy)
             results.append(result)
@@ -89,7 +110,7 @@ def main(*, include_64: bool = False) -> None:
         summaries.append(
             {
                 "lattice_size": size,
-                "seed_count": len(SEEDS),
+                "seed_count": len(seeds),
                 "elapsed_s": float(sum(run_summary["elapsed_s"] for run_summary in runs)),
                 "roughness_mean_ml": float(roughness.mean()),
                 "roughness_std_ml": float(roughness.std()),
@@ -122,7 +143,7 @@ def main(*, include_64: bool = False) -> None:
                 larger["detrended_amplitude_mean"],
                 smaller["detrended_amplitude_std"],
                 larger["detrended_amplitude_std"],
-                len(SEEDS),
+                len(seeds),
                 relative_tolerance=RELATIVE_TOLERANCE,
             )
         )
@@ -130,7 +151,8 @@ def main(*, include_64: bool = False) -> None:
     output = {
         "nominal_ga_n_ratio": RATIO,
         "duration_s": DURATION_S,
-        "seeds": SEEDS,
+        "seeds": seeds,
+        "effective_workers": min(resolve_workers(workers), len(seeds)),
         "paper_parameters": parameters.as_dict(),
         "principal_observable": {
             "name": "detrended_amplitude",
@@ -148,10 +170,10 @@ def main(*, include_64: bool = False) -> None:
         ),
         "sizes": summaries,
     }
-    RUN_DIR.mkdir(parents=True, exist_ok=True)
-    FIGURE_DIR.mkdir(parents=True, exist_ok=True)
-    (RUN_DIR / "figure3_convergence.json").write_text(json.dumps(output, indent=2) + "\n")
-    figure.savefig(FIGURE_DIR / "figure3_convergence.png", dpi=160)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    figure_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "figure3_convergence.json").write_text(json.dumps(output, indent=2) + "\n")
+    figure.savefig(figure_dir / "figure3_convergence.png", dpi=160)
     plt.close(figure)
     print(json.dumps(output, indent=2))
 
@@ -159,4 +181,15 @@ def main(*, include_64: bool = False) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--include-64", action="store_true")
-    main(include_64=parser.parse_args().include_64)
+    parser.add_argument("--workers", type=int)
+    parser.add_argument("--seeds")
+    parser.add_argument("--sizes")
+    arguments = parser.parse_args()
+    main(
+        include_64=arguments.include_64,
+        workers=resolve_workers(arguments.workers),
+        seeds=parse_int_values(arguments.seeds, SEEDS),
+        requested_sizes=(
+            parse_int_values(arguments.sizes, SIZES) if arguments.sizes is not None else None
+        ),
+    )
