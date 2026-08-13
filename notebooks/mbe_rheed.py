@@ -13,11 +13,10 @@ def _():
     import matplotlib.pyplot as plt
     import numpy as np
     import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
 
     from mbe_rheed_sim import SimulationConfig, run
 
-    return Path, SimulationConfig, go, json, make_subplots, mo, np, plt, run
+    return Path, SimulationConfig, go, json, mo, np, plt, run
 
 
 @app.cell
@@ -38,8 +37,47 @@ def _(mo):
 
 @app.cell
 def _(mo):
+    mo.vstack(
+        [
+            mo.md("## 1. From source to growing surface"),
+            mo.mermaid(
+                """
+                flowchart LR
+                    A[Ga source] -->|beam flux F| B[heated substrate]
+                    B --> C[mobile adsorbates]
+                    C --> D[islands and growing film]
+                """
+            ),
+            mo.md(
+                "The substrate temperature controls how rapidly deposited growth units "
+                "diffuse or desorb before they become incorporated into the film."
+            ),
+        ]
+    )
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md("""
+    ## 2. What can a deposited growth unit do?
+
+    | Event | Surface change | Competing control |
+    |---|---|---|
+    | **Deposit** | add one unit at the landing site | flux $F$ |
+    | **Diffuse** | move a top unit to a neighboring column | $T$, bonds, barriers |
+    | **Attach** | gain lateral neighbors and become less mobile | island geometry |
+    | **Desorb** | remove one top unit | $T$, desorption barrier |
+
+    These are the only physical events in the current single-species, solid-on-solid model.
+    """)
+    return
+
+
+@app.cell
+def _(mo):
     mo.md(r"""
-    ## 1. Why kinetic Monte Carlo?
+    ## 3. How kinetic Monte Carlo advances time
 
     MBE contains rare, discrete events with very different rates. Residence-time kinetic
     Monte Carlo chooses event $i$ with probability $r_i / R$ and advances the physical
@@ -56,7 +94,7 @@ def _(mo):
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 2. Baseline growth model
+    ## 4. Model and event rates
 
     The state is an integer solid-on-solid height field on a periodic lattice with six
     neighbors per site. One deposition event adds one generic growth unit. A top particle
@@ -92,25 +130,50 @@ def _(mo):
         "seed": 7,
     }
     get_parameters, _set_parameters = mo.state(default_parameters)
-    parameter_form = mo.ui.dictionary(
-        {
-            "temperature_k": mo.ui.slider(600, 1_100, step=25, value=800, label="Temperature (K)"),
-            "flux_ml_s": mo.ui.slider(0.1, 1.0, step=0.1, value=0.5, label="Flux (ML/s)"),
-            "barrier_ev": mo.ui.slider(0.10, 0.40, step=0.01, value=0.15, label="Diffusion barrier (eV)"),
-            "step_barrier_ev": mo.ui.slider(0.0, 0.20, step=0.01, value=0.05, label="Down-step barrier (eV)"),
-            "desorption_barrier_ev": mo.ui.slider(0.4, 0.9, step=0.01, value=0.65, label="Desorption barrier (eV)"),
-            "size": mo.ui.slider(8, 24, step=2, value=16, label="Lattice size"),
-            "coverage_ml": mo.ui.slider(0.5, 3.0, step=0.5, value=2.0, label="Target coverage (ML)"),
-            "seed": mo.ui.number(start=0, stop=10_000, value=7, label="RNG seed"),
-        }
-    ).form(
+    parameter_controls = mo.md("""
+        ### Growth conditions
+
+        | Quantity | Value |
+        |---|---|
+        | Temperature | {temperature_k} |
+        | Deposition flux | {flux_ml_s} |
+        | Diffusion barrier | {barrier_ev} |
+        | Down-step barrier | {step_barrier_ev} |
+        | Desorption barrier | {desorption_barrier_ev} |
+
+        ### Numerical controls
+
+        | Quantity | Value |
+        |---|---|
+        | Lattice size | {size} |
+        | Target coverage | {coverage_ml} |
+        | RNG seed | {seed} |
+    """).batch(
+        temperature_k=mo.ui.slider(600, 1_100, step=25, value=800, label="Temperature (K)"),
+        flux_ml_s=mo.ui.slider(0.1, 1.0, step=0.1, value=0.5, label="Flux (ML/s)"),
+        barrier_ev=mo.ui.slider(0.10, 0.40, step=0.01, value=0.15, label="Diffusion barrier (eV)"),
+        step_barrier_ev=mo.ui.slider(
+            0.0, 0.20, step=0.01, value=0.05, label="Down-step barrier (eV)"
+        ),
+        desorption_barrier_ev=mo.ui.slider(
+            0.4, 0.9, step=0.01, value=0.65, label="Desorption barrier (eV)"
+        ),
+        size=mo.ui.slider(8, 24, step=2, value=16, label="Lattice size"),
+        coverage_ml=mo.ui.slider(0.5, 3.0, step=0.5, value=2.0, label="Target coverage (ML)"),
+        seed=mo.ui.number(start=0, stop=10_000, value=7, label="RNG seed"),
+    )
+    parameter_form = parameter_controls.form(
         submit_button_label="Run simulation",
         bordered=True,
         on_change=lambda value: _set_parameters(value or default_parameters),
     )
     mo.vstack(
         [
-            mo.md("## 3. Interactive experiment\nChange values, then submit once."),
+            mo.md(
+                "## 5. Run the virtual experiment\n"
+                "Choose a known configuration, then run once. Frame scrubbing below reuses "
+                "the stored trajectory and does not rerun KMC."
+            ),
             parameter_form,
         ]
     )
@@ -148,84 +211,61 @@ def _(mo, simulation):
 
 @app.cell
 def _(mo, simulation):
-    snapshot_slider = mo.ui.slider(
-        0,
-        len(simulation.snapshots) - 1,
-        value=len(simulation.snapshots) - 1,
-        label="Recorded growth frame",
-        show_value=True,
-    )
-    mo.vstack([mo.md("## 4. Evolving surface and RHEED connection"), snapshot_slider])
-    return (snapshot_slider,)
+    get_frame, set_frame = mo.state(len(simulation.snapshots) - 1)
+    return get_frame, set_frame
 
 
 @app.cell
-def _(go, make_subplots, simulation, snapshot_slider):
-    _frame = snapshot_slider.value
+def _(mo, set_frame, simulation):
+    playback = mo.ui.refresh(
+        options=[0.25, 0.5, 1.0],
+        label="Playback interval",
+        on_change=lambda _value: set_frame(lambda frame: (frame + 1) % len(simulation.snapshots)),
+    )
+    return (playback,)
+
+
+@app.cell
+def _(get_frame, mo, playback, set_frame, simulation):
+    snapshot_slider = mo.ui.slider(
+        0,
+        len(simulation.snapshots) - 1,
+        value=min(get_frame(), len(simulation.snapshots) - 1),
+        label="Recorded growth frame",
+        show_value=True,
+        on_change=set_frame,
+    )
+    mo.vstack(
+        [
+            mo.md("## 6. Surface morphology and the RHEED proxy"),
+            mo.hstack([snapshot_slider, playback], justify="start", gap=2),
+        ]
+    )
+    return
+
+
+@app.cell
+def _(get_frame, go, mo, simulation):
+    _frame = min(get_frame(), len(simulation.snapshots) - 1)
     _heights = simulation.snapshots[_frame]
     _coverage = simulation.coverage_ml[_frame]
     _proxy = simulation.rheed_proxy[_frame]
     _zmax = max(1, int(simulation.snapshots.max()))
-    evolution_figure = make_subplots(
-        rows=1,
-        cols=2,
-        specs=[[{"type": "surface"}, {"type": "xy"}]],
-        column_widths=[0.56, 0.44],
-        horizontal_spacing=0.08,
-    )
-    evolution_figure.add_trace(
+    surface_figure = go.Figure(
         go.Surface(
             z=_heights,
             colorscale="Viridis",
             cmin=0,
             cmax=_zmax,
-            colorbar={"title": "height (ML)", "len": 0.7, "x": 0.49},
+            colorbar={"title": "height (ML)", "len": 0.7},
             hovertemplate="x=%{x}<br>y=%{y}<br>height=%{z} ML<extra></extra>",
             name="surface",
-        ),
-        row=1,
-        col=1,
+        )
     )
-    evolution_figure.add_trace(
-        go.Scatter(
-            x=simulation.coverage_ml,
-            y=simulation.rheed_proxy,
-            mode="lines",
-            line={"color": "#d62728", "width": 3},
-            name="normalized step-density RHEED proxy",
-        ),
-        row=1,
-        col=2,
-    )
-    evolution_figure.add_trace(
-        go.Scatter(
-            x=[_coverage, _coverage],
-            y=[0, 1.03],
-            mode="lines",
-            line={"color": "#111827", "dash": "dot"},
-            name="current frame",
-            hoverinfo="skip",
-        ),
-        row=1,
-        col=2,
-    )
-    evolution_figure.add_trace(
-        go.Scatter(
-            x=[_coverage],
-            y=[_proxy],
-            mode="markers",
-            marker={"color": "#111827", "size": 10},
-            name="current proxy",
-            hovertemplate="coverage=%{x:.2f} ML<br>proxy=%{y:.3f}<extra></extra>",
-        ),
-        row=1,
-        col=2,
-    )
-    evolution_figure.update_layout(
-        height=500,
-        margin={"l": 20, "r": 20, "t": 70, "b": 20},
-        title=f"Surface and RHEED proxy at {_coverage:.2f} ML",
-        legend={"orientation": "h", "y": -0.12},
+    surface_figure.update_layout(
+        height=430,
+        margin={"l": 0, "r": 0, "t": 50, "b": 0},
+        title=f"Surface at {_coverage:.2f} ML",
         scene={
             "xaxis_title": "lattice x",
             "yaxis_title": "lattice y",
@@ -235,17 +275,74 @@ def _(go, make_subplots, simulation, snapshot_slider):
             "camera": {"eye": {"x": 1.4, "y": 1.4, "z": 1.0}},
         },
     )
-    evolution_figure.update_xaxes(title_text="film coverage (ML)", row=1, col=2)
-    evolution_figure.update_yaxes(
-        title_text="normalized proxy", range=[0, 1.03], row=1, col=2
+    rheed_figure = go.Figure()
+    rheed_figure.add_trace(
+        go.Scatter(
+            x=simulation.coverage_ml,
+            y=simulation.rheed_proxy,
+            mode="lines",
+            line={"color": "#d62728", "width": 3},
+            name="normalized step-density RHEED proxy",
+        )
     )
-    evolution_figure
+    rheed_figure.add_trace(
+        go.Scatter(
+            x=[_coverage, _coverage],
+            y=[0, 1.03],
+            mode="lines",
+            line={"color": "#111827", "dash": "dot"},
+            name="current frame",
+            hoverinfo="skip",
+        )
+    )
+    rheed_figure.add_trace(
+        go.Scatter(
+            x=[_coverage],
+            y=[_proxy],
+            mode="markers",
+            marker={"color": "#111827", "size": 10},
+            name="current proxy",
+            hovertemplate="coverage=%{x:.2f} ML<br>proxy=%{y:.3f}<extra></extra>",
+        )
+    )
+    rheed_figure.update_layout(
+        height=430,
+        margin={"l": 60, "r": 10, "t": 50, "b": 60},
+        title=f"RHEED proxy at {_coverage:.2f} ML",
+        legend={"orientation": "h", "y": -0.2},
+        xaxis_title="film coverage (ML)",
+        yaxis_title="normalized proxy",
+        yaxis_range=[0, 1.03],
+    )
+    mo.vstack(
+        [
+            mo.Html("""
+                <style>
+                @media (max-width: 600px) {
+                    div:has(> marimo-plotly) { flex-basis: 100% !important; }
+                }
+                </style>
+            """),
+            mo.hstack(
+                [surface_figure, rheed_figure],
+                widths="equal",
+                wrap=True,
+                align="center",
+            ),
+        ]
+    )
     return
 
 
 @app.cell
 def _(mo):
     mo.md(r"""
+    ### What does RHEED see here?
+
+    A real RHEED beam strikes the surface at grazing incidence and its diffracted intensity
+    depends on electron-scattering geometry. This teaching model does **not** calculate that
+    diffraction. It uses surface steps as a morphology-based connection:
+
     The proxy is $I_{\mathrm{proxy}}=1-S_d$, where $S_d$ is the fraction of unique
     nearest-neighbor bonds whose endpoint heights differ. Smooth, nearly complete layers
     have fewer steps and a larger proxy. Real RHEED phase and amplitude also depend on
@@ -255,8 +352,10 @@ def _(mo):
 
 
 @app.cell
-def _(plt, simulation):
-    observable_figure, _axes = plt.subplots(3, 1, figsize=(8, 7), sharex=True, constrained_layout=True)
+def _(mo, plt, simulation):
+    observable_figure, _axes = plt.subplots(
+        3, 1, figsize=(8, 7), sharex=True, constrained_layout=True
+    )
     _axes[0].plot(simulation.coverage_ml, simulation.roughness_ml, color="tab:blue")
     _axes[0].set_ylabel("RMS roughness (ML)")
     _axes[1].plot(
@@ -268,7 +367,7 @@ def _(plt, simulation):
     _axes[2].plot(simulation.coverage_ml, simulation.rheed_proxy, color="tab:red")
     _axes[2].set(xlabel="film coverage (ML)", ylabel=r"$1-S_d$ proxy")
     observable_figure.suptitle("Growth observables")
-    observable_figure
+    mo.vstack([mo.md("## 7. Growth observables"), observable_figure])
     return
 
 
@@ -281,20 +380,24 @@ def _(Path, json, mo):
     _fluxes = sweep_data["fluxes_ml_s"]
     _default = {"temperature_k": _temperatures[1], "flux_ml_s": _fluxes[1]}
     get_sweep_selection, _set_sweep_selection = mo.state(_default)
-    sweep_form = mo.ui.dictionary(
-        {
-            "temperature_k": mo.ui.dropdown(
-                {f"{value:.0f} K": value for value in _temperatures},
-                value=f"{_default['temperature_k']:.0f} K",
-                label="Temperature",
-            ),
-            "flux_ml_s": mo.ui.dropdown(
-                {f"{value:.2f} ML/s": value for value in _fluxes},
-                value=f"{_default['flux_ml_s']:.2f} ML/s",
-                label="Deposition flux",
-            ),
-        }
-    ).form(
+    sweep_controls = mo.md("""
+        | Sweep coordinate | Selection |
+        |---|---|
+        | Temperature | {temperature_k} |
+        | Deposition flux | {flux_ml_s} |
+    """).batch(
+        temperature_k=mo.ui.dropdown(
+            {f"{value:.0f} K": value for value in _temperatures},
+            value=f"{_default['temperature_k']:.0f} K",
+            label="Temperature",
+        ),
+        flux_ml_s=mo.ui.dropdown(
+            {f"{value:.2f} ML/s": value for value in _fluxes},
+            value=f"{_default['flux_ml_s']:.2f} ML/s",
+            label="Deposition flux",
+        ),
+    )
+    sweep_form = sweep_controls.form(
         submit_button_label="Run selected point",
         bordered=True,
         on_change=lambda value: _set_sweep_selection(value or _default),
@@ -302,7 +405,7 @@ def _(Path, json, mo):
     mo.vstack(
         [
             mo.md(
-                "## 5. Temperature/flux regime map\n"
+                "## 8. Temperature/flux regime map\n"
                 "Select one point from the reproducible three-seed sweep. The linked run "
                 "uses seed 0 on the same 16x16 lattice."
             ),
@@ -339,7 +442,15 @@ def _(mo, np, plt, selected_sweep_result, sweep_data, sweep_selection):
     _flux_index = int(np.flatnonzero(_fluxes == sweep_selection["flux_ml_s"])[0])
     sweep_figure, _axes = plt.subplots(1, 3, figsize=(12, 3.5), constrained_layout=True)
     _heatmap = _axes[0].imshow(_amplitudes, origin="lower", cmap="magma", aspect="auto")
-    _axes[0].scatter(_flux_index, _temperature_index, marker="s", s=120, facecolors="none", edgecolors="cyan", linewidths=2)
+    _axes[0].scatter(
+        _flux_index,
+        _temperature_index,
+        marker="s",
+        s=120,
+        facecolors="none",
+        edgecolors="cyan",
+        linewidths=2,
+    )
     _axes[0].set(
         title="Mean proxy amplitude",
         xlabel="flux (ML/s)",
@@ -380,7 +491,7 @@ def _(mo, np, plt, selected_sweep_result, sweep_data, sweep_selection):
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 6. Repeatability, comparison, and next physics
+    ## 9. Paper target, repeatability, and model limits
 
     The seed makes a run exactly reproducible, but one trajectory is not an uncertainty
     estimate. The scripted Stage 3 workflows now aggregate fixed seed ensembles: run

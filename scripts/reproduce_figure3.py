@@ -15,6 +15,7 @@ from mbe_rheed_sim.paper import FIGURE3_NOMINAL_GA_N_RATIOS, figure3_config, fig
 ROOT = Path(__file__).resolve().parents[1]
 RUN_DIR = ROOT / "outputs" / "runs"
 FIGURE_DIR = ROOT / "outputs" / "figures"
+PROCESSED_DIR = ROOT / "data" / "processed"
 LATTICE_SIZE = 7
 SEEDS = (2026, 2027, 2028)
 TIME_GRID_S = np.linspace(0.0, 40.0, 401)
@@ -23,8 +24,10 @@ TIME_GRID_S = np.linspace(0.0, 40.0, 401)
 def main() -> None:
     RUN_DIR.mkdir(parents=True, exist_ok=True)
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     figure, axes = plt.subplots(3, 1, figsize=(8, 7), sharex=True, constrained_layout=True)
     summaries = []
+    notebook_traces = []
 
     for axis, ratio in zip(axes, FIGURE3_NOMINAL_GA_N_RATIOS, strict=True):
         parameters = figure3_parameters(ratio)
@@ -37,6 +40,14 @@ def main() -> None:
         )
         mean = traces.mean(axis=0)
         std = traces.std(axis=0)
+        notebook_traces.append(
+            {
+                "nominal_ga_n_ratio": ratio,
+                "time_s": TIME_GRID_S.tolist(),
+                "rheed_proxy_mean": mean.tolist(),
+                "rheed_proxy_std": std.tolist(),
+            }
+        )
         ratio_label = f"{ratio:.2f}".replace(".", "")
         np.savez_compressed(
             RUN_DIR / f"figure3_ratio_{ratio_label}.npz",
@@ -92,6 +103,19 @@ def main() -> None:
     plt.close(figure)
     (RUN_DIR / "figure3_simulated_smoke.json").write_text(
         json.dumps(summaries, indent=2) + "\n"
+    )
+    (PROCESSED_DIR / "figure3_simulated_smoke.json").write_text(
+        json.dumps(
+            {
+                "description": "Figure 3 parameterization: simulated step-density proxy",
+                "classification": "qualitative finite-size smoke reproduction",
+                "lattice_size": LATTICE_SIZE,
+                "seeds": SEEDS,
+                "traces": notebook_traces,
+            },
+            indent=2,
+        )
+        + "\n"
     )
     print(json.dumps(summaries, indent=2))
 

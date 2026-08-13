@@ -10,13 +10,13 @@ experiment.
 ## Current state
 
 - **Active stage:** Stage 4 - polished Marimo virtual experiment.
-- **Estimated completion:** roughly 65% of the intended final project.
+- **Estimated completion:** roughly 77% of the intended final project.
 - **Working baseline:** deterministic deposition/diffusion/desorption KMC and Marimo notebook.
 - **Main scientific gap:** Figure 3 periodicity is reproduced on a 7x7 smoke lattice, but the
   first paper-regime size study shows that its proxy amplitude is strongly finite-size affected;
   paper-scale convergence and experimental-curve normalization remain unresolved.
-- **Main presentation gap:** plots are functional Matplotlib views, not yet the planned
-  synchronized Plotly/Marimo experience.
+- **Main presentation gap:** the teaching flow, designed controls, playback, and synchronized
+  Plotly view are working; accurate alternate display modes and the paper-results view remain.
 - **Current computational limit:** local event-catalogue updates reduce a paper-derived 64x64,
   4 s run from 131 s to 39 s, but the practical three-seed check reaches 32x32 and is not
   converged in proxy amplitude. Full 40 s, 64x64 publication convergence remains Stage 5 work.
@@ -157,22 +157,22 @@ Matplotlib for static publication outputs. Do not begin Three.js work in this st
 
 #### 4A - Notebook narrative
 
-- [ ] **01 What is MBE?** Show Ga source -> beam -> substrate -> growing surface.
-- [ ] **02 What does an atom do?** Explain deposition, diffusion, attachment, and desorption.
-- [ ] **03 How does KMC work?** Show event rates, selected event, and residence-time advance.
-- [ ] **04 Grow a surface.** Add play/pause and coverage/time scrubbing.
-- [ ] **05 What does RHEED see?** Explain grazing incidence and the step-density relationship.
-- [ ] **06 Surface <-> RHEED.** Synchronize morphology and proxy trace.
-- [ ] **07 Experiment.** Present temperature, flux, barriers, size, and seed as a designed
+- [x] **01 What is MBE?** Show Ga source -> beam -> substrate -> growing surface.
+- [x] **02 What does an atom do?** Explain deposition, diffusion, attachment, and desorption.
+- [x] **03 How does KMC work?** Show event rates, selected event, and residence-time advance.
+- [x] **04 Grow a surface.** Add play/pause and coverage/time scrubbing.
+- [x] **05 What does RHEED see?** Explain grazing incidence and the step-density relationship.
+- [x] **06 Surface <-> RHEED.** Synchronize morphology and proxy trace.
+- [x] **07 Experiment.** Present temperature, flux, barriers, size, and seed as a designed
   control panel rather than a raw dictionary.
 - [x] **08 Parameter sweep.** Show the Stage 3 regime map and selected run.
 - [ ] **09 Paper reproduction.** Present Figure 3 simulation/comparison results.
-- [ ] **10 Model limits.** State omitted physics and valid interpretation.
+- [x] **10 Model limits.** State omitted physics and valid interpretation.
 
 #### 4B - Interactive morphology
 
-- [ ] Replace the small Matplotlib 3D notebook view with a Plotly 3D height surface.
-- [ ] Support rotation, zoom, hover height, stable color limits, and a readable camera default.
+- [x] Replace the small Matplotlib 3D notebook view with a Plotly 3D height surface.
+- [x] Support rotation, zoom, hover height, stable color limits, and a readable camera default.
 - [ ] Add `Atoms | Height field | Step edges` display modes where they remain accurate and
   performant.
 - [ ] Render the six-neighbor topology with hexagonal geometry where the lattice itself is
@@ -181,19 +181,19 @@ Matplotlib for static publication outputs. Do not begin Three.js work in this st
 
 #### 4C - Synchronized morphology and RHEED
 
-- [ ] Use one coverage/frame control for both surface and RHEED views.
-- [ ] Add a vertical current-coverage marker to the full RHEED trace.
-- [ ] Label the curve **normalized step-density RHEED proxy**.
+- [x] Use one coverage/frame control for both surface and RHEED views.
+- [x] Add a vertical current-coverage marker to the full RHEED trace.
+- [x] Label the curve **normalized step-density RHEED proxy**.
 - [ ] Show the flat-surface maximum versus partial-layer minimum mechanism visually.
-- [ ] Keep expensive simulations behind an explicit run action; frame scrubbing must reuse
+- [x] Keep expensive simulations behind an explicit run action; frame scrubbing must reuse
   stored snapshots.
 
 #### 4D - Visual and interaction validation
 
-- [ ] Verify first-load output, control changes, play/pause, scrubbing, and parameter selection.
-- [ ] Inspect desktop and narrow layouts.
-- [ ] Check browser console and notebook kernel for errors.
-- [ ] Confirm notebook execution and static HTML export remain automated.
+- [x] Verify first-load output, control changes, play/pause, scrubbing, and parameter selection.
+- [x] Inspect desktop and narrow layouts.
+- [x] Check browser console and notebook kernel for errors.
+- [x] Confirm notebook execution and static HTML export remain automated.
 
 **Exit criteria:** the notebook reads as one numerical experiment and physics explanation,
 not a sequence of unrelated controls and plots.
@@ -270,7 +270,7 @@ the interactive notebook using only the documented commands.
 - [x] Validate Figure 3-like oscillatory behavior at smoke scale
 - [x] Validate corrected-model smoothing and step-barrier mounding trends
 - [x] Run an initial generic-regime lattice-size sensitivity check
-- [ ] Re-inspect desktop and narrow layouts after the visual redesign
+- [x] Re-inspect desktop and narrow layouts after the visual redesign
 - [x] `make figure3-parameters` - Appendix A and Equation 8 values match hand-calculated checks
 - [x] `make validate-acceleration` - 100-seed exact/accelerated observable comparison passes
 - [x] `make reproduce-figure3` - three-seed 40 s bands for all three paper ratios generated
@@ -279,7 +279,8 @@ the interactive notebook using only the documented commands.
 - [x] `make validate-sweep` - 24x24 low/high-flux direction passes at all three temperatures
 - [x] `make convergence` - 8x8/16x16/24x24, three-seed sensitivity artifacts generated
 - [x] `make convergence-figure3` - 8x8/16x16/32x32, three-seed 4 s bands generated
-- [x] Browser-check sweep selection plus desktop/narrow rendering with zero console errors
+- [x] Browser-check synchronized frame scrubbing plus responsive desktop/narrow rendering
+  with zero console errors
 
 The canonical 8x8, 1 ML software baseline records 67 deposition, 1,416 diffusion, and 3
 desorption events. Its final-height SHA-256 is checked by `make reproduce`. This proves
@@ -304,7 +305,7 @@ repeatability, not scientific agreement.
 
 - [x] Use Marimo for controls, reactive state, layouts, and the notebook application.
 - [x] Keep Matplotlib for deterministic static/publication figures.
-- [ ] Add Plotly in Stage 4 for interactive 3D morphology, RHEED curves, and sweep views.
+- [x] Add Plotly in Stage 4 for interactive 3D morphology and synchronized RHEED curves.
 - [ ] Evaluate AnyWidget + Three.js only after Plotly and the KMC interface are stable.
 - [x] Do not add K3D-jupyter without a measured rendering-scale need.
 
@@ -333,6 +334,9 @@ make export
 
 ## Last meaningful update
 
-2026-08-13 - Completed Stage 3. Local accelerated-catalogue invalidation preserves full-rebuild
-rates and reduces the 64x64, 4 s benchmark from 131 s to 39 s. The 16x16 sweep, 24x24 trend
-check, paper-regime convergence record, and selectable Marimo views are reproducible.
+2026-08-13 - Continued Stage 4. Added the source-to-film and atom-event teaching sequence,
+replaced raw dictionary controls with labelled Marimo form tables, and linked responsive
+Plotly surface/RHEED views to one stored-snapshot slider. Native timed playback advances the
+same stored frame state and pauses cleanly. Desktop and 390 px layouts, form submission,
+manual/timed scrubbing, and browser console output were verified; no custom widget is needed
+yet.
