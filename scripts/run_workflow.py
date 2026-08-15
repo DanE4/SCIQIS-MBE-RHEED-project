@@ -25,7 +25,7 @@ WORKFLOWS = {
         "script": "reproduce_baseline.py",
         "preset": "8x8, 1 ML, seed 2026",
     },
-    "publication": {
+    "figure3": {
         "script": "reproduce_figure3.py",
         "workers": True,
         "seeds": True,

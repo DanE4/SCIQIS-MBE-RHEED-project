@@ -22,6 +22,7 @@ def _():
     from plotly.subplots import make_subplots
 
     from mbe_rheed_sim import SimulationConfig, run
+    from mbe_rheed_sim.kmc import SimulationResult
     from mbe_rheed_sim.paper import (
         FIGURE3_NOMINAL_GA_N_RATIOS,
         figure3_config,
@@ -29,10 +30,16 @@ def _():
     )
     from mbe_rheed_sim.rates import arrhenius_rate
 
+    GALLERY_DIR = Path(__file__).resolve().parents[1] / "data" / "gallery"
+    GALLERY = json.loads((GALLERY_DIR / "index.json").read_text())
+
     return (
         FIGURE3_NOMINAL_GA_N_RATIOS,
+        GALLERY,
+        GALLERY_DIR,
         Path,
         SimulationConfig,
+        SimulationResult,
         arrhenius_rate,
         figure3_config,
         figure3_parameters,
@@ -151,9 +158,39 @@ def _(mo):
 
 
 @app.cell
+def _(GALLERY, mo):
+    data_source = mo.ui.radio(
+        options=["Pre-computed demo", "Simulate now"],
+        value="Pre-computed demo",
+        label="Result source",
+    )
+    gallery_choice = mo.ui.dropdown(
+        {meta["title"]: name for name, meta in GALLERY.items()},
+        value=next(iter(GALLERY.values()))["title"],
+        label="Pre-computed run",
+    )
+    mo.vstack(
+        [
+            mo.md(
+                "## 5. Run the virtual experiment\n"
+                "**Pre-computed demo** loads a stored trajectory instantly — use this when "
+                "presenting. **Simulate now** runs the model live with the parameters below.\n\n"
+                "One KMC trajectory is strictly sequential: every event changes the surface "
+                "that the next event is drawn from, so a single run cannot be spread across "
+                "cores no matter how many are free. Cores only help across *independent* runs, "
+                "which is what the batch workflows in the last section use. That is why a live "
+                "run here is single-threaded and why the stored trajectories exist."
+            ),
+            mo.hstack([data_source, gallery_choice], justify="start", gap=2, wrap=True),
+        ]
+    )
+    return data_source, gallery_choice
+
+
+@app.cell
 def _(FIGURE3_NOMINAL_GA_N_RATIOS, mo):
     default_parameters = {
-        "experiment_mode": "Generic demonstration",
+        "experiment_mode": "Hand-tuned parameters",
         "figure3_ratio": 0.82,
         "temperature_k": 800,
         "flux_ml_s": 0.5,
@@ -170,16 +207,15 @@ def _(FIGURE3_NOMINAL_GA_N_RATIOS, mo):
         "sample_every_ml": 0.05,
         "max_events": 2_000_000,
         "seed": 7,
-        "confirm_expensive": False,
     }
     get_parameters, _set_parameters = mo.state(default_parameters)
     parameter_controls = mo.md("""
-        ### Simulation mode
+        ### Parameter source
 
         | Choice | Value |
         |---|---|
-        | Experiment | {experiment_mode} |
-        | Paper condition | {figure3_ratio} |
+        | Parameter source | {experiment_mode} |
+        | Paper Ga/N condition | {figure3_ratio} |
 
         ### Growth conditions
 
@@ -205,12 +241,11 @@ def _(FIGURE3_NOMINAL_GA_N_RATIOS, mo):
         | Sampling interval | {sample_every_ml} |
         | Maximum selected events | {max_events} |
         | RNG seed | {seed} |
-        | Confirm expensive run | {confirm_expensive} |
     """).batch(
         experiment_mode=mo.ui.radio(
-            options=["Generic demonstration", "Paper Figure 3 preset"],
-            value="Generic demonstration",
-            label="Simulation mode",
+            options=["Hand-tuned parameters", "GaN parameters from the paper"],
+            value="Hand-tuned parameters",
+            label="Where do the parameters come from?",
         ),
         figure3_ratio=mo.ui.dropdown(
             {f"Ga/N = {ratio:.2f}": ratio for ratio in FIGURE3_NOMINAL_GA_N_RATIOS},
@@ -254,7 +289,7 @@ def _(FIGURE3_NOMINAL_GA_N_RATIOS, mo):
                 "24 x 24 — detailed interactive": 24,
                 "32 x 32 — science check": 32,
                 "48 x 48 — extended": 48,
-                "64 x 64 — publication candidate": 64,
+                "64 x 64 — large": 64,
                 "96 x 96 — expensive": 96,
                 "128 x 128 — benchmark": 128,
                 "256 x 256 — paper reference": 256,
@@ -297,10 +332,6 @@ def _(FIGURE3_NOMINAL_GA_N_RATIOS, mo):
             label="Event safety limit",
         ),
         seed=mo.ui.number(start=0, stop=10_000, value=7, label="RNG seed"),
-        confirm_expensive=mo.ui.checkbox(
-            value=False,
-            label="I understand this run may keep the notebook busy for minutes or longer",
-        ),
     )
     parameter_form = parameter_controls.form(
         submit_button_label="Run simulation",
@@ -310,13 +341,12 @@ def _(FIGURE3_NOMINAL_GA_N_RATIOS, mo):
     mo.vstack(
         [
             mo.md(
-                "## 5. Run the virtual experiment\n"
-                "Choose **Generic demonstration** for editable teaching parameters or "
-                "**Paper Figure 3 preset** to derive the growth rates and barriers from the "
-                "selected Ga/N ratio. Lattice size, stopping criterion, acceleration, sampling, "
-                "event limit, and seed apply in both modes; only the generic growth-condition "
-                "fields are ignored in paper mode. The unused coverage/time target is ignored. "
-                "Frame scrubbing below reuses the stored trajectory and does not rerun KMC."
+                "### Parameters for a live run\n"
+                "**Hand-tuned parameters** lets you edit every growth condition directly. "
+                "**GaN parameters from the paper** replaces temperature, effective Ga flux, and "
+                "the four barriers with values the paper fits to a Ga/N ratio; the lattice, "
+                "stopping criterion, acceleration, sampling, event limit, and seed still apply. "
+                "The stopping criterion you did not pick is ignored."
             ),
             parameter_form,
         ]
@@ -325,11 +355,24 @@ def _(FIGURE3_NOMINAL_GA_N_RATIOS, mo):
 
 
 @app.cell
+def _(mo):
+    # A run button lives in its own cell so reading its value does not reset it.
+    expensive_override = mo.ui.run_button(label="Run it anyway")
+    return (expensive_override,)
+
+
+@app.cell
 def _(
+    GALLERY,
+    GALLERY_DIR,
     SimulationConfig,
+    SimulationResult,
     arrhenius_rate,
+    data_source,
+    expensive_override,
     figure3_config,
     figure3_parameters,
+    gallery_choice,
     get_parameters,
     mo,
     replace,
@@ -366,7 +409,20 @@ def _(
         )
         return selected_events / _selected_events_per_s
 
-    if selected_parameters["experiment_mode"] == "Paper Figure 3 preset":
+    if data_source.value == "Pre-computed demo":
+        _entry = gallery_choice.value
+        _meta = GALLERY[_entry]
+        simulation = SimulationResult.load_npz(GALLERY_DIR / f"{_entry}.npz")
+        _growth_rate = _meta["predicted_growth_rate_ml_s"]
+        experiment_name = _meta["title"]
+        _period = _meta["oscillation_period_ml"]
+        experiment_detail = (
+            f"{_meta['story']}\n\nStored run: {simulation.config.lattice_size}"
+            f"x{simulation.config.lattice_size}, seed {simulation.config.seed}, "
+            f"{_meta['frames']} recorded frames. Measured oscillation period "
+            + (f"{_period:.2f} ML." if _period else "not resolved (no layer cycle).")
+        )
+    elif selected_parameters["experiment_mode"] == "GaN parameters from the paper":
         _ratio = float(selected_parameters["figure3_ratio"])
         _paper_parameters = figure3_parameters(_ratio)
         _duration_s = (
@@ -389,7 +445,8 @@ def _(
         _estimated_runtime_s = _estimate_runtime_s(
             simulation_config, _duration_s * _paper_parameters.predicted_growth_rate_ml_s
         )
-        experiment_name = f"Paper-derived experiment (Ga/N = {_ratio:.2f})"
+        _growth_rate = _paper_parameters.predicted_growth_rate_ml_s
+        experiment_name = f"GaN paper parameters (Ga/N = {_ratio:.2f})"
         experiment_detail = (
             f"T = {_paper_parameters.temperature_k:.2f} K; effective Ga flux = "
             f"{_paper_parameters.effective_ga_flux_ml_s:.4f} ML/s; predicted growth rate = "
@@ -397,7 +454,7 @@ def _(
             f"{_size}x{_size}; target {_duration_s:.2f} s; seed {simulation_config.seed}."
         )
     else:
-        _paper_parameters = None
+        _growth_rate = None
         _target_coverage_ml = (
             None if _stop_by_time else float(selected_parameters["coverage_ml"])
         )
@@ -424,7 +481,7 @@ def _(
             if _target_coverage_ml is not None
             else _target_time_s * simulation_config.deposition_flux_ml_s,
         )
-        experiment_name = "Custom generic experiment"
+        experiment_name = "Hand-tuned experiment"
         _target_description = (
             f"{simulation_config.target_time_s:.2f} s"
             if _target_time_s is not None
@@ -435,32 +492,34 @@ def _(
             f"{simulation_config.deposition_flux_ml_s:.3f} ML/s; "
             f"{_size}x{_size}; target {_target_description}; seed {simulation_config.seed}."
         )
-    _expensive = _size >= 64 or _estimated_runtime_s >= 15.0
-    mo.stop(
-        _expensive and not selected_parameters["confirm_expensive"],
-        mo.callout(
-            f"Rough order-of-magnitude estimate: {_estimated_runtime_s:.0f} s. The true "
-            "runtime can differ by roughly ten times either way depending on the rate "
-            "constants. Enable **Confirm expensive run** and submit again to launch it.",
-            kind="warn",
-        ),
-    )
-    simulation = run(simulation_config)
-    _runtime_note = (
-        f"Rough estimate before launch: {_estimated_runtime_s:.1f} s; isolated-adatom hop limit "
-        f"{_hop_distance}; sample interval {simulation_config.sample_every_ml:g} ML; "
-        f"event limit {simulation_config.max_events:,}."
-    )
-    experiment_detail = f"{experiment_detail} {_runtime_note}"
+    if data_source.value != "Pre-computed demo":
+        if _size >= 64 or _estimated_runtime_s >= 20.0:
+            mo.stop(
+                not expensive_override.value,
+                mo.vstack(
+                    [
+                        mo.callout(
+                            f"This run is estimated at roughly **{_estimated_runtime_s:.0f} s** "
+                            "and is single-threaded. The estimate is order-of-magnitude only; "
+                            "the true cost depends strongly on the rate constants.",
+                            kind="warn",
+                        ),
+                        expensive_override,
+                    ]
+                ),
+            )
+        simulation = run(simulation_config)
+        experiment_detail = (
+            f"{experiment_detail} Estimated {_estimated_runtime_s:.1f} s; hop limit "
+            f"{_hop_distance}; sampled every {simulation_config.sample_every_ml:g} ML; "
+            f"event limit {simulation_config.max_events:,}."
+        )
+
     coverage_axis = (
-        simulation.time_s * _paper_parameters.predicted_growth_rate_ml_s
-        if _paper_parameters is not None
-        else simulation.coverage_ml
+        simulation.time_s * _growth_rate if _growth_rate else simulation.coverage_ml
     )
     coverage_axis_label = (
-        "paper-predicted film coverage (ML)"
-        if _paper_parameters is not None
-        else "film coverage (ML)"
+        "paper-predicted film coverage (ML)" if _growth_rate else "film coverage (ML)"
     )
     return coverage_axis, coverage_axis_label, experiment_detail, experiment_name, simulation
 
@@ -541,6 +600,19 @@ def _(coverage_axis, get_frame, mo, np, playback, set_frame, simulation):
     mo.vstack(
         [
             mo.md("## 6. Surface morphology and the RHEED proxy"),
+            mo.md(r"""
+            **What does RHEED actually see?** A real RHEED beam strikes the surface at grazing
+            incidence and its diffracted intensity depends on electron-scattering geometry.
+            This teaching model does **not** calculate that diffraction. It uses surface steps
+            as a morphology-based stand-in:
+
+            $$I_{\mathrm{proxy}} = 1 - S_d$$
+
+            where $S_d$ is the fraction of unique nearest-neighbor bonds whose endpoint heights
+            differ. Smooth, nearly complete layers have fewer steps and a larger proxy. Real
+            RHEED phase and amplitude also depend on beam geometry, refraction, absorption,
+            surface reconstruction, and multiple scattering.
+            """),
             mo.md(
                 "The annotated 0–2 ML shortcuts encode the **ideal layer-by-layer "
                 "hypothesis**. The linked morphology and proxy show what this stochastic "
@@ -735,23 +807,6 @@ def _(coverage_axis, coverage_axis_label, display_mode, get_frame, go, mo, np, s
             ),
         ]
     )
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""
-    ### What does RHEED see here?
-
-    A real RHEED beam strikes the surface at grazing incidence and its diffracted intensity
-    depends on electron-scattering geometry. This teaching model does **not** calculate that
-    diffraction. It uses surface steps as a morphology-based connection:
-
-    The proxy is $I_{\mathrm{proxy}}=1-S_d$, where $S_d$ is the fraction of unique
-    nearest-neighbor bonds whose endpoint heights differ. Smooth, nearly complete layers
-    have fewer steps and a larger proxy. Real RHEED phase and amplitude also depend on
-    beam geometry, refraction, absorption, reconstruction, and multiple scattering.
-    """)
     return
 
 
@@ -1053,7 +1108,7 @@ def _(figure3_data, go, make_subplots, mo, np):
     _provenance = figure3_data["provenance"]
     mo.vstack(
         [
-            mo.md("## 9. Publication comparison view"),
+            mo.md("## 9. Comparison with the published experiment"),
             figure3_figure,
             mo.md(
                 "The red curves are **figure-derived experimental RHEED panel coordinates**; "
@@ -1076,12 +1131,39 @@ def _(figure3_data, go, make_subplots, mo, np):
             mo.md(
                 f"The morphology sequence is **{_morphology['classification']}**. "
                 f"Artifacts were generated by `{_provenance['generated_by']}` at Git commit "
-                f"`{_provenance['code_version']['git_commit_at_generation']}` using lattice "
+                f"`{_provenance['code_version']['git_commit']}` using lattice "
                 f"{_provenance['lattice_size']}x{_provenance['lattice_size']} and seeds "
-                f"`{_provenance['seeds']}`. Run `make publication` to regenerate them."
+                f"`{_provenance['seeds']}`. Run `make figure3` to regenerate them."
             ),
         ]
     )
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ## 10. Repeatability and model limits
+
+    The seed makes a run exactly reproducible, but one trajectory is not an uncertainty
+    estimate. The scripted workflows aggregate fixed seed ensembles instead: `make figure3`
+    for the Ga/N comparison and morphology figures, `make sweep` for the temperature/flux
+    map, `make convergence` for the generic finite-size check, and `make convergence-figure3`
+    for the paper-regime size check.
+
+    The comparison target is the oscillation of surface step density shown alongside
+    experimental RHEED traces in Figure 3 of Budagosky and Garcia-Cristobal. That workflow
+    implements the paper's homoepitaxial flux-ratio calibration and a validated
+    isolated-adatom long-hop approximation, and reports figure-derived reference curves,
+    period, phase, damping, relative amplitude, and provenance.
+
+    It stays a **qualitative** comparison: the authors' normalization is unavailable, and the
+    7x7 amplitude is not finite-size converged. Strain is not needed for this homoepitaxial
+    target and is outside the model.
+
+    A defensible next RHEED stage is a kinematic layer-interference model. Full dynamical
+    electron scattering remains outside the baseline.
+    """)
     return
 
 
@@ -1101,7 +1183,7 @@ def _(mo, time):
         workflow=mo.ui.dropdown(
             {
                 "Baseline reproduction": "baseline",
-                "Publication comparison": "publication",
+                "GaN Ga/N comparison": "figure3",
                 "Temperature/flux sweep": "sweep",
                 "Generic convergence": "convergence",
                 "Figure 3 convergence": "figure3-convergence",
@@ -1110,7 +1192,7 @@ def _(mo, time):
                 "Sweep lattice validation": "validate-sweep",
                 "64/128/256 runtime benchmark": "benchmark-sizes",
             },
-            value="Publication comparison",
+            value="GaN Ga/N comparison",
             label="Workflow",
         ),
         workers=mo.ui.slider(1, 8, value=4, label="Worker processes"),
@@ -1139,14 +1221,14 @@ def _(mo, time):
     mo.vstack(
         [
             mo.md(
-                "## 10. Batch workflows\n"
+                "## 11. Batch workflows (regenerating the data)\n"
                 "These controls launch the same reproducible CLI used by `make`. Independent "
                 "seeds and parameter points use bounded spawn-based worker processes; one KMC "
                 "trajectory remains sequential. Blank overrides retain the preset below.\n\n"
                 "| Workflow | Canonical seeds | Canonical sizes / grid |\n"
                 "|---|---|---|\n"
                 "| Baseline | 2026 | 8x8 |\n"
-                "| Publication | 2026-2028 | 7x7, three Ga/N ratios |\n"
+                "| GaN Ga/N comparison | 2026-2028 | 7x7, three Ga/N ratios |\n"
                 "| Sweep | 0-2 | 16x16, 3 temperatures x 3 fluxes |\n"
                 "| Generic convergence | 0-2 | 8/16/24 |\n"
                 "| Figure 3 convergence | 0-2 | 8/16/32; add 64 via the size override |\n"
@@ -1154,7 +1236,7 @@ def _(mo, time):
                 "| Scientific trends | 0-4 | 8x8, three physics configurations |\n"
                 "| Sweep validation | 0-2 | 24x24, 3 temperatures x 2 fluxes |\n"
                 "| Runtime benchmark | 0 | 64/128/256, sequential |\n\n"
-                "Measured on the development M4 Pro: publication is about 16 s with four "
+                "Measured on the development M4 Pro: the Ga/N comparison is about 16 s with four "
                 "workers; Figure 3 convergence through 64x64 is about 52 s with three effective "
                 "workers; the sequential 64/128/256 benchmark is about 34 s. Runtime varies "
                 "with load."
@@ -1307,32 +1389,6 @@ def _(
             mo.hstack([batch_refresh, cancel_batch], justify="start", gap=2),
         ]
     )
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""
-    ## 11. Repeatability and model limits
-
-    The seed makes a run exactly reproducible, but one trajectory is not an uncertainty
-    estimate. The scripted Stage 3 workflows now aggregate fixed seed ensembles: run
-    `make publication` for the Stage 5 comparison and morphology figures, `make sweep` for the first
-    temperature/flux map, `make convergence` for the generic finite-size check, and
-    `make convergence-figure3` for the practical paper-regime size check.
-
-    The qualitative comparison target is the oscillation of surface step density shown
-    alongside experimental RHEED traces in Figure 3 of Budagosky and Garcia-Cristobal.
-    The separate Figure 3 workflow implements the paper's homoepitaxial flux-ratio
-    calibration and a validated isolated-adatom long-hop approximation. The publication view
-    reports figure-derived reference curves, period, phase, damping, relative amplitude, and
-    provenance. It remains a qualitative smoke comparison because the author normalization is
-    unavailable and simulation amplitude is not finite-size converged. Strain is not needed
-    for that homoepitaxial target and remains outside the current model.
-
-    A defensible next RHEED stage is a kinematic layer-interference model. Full dynamical
-    electron scattering remains outside the baseline.
-    """)
     return
 
 

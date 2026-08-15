@@ -40,6 +40,24 @@ class SimulationResult:
     long_hop_events: int
     desorbed_events: int
 
+    @classmethod
+    def load_npz(cls, path: str | Path) -> "SimulationResult":
+        """Rebuild a result written by save_npz, without pickling."""
+        with np.load(path) as stored:
+            fields = {
+                name: stored[name]
+                for name in cls.__slots__
+                if name not in {"config", "final_heights"}
+            }
+            return cls(
+                config=SimulationConfig(**json.loads(str(stored["config_json"]))),
+                final_heights=stored["final_heights"],
+                **{
+                    name: int(value) if value.ndim == 0 else value
+                    for name, value in fields.items()
+                },
+            )
+
     def save_npz(self, path: str | Path) -> None:
         """Serialize arrays and configuration without custom object pickling."""
         output = Path(path)

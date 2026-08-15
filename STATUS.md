@@ -166,7 +166,7 @@ normalization, and provenance are compared without conflating physical quantitie
 bands. The CC BY PDF supplies vector paths for a figure-derived experimental visual reference;
 raw experimental values and the paper's arbitrary-unit normalization remain unavailable.
 
-**Implementation:** notebook Section 09 and `make publication` now provide separate reference
+**Implementation:** notebook Section 09 and `make figure3` now provide separate reference
 and simulation panels, uncertainty bands, period/phase/damping/relative-amplitude diagnostics,
 a Figure 4-inspired no-strain morphology sequence, and provenance-rich JSON/CSV/NPZ artifacts.
 
@@ -426,7 +426,7 @@ not a sequence of unrelated controls and plots.
   performance work or access to suitable compute.
 - [x] Benchmark 128x128 and the paper-reference 256x256; the optimized 0.1 s runtime envelope is
   documented, but no smaller size is accepted because convergence is not demonstrated.
-- [x] Regenerate all main figures through the documented `make publication` command.
+- [x] Regenerate all main figures through the documented `make figure3` command.
 
 **Exit criteria:** every final figure is traceable to a configuration, seed set, code version,
 and generated data artifact. **Met for the smoke-scale publication artifacts; Stage 5 remains
@@ -498,7 +498,7 @@ the interactive notebook using only the documented commands.
 - [x] `make figure3-parameters` - Appendix A and Equation 8 values match hand-calculated checks
 - [x] `make validate-acceleration` - 100-seed exact/accelerated observable comparison passes
 - [x] `make reproduce-figure3` - three-seed 40 s bands for all three paper ratios generated
-- [x] `make publication` - separate-scale Figure 3 comparison, diagnostics, morphology sequence,
+- [x] `make figure3` - separate-scale Figure 3 comparison, diagnostics, morphology sequence,
   and provenance-rich JSON/CSV/NPZ artifacts generated
 - [x] `make sweep` - 16x16, 3x3, three-seed amplitude map generated
 - [x] `make validate-science` - five-seed smoothing/mounding ordering passes

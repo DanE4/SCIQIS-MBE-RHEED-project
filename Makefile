@@ -1,9 +1,9 @@
 # Every workflow name accepted by scripts/run_workflow.py is a make target of the same name.
-WORKFLOWS := baseline publication sweep convergence figure3-convergence \
+WORKFLOWS := baseline figure3 sweep convergence figure3-convergence \
 	validate-acceleration validate-science validate-sweep benchmark-sizes
 
 .PHONY: setup notebook test check export figure3-parameters digitize-figure3 \
-	reproduce reproduce-figure3 convergence-figure3 $(WORKFLOWS)
+	reproduce reproduce-figure3 convergence-figure3 gallery $(WORKFLOWS)
 
 NOTEBOOK := notebooks/mbe_rheed.py
 MARIMO_PORT ?= 2718
@@ -30,8 +30,11 @@ $(WORKFLOWS):
 
 # Long-standing aliases kept so documented commands keep working.
 reproduce: baseline
-reproduce-figure3: publication
+reproduce-figure3: figure3
 convergence-figure3: figure3-convergence
+
+gallery:
+	uv run python scripts/build_gallery.py
 
 figure3-parameters:
 	uv run python scripts/inspect_figure3_parameters.py

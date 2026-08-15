@@ -1,4 +1,4 @@
-"""Regenerate the Stage 5 Figure 3 comparison and morphology artifacts."""
+"""Regenerate the Figure 3 Ga/N comparison and morphology artifacts."""
 
 import argparse
 import csv
@@ -89,7 +89,7 @@ def _plot_comparison(traces: list[dict[str, object]], figure_dir: Path) -> None:
         "Figure 3 comparison — separate scales, shared time domain\n"
         "Reference is figure-derived; proxy amplitude is not finite-size converged"
     )
-    figure.savefig(figure_dir / "figure3_publication_comparison.png", dpi=180)
+    figure.savefig(figure_dir / "figure3_comparison.png", dpi=180)
     plt.close(figure)
 
 
@@ -200,7 +200,7 @@ def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
         run,
         configurations,
         workers=workers,
-        description="Figure 3 publication ensemble",
+        description="Figure 3 Ga/N ensemble",
     )
 
     for ratio_index, ratio in enumerate(FIGURE3_NOMINAL_GA_N_RATIOS):
@@ -323,7 +323,7 @@ def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
         "classification": "qualitative finite-size smoke comparison; amplitude not converged",
     }
     artifact = {
-        "description": "Stage 5 Figure 3 comparison and Figure 4-inspired morphology sequence",
+        "description": "Figure 3 Ga/N comparison and Figure 4-inspired morphology sequence",
         "provenance": provenance,
         "signal_definitions": {
             "reference": reference_data["classification"],
@@ -336,12 +336,12 @@ def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
         "comparisons": comparisons,
         "morphology_sequence": morphology,
         "figures": [
-            "outputs/figures/figure3_publication_comparison.png",
+            "outputs/figures/figure3_comparison.png",
             "outputs/figures/figure3_metric_comparison.png",
             "outputs/figures/figure4_inspired_morphology.png",
         ],
     }
-    (run_dir / "figure3_publication.json").write_text(json.dumps(artifact, indent=2) + "\n")
+    (run_dir / "figure3_comparison.json").write_text(json.dumps(artifact, indent=2) + "\n")
     (run_dir / "figure3_run_summaries.json").write_text(json.dumps(summaries, indent=2) + "\n")
     (processed_dir / "figure3_simulated_smoke.json").write_text(
         json.dumps(artifact, separators=(",", ":")) + "\n"
