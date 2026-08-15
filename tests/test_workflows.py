@@ -6,10 +6,12 @@ import pytest
 
 from mbe_rheed_sim import SimulationConfig, run
 from mbe_rheed_sim.workflows import (
+    log_progress,
     parse_int_values,
     promote_artifacts,
     resolve_workers,
     run_parallel,
+    update_progress,
 )
 
 
@@ -45,6 +47,29 @@ def test_parallel_failure_is_propagated() -> None:
     with pytest.raises(ValueError):
         run_parallel(int, ("1", "not-an-integer", "3"), workers=2, description="failure test")
     assert not active_children()
+
+
+def test_progress_is_logged_even_without_a_batch_manifest(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A script run straight from the shell still reports, so the CLI is never silent."""
+    monkeypatch.delenv("MBE_PROGRESS_FILE", raising=False)
+    with caplog.at_level("INFO", logger="mbe"):
+        update_progress(stage="demo", completed=2, total=5)
+    assert "demo 2/5" in caplog.text
+
+
+def test_log_progress_reports_once_per_decile(caplog: pytest.LogCaptureFixture) -> None:
+    """One long trajectory is one work item, so it needs fraction logging, not a count."""
+    report = log_progress("32x32")
+    with caplog.at_level("INFO", logger="mbe"):
+        for fraction in (0.0, 0.04, 0.09, 0.1, 0.15, 1.0):
+            report(fraction)
+    assert [record.getMessage() for record in caplog.records] == [
+        "32x32   0%",
+        "32x32  10%",
+        "32x32 100%",
+    ]
 
 
 def test_promotion_keeps_history_and_replaces_canonical_atomically(tmp_path) -> None:

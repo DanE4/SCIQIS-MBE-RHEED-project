@@ -11,7 +11,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from mbe_rheed_sim import SimulationConfig, run
-from mbe_rheed_sim.workflows import artifact_root, update_progress
+from mbe_rheed_sim.workflows import artifact_root, setup_logging, update_progress
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -38,6 +38,7 @@ EXPECTED = {
 
 
 def main() -> None:
+    setup_logging()
     update_progress(stage="deterministic baseline", completed=0, total=1, effective_workers=1)
     result = run(CONFIG)
     height_sha256 = hashlib.sha256(result.final_heights.tobytes()).hexdigest()

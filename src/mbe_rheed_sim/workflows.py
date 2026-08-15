@@ -3,9 +3,11 @@
 import argparse
 import fcntl
 import json
+import logging
 import os
 import shutil
 import subprocess
+import sys
 from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import get_context
@@ -24,6 +26,39 @@ WORKER_ENVIRONMENT = (
     "VECLIB_MAXIMUM_THREADS",
     "NUMEXPR_NUM_THREADS",
 )
+
+log = logging.getLogger("mbe")
+
+
+def setup_logging() -> None:
+    """Send progress to stderr, leaving stdout as the machine-readable JSON summary.
+
+    `MBE_LOG_LEVEL=DEBUG` (or WARNING to quieten it) overrides the default.
+    """
+    logging.basicConfig(
+        level=os.environ.get("MBE_LOG_LEVEL", "INFO").upper(),
+        format="%(asctime)s %(message)s",
+        datefmt="%H:%M:%S",
+        stream=sys.stderr,
+    )
+
+
+def log_progress(label: str) -> Callable[[float], None]:
+    """Build a `run(on_progress=...)` callback that logs one line per 10% of a trajectory.
+
+    For a single long run, which is the case a completed-count cannot report on: one KMC
+    trajectory is sequential, so it is one item that stays at 0/1 until it finishes.
+    """
+    reported = -1
+
+    def report(fraction: float) -> None:
+        nonlocal reported
+        decile = int(fraction * 10)
+        if decile > reported:
+            reported = decile
+            log.info("%s %3.0f%%", label, fraction * 100)
+
+    return report
 
 def resolve_workers(requested: int | None = None) -> int:
     """Resolve CLI, environment, then safe-default worker count."""
@@ -62,6 +97,7 @@ def parse_workflow_args(
     Pass the script's canonical defaults for the overrides it accepts; omit the rest so the
     parser rejects a flag the script cannot honour instead of silently ignoring it.
     """
+    setup_logging()
     parser = argparse.ArgumentParser()
     if workers:
         parser.add_argument("--workers", type=int)
@@ -97,7 +133,14 @@ def merge_json(path: Path, **fields: object) -> dict[str, object]:
 
 
 def update_progress(**fields: object) -> None:
-    """Merge progress into the active batch manifest, when the supervisor configured one."""
+    """Log progress, and merge it into the active batch manifest when one is configured.
+
+    Every workflow already funnels its stage reports through here, so logging at this one
+    point gives each script a command-line trace without touching any of them.
+    """
+    if (stage := fields.get("stage")) is not None:
+        total, completed = fields.get("total"), fields.get("completed")
+        log.info("%s %s", stage, f"{completed}/{total}" if total else "starting")
     path = os.environ.get("MBE_PROGRESS_FILE")
     if path is not None:
         merge_json(Path(path), **fields)

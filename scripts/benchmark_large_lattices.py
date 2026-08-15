@@ -11,6 +11,7 @@ from mbe_rheed_sim.analysis import result_array_bytes
 from mbe_rheed_sim.paper import figure3_config
 from mbe_rheed_sim.workflows import (
     artifact_root,
+    log_progress,
     parse_workflow_args,
     update_progress,
 )
@@ -29,7 +30,10 @@ def main(*, sizes: tuple[int, ...] = SIZES) -> None:
     update_progress(stage="sequential lattice benchmark", completed=0, total=len(sizes), effective_workers=1)
     for completed, size in enumerate(sizes, start=1):
         started = perf_counter()
-        result = run(figure3_config(RATIO, lattice_size=size, duration_s=DURATION_S, seed=SEED))
+        result = run(
+            figure3_config(RATIO, lattice_size=size, duration_s=DURATION_S, seed=SEED),
+            on_progress=log_progress(f"{size}x{size}"),
+        )
         elapsed = perf_counter() - started
         events = result.deposited_events + result.selected_diffusion_events + result.desorbed_events
         measurements.append(

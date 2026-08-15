@@ -11,7 +11,7 @@ from pathlib import Path
 from mbe_rheed_sim import SimulationConfig, run
 from mbe_rheed_sim.analysis import rheed_oscillation_metrics
 from mbe_rheed_sim.paper import figure3_config, figure3_parameters
-from mbe_rheed_sim.workflows import run_parallel
+from mbe_rheed_sim.workflows import run_parallel, setup_logging
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "data" / "gallery"
@@ -100,6 +100,7 @@ EXPECTED_ROUGHNESS_ORDER = (
 
 
 def main() -> None:
+    setup_logging()
     OUTPUT.mkdir(parents=True, exist_ok=True)
     names = list(ENTRIES)
     results = run_parallel(

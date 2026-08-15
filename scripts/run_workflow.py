@@ -82,6 +82,23 @@ def _emit_progress(manifest: dict[str, object]) -> None:
     print(json.dumps({key: manifest.get(key) for key in PROGRESS_FIELDS}), flush=True)
 
 
+def _echo_new_logs(path: Path, offset: int) -> int:
+    """Copy whatever the child appended to its log since `offset` onto our own stderr.
+
+    The workflow scripts log through `mbe_rheed_sim.workflows`, which writes to stderr; the
+    child's stream is a file so failures keep a durable tail, so this is what makes those
+    lines visible live on the command line. Reuses the existing poll loop, no reader thread.
+    """
+    if not path.exists():
+        return offset
+    with path.open() as stream:
+        stream.seek(offset)
+        if text := stream.read():
+            sys.stderr.write(text)
+            sys.stderr.flush()
+        return stream.tell()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("workflow", choices=WORKFLOWS)
@@ -168,8 +185,10 @@ def main() -> None:
             manifest.get("completed"),
             manifest.get("total"),
         )
+        log_offset = 0
         while (return_code := process.poll()) is None:
             sleep(0.2)
+            log_offset = _echo_new_logs(batch_dir / "stderr.log", log_offset)
             progress = json.loads(manifest_path.read_text())
             signature = (
                 progress.get("stage"),
@@ -179,6 +198,8 @@ def main() -> None:
             if signature != last_progress:
                 _emit_progress(progress)
                 last_progress = signature
+        # The child can write between the last poll and exiting, so flush the tail.
+        _echo_new_logs(batch_dir / "stderr.log", log_offset)
     if return_code != 0:
         error_tail = (batch_dir / "stderr.log").read_text()[-4_000:]
         manifest = merge_json(
