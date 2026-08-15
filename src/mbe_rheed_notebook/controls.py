@@ -184,7 +184,8 @@ def _layout() -> str:
             # marimo's own tooltip: its RenderHTML wraps any element carrying data-tooltip and
             # styles it with a dotted underline. A plain title= is a bare browser tooltip that
             # takes a second to appear and shows no affordance.
-            f'| {label} <span data-tooltip="{help_text}">&#9432;</span> | {{{key}}} |'
+            f'| {label} <span data-tooltip="{help_text}" '
+            f'style="text-decoration:none;cursor:help">&#9432;</span> | {{{key}}} |'
             for label, key, help_text in rows
         )
         blocks.append(f"### {section}\n\n| Quantity | Value |\n|---|---|\n{table}")
