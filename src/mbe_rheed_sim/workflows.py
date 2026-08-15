@@ -16,7 +16,7 @@ from typing import cast
 from mbe_rheed_sim.config import SimulationConfig
 from mbe_rheed_sim.kmc import SimulationResult, run
 
-DEFAULT_WORKERS = 4
+DEFAULT_WORKERS = min(10, max(1, (os.cpu_count() or 1) - 1))
 WORKER_ENVIRONMENT = (
     "OMP_NUM_THREADS",
     "OPENBLAS_NUM_THREADS",

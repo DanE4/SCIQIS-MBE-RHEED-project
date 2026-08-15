@@ -388,7 +388,7 @@ Matplotlib for static publication outputs. Do not begin Three.js work in this st
 
 #### 4E - Parallel batch workflows
 
-- [x] Resolve worker count as CLI override, `MBE_WORKERS`, then default 4; reject values outside
+- [x] Resolve worker count as CLI override, `MBE_WORKERS`, then default `min(10, cpu_count-1)`; reject values outside
   `1..os.cpu_count()`.
 - [x] Run independent publication, sweep, acceleration, scientific-trend, and sweep-validation
   configurations in spawn-based workers with stable result ordering.
