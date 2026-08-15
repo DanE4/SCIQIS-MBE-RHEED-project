@@ -36,6 +36,21 @@ def test_deposition_only_limit_and_invariants() -> None:
     assert result.coverage_ml[-1] == 1.0
 
 
+def test_progress_callback_rises_to_one() -> None:
+    config = SimulationConfig(
+        lattice_size=4,
+        target_coverage_ml=1.0,
+        attempt_frequency_hz=0.0,
+        sample_every_ml=0.25,
+        seed=7,
+    )
+    fractions: list[float] = []
+    run(config, on_progress=fractions.append)
+    assert fractions == sorted(fractions)
+    assert fractions[0] == 0.0
+    assert fractions[-1] == 1.0
+
+
 def test_rate_tree_updates_and_selects_weighted_sites() -> None:
     tree = _RateTree(np.array([1.0, 2.0, 3.0]))
     assert tree.total_rate == pytest.approx(6.0)

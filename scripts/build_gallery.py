@@ -24,6 +24,10 @@ BASE = SimulationConfig(
     seed=7,
     desorption_barrier_ev=1.2,  # suppress desorption so morphology is the only story
 )
+# Ga/N condition behind the paper entry. Written into the index so the notebook can reload
+# this run into the live-run form in paper mode instead of guessing the ratio back.
+PAPER_RATIO = 0.82
+
 ENTRIES = {
     "gan-paper-082": {
         "title": "Layer-by-layer growth (GaN paper parameters)",
@@ -34,7 +38,8 @@ ENTRIES = {
             "to nearly flat every monolayer and the proxy oscillates with a ~1 ML period. "
             "This is the textbook RHEED oscillation the whole model is aiming at."
         ),
-        "config": figure3_config(0.82, lattice_size=7, duration_s=40.0, seed=7),
+        "config": figure3_config(PAPER_RATIO, lattice_size=7, duration_s=40.0, seed=7),
+        "figure3_ratio": PAPER_RATIO,
     },
     "island-growth": {
         "title": "Island growth (damped oscillations)",
@@ -109,7 +114,7 @@ def main() -> None:
         entry = ENTRIES[name]
         # The paper entry runs on a physical clock, so record how coverage was derived.
         growth_rate = (
-            figure3_parameters(0.82).predicted_growth_rate_ml_s
+            figure3_parameters(PAPER_RATIO).predicted_growth_rate_ml_s
             if name == "gan-paper-082"
             else None
         )
@@ -122,6 +127,7 @@ def main() -> None:
             "story": entry["story"],
             "config": asdict(result.config),
             "predicted_growth_rate_ml_s": growth_rate,
+            "figure3_ratio": entry.get("figure3_ratio"),
             "final_roughness_ml": float(result.roughness_ml[-1]),
             "oscillation_period_ml": metrics.period_ml,
             "is_oscillatory": metrics.is_oscillatory,

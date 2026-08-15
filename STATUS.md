@@ -27,13 +27,17 @@ experiment.
   256x256 and every `SimulationConfig` field relevant to manual generic or paper-derived runs,
   with expensive-run confirmation. Replacing smoke-scale results with a converged ensemble
   remains.
-- **Current computational limit:** local event-catalogue updates reduce a paper-derived 64x64,
-  4 s run from 131 s to about 38 s. An updateable rate tree reduces the 0.1 s envelope from
-  10.6 to 6.1 s at 128x128 and from 105.8 to 24.8 s at 256x256 while preserving the existing
-  small-lattice path. Bounded process workers now reduce independent-ensemble wall time without
-  changing trajectories: publication is 3.30x faster with four workers, and the three-seed
-  64x64 convergence workflow is 3.07x faster with three effective workers. Single-trajectory
-  algorithmic efficiency is still the bottleneck for the next size.
+- **Current computational limit:** single-trajectory cost is no longer the binding constraint.
+  Batched neighbourhood gathers, skipping empty sites in the local refresh, sampling from the
+  occupied sites only, and compiled Numba kernels for refresh, rate-tree update and sampling
+  together reduce the 0.1 s Figure 3 envelope from 1.49 to 0.029 s at 64x64, 6.06 to 0.124 s at
+  128x128, and 24.9 to 0.512 s at 256x256, and a paper-derived 64x64, 4 s run from 36.2 to
+  1.73 s. Every one of those runs is bit-identical to the trajectory it replaced. The
+  three-seed Figure 3 convergence study now reaches 128x128 in 12 s of wall time, so finite-size
+  convergence is a science question about how many seeds and sizes to average, not a runtime
+  question. Bounded process workers add about 5.6x on top with eight workers on the M4 Pro.
+  What now dominates is Python-level per-event overhead: the event loop, RNG draws and the
+  per-call boundary into the kernels, at roughly 6.5 microseconds per event.
 - **Size policy:** 16x16 is for responsive teaching, 64x64 is the current publication candidate,
   and 128x128/256x256 are benchmarks if runtime permits. Matching 256x256 exactly is not the
   objective; demonstrated convergence of reported observables is.

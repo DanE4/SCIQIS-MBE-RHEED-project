@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from functools import cache
 
 import numpy as np
 from numpy.typing import NDArray
@@ -7,6 +8,24 @@ HeightField = NDArray[np.int64]
 
 # Axial-coordinate connectivity represented on a periodic rectangular array.
 HEX_DIRECTIONS = ((0, 1), (0, -1), (1, 0), (-1, 0), (1, -1), (-1, 1))
+
+
+@cache
+def hex_ring_offsets(radius: int) -> tuple[tuple[int, int], ...]:
+    """The 6*radius axial offsets exactly `radius` hex steps away."""
+    return tuple(
+        (dy, dx)
+        for dy in range(-radius, radius + 1)
+        for dx in range(-radius, radius + 1)
+        if max(abs(dx), abs(dy), abs(dx + dy)) == radius
+    )
+
+
+@cache
+def hex_disk_offsets(radius: int) -> tuple[tuple[int, int], ...]:
+    return ((0, 0),) + tuple(
+        offset for ring in range(1, radius + 1) for offset in hex_ring_offsets(ring)
+    )
 
 
 def empty_lattice(size: int) -> HeightField:
@@ -37,12 +56,9 @@ def open_terrace_hop_distance(
     base_height = int(heights[y, x]) - 1
     size = len(heights)
     for radius in range(1, maximum):
-        for dy in range(-radius, radius + 1):
-            for dx in range(-radius, radius + 1):
-                if max(abs(dx), abs(dy), abs(dx + dy)) != radius:
-                    continue
-                if int(heights[(y + dy) % size, (x + dx) % size]) != base_height:
-                    return max(1, radius - 1)
+        for dy, dx in hex_ring_offsets(radius):
+            if int(heights[(y + dy) % size, (x + dx) % size]) != base_height:
+                return max(1, radius - 1)
     return maximum
 
 

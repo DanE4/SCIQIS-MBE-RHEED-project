@@ -5,6 +5,10 @@ pulled out of it, so a broken form mapping or figure builder fails in CI rather 
 live demo.
 """
 
+import json
+from dataclasses import asdict
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -40,6 +44,23 @@ def test_paper_mode_overrides_growth_conditions_but_keeps_numerical_choices() ->
     # Paper barriers, not the form's teaching defaults.
     assert config.diffusion_barrier_ev != controls.DEFAULT_PARAMETERS["barrier_ev"]
     assert "0.82" in name
+
+
+def _gallery() -> dict:
+    index = Path(__file__).resolve().parents[1] / "data" / "gallery" / "index.json"
+    return json.loads(index.read_text())
+
+
+@pytest.mark.parametrize("name", list(_gallery()))
+def test_a_preset_reproduces_the_stored_run_it_names(name: str) -> None:
+    """The form values a preset loads must map back to the stored config exactly.
+
+    Sliders are stepped, so a scenario whose parameters fell between steps would load as
+    something subtly different from the trajectory the caption describes.
+    """
+    meta = _gallery()[name]
+    config, *_ = controls.build_run(controls.preset_parameters(meta))
+    assert asdict(config) == meta["config"]
 
 
 def test_hop_distance_is_clamped_to_the_periodic_lattice() -> None:

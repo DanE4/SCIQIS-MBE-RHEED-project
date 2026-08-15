@@ -20,7 +20,6 @@ def _():
     ROOT = Path(__file__).resolve().parents[1]
     GALLERY_DIR = ROOT / "data" / "gallery"
     GALLERY = json.loads((GALLERY_DIR / "index.json").read_text())
-
     return (
         FIGURE3_NOMINAL_GA_N_RATIOS,
         GALLERY,
@@ -161,25 +160,43 @@ def _(GALLERY, controls, mo):
 
 
 @app.cell
-def _(FIGURE3_NOMINAL_GA_N_RATIOS, controls, mo):
-    get_parameters, _set_parameters = mo.state(controls.DEFAULT_PARAMETERS)
-    parameter_form = controls.parameter_form(
-        FIGURE3_NOMINAL_GA_N_RATIOS,
-        on_change=lambda value: _set_parameters(value or controls.DEFAULT_PARAMETERS),
-    )
+def _(GALLERY, controls, mo):
+    preset_choice = controls.preset_selector(GALLERY)
     mo.vstack(
         [
             mo.md(
                 "### Parameters for a live run\n"
+                "**Start from** loads the parameters behind any stored demo into the form below, "
+                "so you can reproduce that scenario and then change one thing at a time. Hover "
+                "the &#9432; beside a quantity to see what it does.\n\n"
                 "**Hand-tuned parameters** lets you edit every growth condition directly. "
                 "**GaN parameters from the paper** replaces temperature, effective Ga flux, and "
                 "the four barriers with values the paper fits to a Ga/N ratio; the lattice, "
                 "stopping criterion, acceleration, sampling, event limit, and seed still apply. "
                 "The stopping criterion you did not pick is ignored."
             ),
-            parameter_form,
+            preset_choice,
         ]
     )
+    return (preset_choice,)
+
+
+@app.cell
+def _(FIGURE3_NOMINAL_GA_N_RATIOS, GALLERY, controls, mo, preset_choice):
+    # Rebuilding the form is how a preset moves the sliders: marimo elements take their value
+    # at construction, so the cell that owns them re-runs when the preset changes.
+    _values = (
+        controls.preset_parameters(GALLERY[preset_choice.value])
+        if preset_choice.value
+        else controls.DEFAULT_PARAMETERS
+    )
+    get_parameters, _set_parameters = mo.state(_values)
+    parameter_form = controls.parameter_form(
+        FIGURE3_NOMINAL_GA_N_RATIOS,
+        on_change=lambda value: _set_parameters(value or _values),
+        values=_values,
+    )
+    parameter_form
     return (get_parameters,)
 
 
@@ -201,7 +218,6 @@ def _(
     gallery_choice,
     get_parameters,
     mo,
-    run,
 ):
     if data_source.value == controls.PRE_COMPUTED:
         _entry = gallery_choice.value
@@ -210,6 +226,7 @@ def _(
         growth_rate = _meta["predicted_growth_rate_ml_s"]
         experiment_name = _meta["title"]
         experiment_detail = controls.gallery_detail(_meta, simulation.config)
+        experiment_source = f"stored trajectory `data/gallery/{_entry}.npz` — nothing was simulated"
     else:
         _config, _estimate, growth_rate, experiment_name, experiment_detail = controls.build_run(
             get_parameters()
@@ -218,19 +235,31 @@ def _(
             controls.is_expensive(_config, _estimate) and not expensive_override.value,
             controls.expensive_warning(_estimate, expensive_override),
         )
-        simulation = run(_config)
+        simulation = controls.run_with_progress(_config, f"Running KMC: {experiment_name}")
+        experiment_source = (
+            f"live run, {_config.lattice_size}x{_config.lattice_size}, seed {_config.seed}"
+        )
 
     coverage_axis = simulation.time_s * growth_rate if growth_rate else simulation.coverage_ml
     coverage_axis_label = (
         "paper-predicted film coverage (ML)" if growth_rate else "film coverage (ML)"
     )
-    return coverage_axis, coverage_axis_label, experiment_detail, experiment_name, simulation
+    return (
+        coverage_axis,
+        coverage_axis_label,
+        experiment_detail,
+        experiment_name,
+        experiment_source,
+        simulation,
+    )
 
 
 @app.cell
-def _(experiment_detail, experiment_name, mo, simulation):
+def _(experiment_detail, experiment_name, experiment_source, mo, simulation):
     mo.md(f"""
     **Active mode:** {experiment_name}
+
+    **Source:** {experiment_source}
 
     {experiment_detail}
 
@@ -333,7 +362,15 @@ def _(coverage_axis, get_frame, mo, np, playback, set_frame, simulation):
 
 
 @app.cell
-def _(coverage_axis, coverage_axis_label, display_mode, figures, get_frame, mo, simulation):
+def _(
+    coverage_axis,
+    coverage_axis_label,
+    display_mode,
+    figures,
+    get_frame,
+    mo,
+    simulation,
+):
     _frame = min(get_frame(), len(simulation.snapshots) - 1)
     _heights = simulation.snapshots[_frame]
     _zmax = max(1, int(simulation.snapshots.max()))
@@ -582,7 +619,10 @@ def _(batch, mo):
             mo.md(
                 "Successful jobs are first retained under `outputs/batches/`, then atomically "
                 "promoted to the canonical notebook artifacts. Failed or cancelled jobs never "
-                "replace canonical data. Only one batch can run in this notebook session."
+                "replace canonical data. Only one batch can run in this notebook session.\n\n"
+                "This panel regenerates data; it does not plot it. On promotion, sections 8 "
+                "and 9 above re-read `data/processed/` and redraw themselves — scroll back up "
+                "to see what a batch changed."
             ),
         ]
     )

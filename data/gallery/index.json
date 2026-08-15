@@ -19,6 +19,7 @@
       "max_events": 10000000
     },
     "predicted_growth_rate_ml_s": 0.22815899705450818,
+    "figure3_ratio": 0.82,
     "final_roughness_ml": 0.2397416351932802,
     "oscillation_period_ml": 0.9208210643455488,
     "is_oscillatory": true,
@@ -45,6 +46,7 @@
       "max_events": 2000000
     },
     "predicted_growth_rate_ml_s": null,
+    "figure3_ratio": null,
     "final_roughness_ml": 1.125771340508858,
     "oscillation_period_ml": 0.8250000000000001,
     "is_oscillatory": true,
@@ -71,6 +73,7 @@
       "max_events": 2000000
     },
     "predicted_growth_rate_ml_s": null,
+    "figure3_ratio": null,
     "final_roughness_ml": 3.010398644698074,
     "oscillation_period_ml": null,
     "is_oscillatory": false,
@@ -97,6 +100,7 @@
       "max_events": 2000000
     },
     "predicted_growth_rate_ml_s": null,
+    "figure3_ratio": null,
     "final_roughness_ml": 1.9781795784115366,
     "oscillation_period_ml": null,
     "is_oscillatory": false,
@@ -123,6 +127,7 @@
       "max_events": 2000000
     },
     "predicted_growth_rate_ml_s": null,
+    "figure3_ratio": null,
     "final_roughness_ml": 1.9658543520142415,
     "oscillation_period_ml": 0.65,
     "is_oscillatory": true,
@@ -149,6 +154,7 @@
       "max_events": 2000000
     },
     "predicted_growth_rate_ml_s": null,
+    "figure3_ratio": null,
     "final_roughness_ml": 1.8171635406130437,
     "oscillation_period_ml": null,
     "is_oscillatory": false,

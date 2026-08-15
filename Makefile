@@ -15,7 +15,7 @@ setup:
 	uv sync --locked
 
 notebook:
-	uv run marimo edit $(NOTEBOOK) --no-token --no-skew-protection --port $(MARIMO_PORT)
+	uv run marimo edit $(NOTEBOOK) --no-token --port $(MARIMO_PORT)
 
 test:
 	uv run pytest
