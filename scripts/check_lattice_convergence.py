@@ -1,6 +1,5 @@
 """Measure small-lattice sensitivity for the current uncalibrated demonstration regime."""
 
-import argparse
 import json
 from dataclasses import asdict, replace
 from pathlib import Path
@@ -20,8 +19,7 @@ from mbe_rheed_sim.analysis import (
 )
 from mbe_rheed_sim.workflows import (
     artifact_root,
-    parse_int_values,
-    resolve_workers,
+    parse_workflow_args,
     run_parallel,
     run_timed,
 )
@@ -144,13 +142,4 @@ def main(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--workers", type=int)
-    parser.add_argument("--seeds")
-    parser.add_argument("--sizes")
-    arguments = parser.parse_args()
-    main(
-        workers=resolve_workers(arguments.workers),
-        seeds=parse_int_values(arguments.seeds, SEEDS),
-        sizes=parse_int_values(arguments.sizes, SIZES),
-    )
+    main(**parse_workflow_args(seeds=SEEDS, sizes=SIZES))

@@ -1,6 +1,5 @@
 """Check one oscillation-scale Figure 3 window across practical lattice sizes."""
 
-import argparse
 import json
 from dataclasses import asdict
 from itertools import pairwise
@@ -21,8 +20,7 @@ from mbe_rheed_sim.analysis import (
 from mbe_rheed_sim.paper import figure3_config, figure3_parameters
 from mbe_rheed_sim.workflows import (
     artifact_root,
-    parse_int_values,
-    resolve_workers,
+    parse_workflow_args,
     run_parallel,
     run_timed,
 )
@@ -153,13 +151,4 @@ def main(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--workers", type=int)
-    parser.add_argument("--seeds")
-    parser.add_argument("--sizes")
-    arguments = parser.parse_args()
-    main(
-        workers=resolve_workers(arguments.workers),
-        seeds=parse_int_values(arguments.seeds, SEEDS),
-        sizes=parse_int_values(arguments.sizes, SIZES),
-    )
+    main(**parse_workflow_args(seeds=SEEDS, sizes=SIZES))

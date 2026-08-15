@@ -7,55 +7,34 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     import json
-    import os
-    import signal
-    import subprocess
-    import sys
-    import time
-    from dataclasses import replace
     from pathlib import Path
 
     import marimo as mo
-    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
 
+    from mbe_rheed_notebook import batch, controls, figures
     from mbe_rheed_sim import SimulationConfig, run
     from mbe_rheed_sim.kmc import SimulationResult
-    from mbe_rheed_sim.paper import (
-        FIGURE3_NOMINAL_GA_N_RATIOS,
-        figure3_config,
-        figure3_parameters,
-    )
-    from mbe_rheed_sim.rates import arrhenius_rate
+    from mbe_rheed_sim.paper import FIGURE3_NOMINAL_GA_N_RATIOS
 
-    GALLERY_DIR = Path(__file__).resolve().parents[1] / "data" / "gallery"
+    ROOT = Path(__file__).resolve().parents[1]
+    GALLERY_DIR = ROOT / "data" / "gallery"
     GALLERY = json.loads((GALLERY_DIR / "index.json").read_text())
 
     return (
         FIGURE3_NOMINAL_GA_N_RATIOS,
         GALLERY,
         GALLERY_DIR,
-        Path,
+        ROOT,
         SimulationConfig,
         SimulationResult,
-        arrhenius_rate,
-        figure3_config,
-        figure3_parameters,
-        go,
+        batch,
+        controls,
+        figures,
         json,
-        make_subplots,
         mo,
         np,
-        os,
-        plt,
-        replace,
         run,
-        signal,
-        subprocess,
-        sys,
-        time,
     )
 
 
@@ -71,6 +50,9 @@ def _(mo):
     This notebook implements a **small teaching model**, not the full strained GaN/AlN
     quantum-dot model of Budagosky and Garcia-Cristobal (2022). Its RHEED curve is a
     clearly labelled morphology proxy, not an electron-diffraction calculation.
+
+    Narrative and reactive wiring live here; the physics is in `mbe_rheed_sim` and the
+    figure/widget construction is in `mbe_rheed_notebook`. See `INDEX.md`.
     """)
     return
 
@@ -158,17 +140,8 @@ def _(mo):
 
 
 @app.cell
-def _(GALLERY, mo):
-    data_source = mo.ui.radio(
-        options=["Pre-computed demo", "Simulate now"],
-        value="Pre-computed demo",
-        label="Result source",
-    )
-    gallery_choice = mo.ui.dropdown(
-        {meta["title"]: name for name, meta in GALLERY.items()},
-        value=next(iter(GALLERY.values()))["title"],
-        label="Pre-computed run",
-    )
+def _(GALLERY, controls, mo):
+    data_source, gallery_choice = controls.source_selector(GALLERY)
     mo.vstack(
         [
             mo.md(
@@ -188,155 +161,11 @@ def _(GALLERY, mo):
 
 
 @app.cell
-def _(FIGURE3_NOMINAL_GA_N_RATIOS, mo):
-    default_parameters = {
-        "experiment_mode": "Hand-tuned parameters",
-        "figure3_ratio": 0.82,
-        "temperature_k": 800,
-        "flux_ml_s": 0.5,
-        "attempt_frequency_hz": 1_000.0,
-        "barrier_ev": 0.15,
-        "bond_energy_ev": 0.05,
-        "step_barrier_ev": 0.05,
-        "desorption_barrier_ev": 0.65,
-        "size": 16,
-        "stop_mode": "Coverage",
-        "coverage_ml": 2.0,
-        "duration_s": 4.0,
-        "hop_distance": 1,
-        "sample_every_ml": 0.05,
-        "max_events": 2_000_000,
-        "seed": 7,
-    }
-    get_parameters, _set_parameters = mo.state(default_parameters)
-    parameter_controls = mo.md("""
-        ### Parameter source
-
-        | Choice | Value |
-        |---|---|
-        | Parameter source | {experiment_mode} |
-        | Paper Ga/N condition | {figure3_ratio} |
-
-        ### Growth conditions
-
-        | Quantity | Value |
-        |---|---|
-        | Temperature | {temperature_k} |
-        | Deposition flux | {flux_ml_s} |
-        | Attempt frequency | {attempt_frequency_hz} |
-        | Diffusion barrier | {barrier_ev} |
-        | Lateral bond energy | {bond_energy_ev} |
-        | Down-step barrier | {step_barrier_ev} |
-        | Desorption barrier | {desorption_barrier_ev} |
-
-        ### Numerical controls
-
-        | Quantity | Value |
-        |---|---|
-        | Lattice size | {size} |
-        | Stop by | {stop_mode} |
-        | Target coverage | {coverage_ml} |
-        | Target physical time | {duration_s} |
-        | Isolated-adatom hop limit | {hop_distance} |
-        | Sampling interval | {sample_every_ml} |
-        | Maximum selected events | {max_events} |
-        | RNG seed | {seed} |
-    """).batch(
-        experiment_mode=mo.ui.radio(
-            options=["Hand-tuned parameters", "GaN parameters from the paper"],
-            value="Hand-tuned parameters",
-            label="Where do the parameters come from?",
-        ),
-        figure3_ratio=mo.ui.dropdown(
-            {f"Ga/N = {ratio:.2f}": ratio for ratio in FIGURE3_NOMINAL_GA_N_RATIOS},
-            value="Ga/N = 0.82",
-            label="Figure 3 nominal Ga/N ratio",
-        ),
-        temperature_k=mo.ui.slider(
-            start=500, stop=1_200, step=10, value=800, label="Temperature (K)"
-        ),
-        flux_ml_s=mo.ui.slider(
-            start=0.05, stop=1.5, step=0.05, value=0.5, label="Flux (ML/s)"
-        ),
-        attempt_frequency_hz=mo.ui.dropdown(
-            {
-                "1e3 Hz (teaching)": 1_000.0,
-                "1e6 Hz": 1e6,
-                "1e9 Hz": 1e9,
-                "1e13 Hz (atomistic)": 1e13,
-            },
-            value="1e3 Hz (teaching)",
-            label="Attempt frequency",
-        ),
-        barrier_ev=mo.ui.slider(
-            start=0.05, stop=2.5, step=0.01, value=0.15, label="Diffusion barrier (eV)"
-        ),
-        bond_energy_ev=mo.ui.slider(
-            start=0.0, stop=0.6, step=0.01, value=0.05, label="Lateral bond energy (eV)"
-        ),
-        step_barrier_ev=mo.ui.slider(
-            start=0.0, stop=0.3, step=0.01, value=0.05, label="Down-step barrier (eV)"
-        ),
-        desorption_barrier_ev=mo.ui.slider(
-            start=0.2, stop=3.0, step=0.05, value=0.65, label="Desorption barrier (eV)"
-        ),
-        size=mo.ui.dropdown(
-            {
-                "7 x 7 — paper smoke": 7,
-                "8 x 8 — baseline": 8,
-                "12 x 12 — tiny": 12,
-                "16 x 16 — fast interactive": 16,
-                "24 x 24 — detailed interactive": 24,
-                "32 x 32 — science check": 32,
-                "48 x 48 — extended": 48,
-                "64 x 64 — large": 64,
-                "96 x 96 — expensive": 96,
-                "128 x 128 — benchmark": 128,
-                "256 x 256 — paper reference": 256,
-            },
-            value="16 x 16 — fast interactive",
-            label="Lattice size",
-        ),
-        stop_mode=mo.ui.radio(
-            options=["Coverage", "Physical time"], value="Coverage", label="Stopping criterion"
-        ),
-        coverage_ml=mo.ui.slider(
-            start=0.25, stop=10.0, step=0.25, value=2.0, label="Target coverage (ML)"
-        ),
-        duration_s=mo.ui.slider(
-            start=0.1, stop=40.0, step=0.1, value=4.0, label="Target time (s)"
-        ),
-        hop_distance=mo.ui.dropdown(
-            {
-                "1 (exact nearest-neighbor KMC)": 1,
-                "3 (accelerated)": 3,
-                "5 (accelerated)": 5,
-                "8 (accelerated)": 8,
-                "16 (accelerated)": 16,
-            },
-            value="1 (exact nearest-neighbor KMC)",
-            label="Maximum isolated-adatom hop distance",
-        ),
-        sample_every_ml=mo.ui.dropdown(
-            {str(value): value for value in (0.01, 0.025, 0.05, 0.1, 0.25)},
-            value="0.05",
-            label="Sample every (ML)",
-        ),
-        max_events=mo.ui.dropdown(
-            {
-                "2 million": 2_000_000,
-                "10 million": 10_000_000,
-                "50 million": 50_000_000,
-            },
-            value="2 million",
-            label="Event safety limit",
-        ),
-        seed=mo.ui.number(start=0, stop=10_000, value=7, label="RNG seed"),
-    )
-    parameter_form = parameter_controls.form(
-        submit_button_label="Run simulation",
-        bordered=True,
-        on_change=lambda value: _set_parameters(value or default_parameters),
+def _(FIGURE3_NOMINAL_GA_N_RATIOS, controls, mo):
+    get_parameters, _set_parameters = mo.state(controls.DEFAULT_PARAMETERS)
+    parameter_form = controls.parameter_form(
+        FIGURE3_NOMINAL_GA_N_RATIOS,
+        on_change=lambda value: _set_parameters(value or controls.DEFAULT_PARAMETERS),
     )
     mo.vstack(
         [
@@ -365,161 +194,35 @@ def _(mo):
 def _(
     GALLERY,
     GALLERY_DIR,
-    SimulationConfig,
     SimulationResult,
-    arrhenius_rate,
+    controls,
     data_source,
     expensive_override,
-    figure3_config,
-    figure3_parameters,
     gallery_choice,
     get_parameters,
     mo,
-    replace,
     run,
 ):
-    selected_parameters = get_parameters()
-    _size = int(selected_parameters["size"])
-    # SimulationConfig rejects a hop longer than half the periodic lattice.
-    _hop_distance = min(
-        int(selected_parameters["hop_distance"]), max(1, (_size - 1) // 2)
-    )
-    _stop_by_time = selected_parameters["stop_mode"] == "Physical time"
-
-    # ponytail: order-of-magnitude gate only. Selected KMC events are deposition events times
-    # the isolated-adatom hops each one survives, divided by the hops an accelerated long jump
-    # collapses into one selection. Throughput is a single measured constant and the exact and
-    # accelerated regimes straddle it by roughly an order of magnitude either way -- fine for a
-    # "this may take minutes" warning, not a scheduler. Re-measure on new hardware.
-    _selected_events_per_s = 3e5
-
-    def _estimate_runtime_s(config, coverage_ml):
-        hops_per_atom = (
-            arrhenius_rate(
-                config.attempt_frequency_hz,
-                config.diffusion_barrier_ev,
-                config.temperature_k,
-            )
-            / config.deposition_flux_ml_s
-        )
-        selected_events = (
-            config.lattice_size**2
-            * coverage_ml
-            * (1.0 + hops_per_atom / config.max_isolated_hop_distance**2)
-        )
-        return selected_events / _selected_events_per_s
-
-    if data_source.value == "Pre-computed demo":
+    if data_source.value == controls.PRE_COMPUTED:
         _entry = gallery_choice.value
         _meta = GALLERY[_entry]
         simulation = SimulationResult.load_npz(GALLERY_DIR / f"{_entry}.npz")
-        _growth_rate = _meta["predicted_growth_rate_ml_s"]
+        growth_rate = _meta["predicted_growth_rate_ml_s"]
         experiment_name = _meta["title"]
-        _period = _meta["oscillation_period_ml"]
-        experiment_detail = (
-            f"{_meta['story']}\n\nStored run: {simulation.config.lattice_size}"
-            f"x{simulation.config.lattice_size}, seed {simulation.config.seed}, "
-            f"{_meta['frames']} recorded frames. Measured oscillation period "
-            + (f"{_period:.2f} ML." if _period else "not resolved (no layer cycle).")
-        )
-    elif selected_parameters["experiment_mode"] == "GaN parameters from the paper":
-        _ratio = float(selected_parameters["figure3_ratio"])
-        _paper_parameters = figure3_parameters(_ratio)
-        _duration_s = (
-            float(selected_parameters["duration_s"])
-            if _stop_by_time
-            else float(selected_parameters["coverage_ml"])
-            / _paper_parameters.predicted_growth_rate_ml_s
-        )
-        simulation_config = replace(
-            figure3_config(
-                _ratio,
-                lattice_size=_size,
-                duration_s=_duration_s,
-                seed=int(selected_parameters["seed"]),
-            ),
-            max_isolated_hop_distance=_hop_distance,
-            sample_every_ml=float(selected_parameters["sample_every_ml"]),
-            max_events=int(selected_parameters["max_events"]),
-        )
-        _estimated_runtime_s = _estimate_runtime_s(
-            simulation_config, _duration_s * _paper_parameters.predicted_growth_rate_ml_s
-        )
-        _growth_rate = _paper_parameters.predicted_growth_rate_ml_s
-        experiment_name = f"GaN paper parameters (Ga/N = {_ratio:.2f})"
-        experiment_detail = (
-            f"T = {_paper_parameters.temperature_k:.2f} K; effective Ga flux = "
-            f"{_paper_parameters.effective_ga_flux_ml_s:.4f} ML/s; predicted growth rate = "
-            f"{_paper_parameters.predicted_growth_rate_ml_s:.4f} ML/s; "
-            f"{_size}x{_size}; target {_duration_s:.2f} s; seed {simulation_config.seed}."
-        )
+        experiment_detail = controls.gallery_detail(_meta, simulation.config)
     else:
-        _growth_rate = None
-        _target_coverage_ml = (
-            None if _stop_by_time else float(selected_parameters["coverage_ml"])
+        _config, _estimate, growth_rate, experiment_name, experiment_detail = controls.build_run(
+            get_parameters()
         )
-        _target_time_s = float(selected_parameters["duration_s"]) if _stop_by_time else None
-        simulation_config = SimulationConfig(
-            lattice_size=_size,
-            target_coverage_ml=_target_coverage_ml,
-            target_time_s=_target_time_s,
-            temperature_k=float(selected_parameters["temperature_k"]),
-            deposition_flux_ml_s=float(selected_parameters["flux_ml_s"]),
-            attempt_frequency_hz=float(selected_parameters["attempt_frequency_hz"]),
-            diffusion_barrier_ev=float(selected_parameters["barrier_ev"]),
-            lateral_bond_energy_ev=float(selected_parameters["bond_energy_ev"]),
-            step_barrier_ev=float(selected_parameters["step_barrier_ev"]),
-            desorption_barrier_ev=float(selected_parameters["desorption_barrier_ev"]),
-            max_isolated_hop_distance=_hop_distance,
-            sample_every_ml=float(selected_parameters["sample_every_ml"]),
-            seed=int(selected_parameters["seed"]),
-            max_events=int(selected_parameters["max_events"]),
+        mo.stop(
+            controls.is_expensive(_config, _estimate) and not expensive_override.value,
+            controls.expensive_warning(_estimate, expensive_override),
         )
-        _estimated_runtime_s = _estimate_runtime_s(
-            simulation_config,
-            _target_coverage_ml
-            if _target_coverage_ml is not None
-            else _target_time_s * simulation_config.deposition_flux_ml_s,
-        )
-        experiment_name = "Hand-tuned experiment"
-        _target_description = (
-            f"{simulation_config.target_time_s:.2f} s"
-            if _target_time_s is not None
-            else f"{simulation_config.target_coverage_ml:.2f} ML"
-        )
-        experiment_detail = (
-            f"T = {simulation_config.temperature_k:.0f} K; flux = "
-            f"{simulation_config.deposition_flux_ml_s:.3f} ML/s; "
-            f"{_size}x{_size}; target {_target_description}; seed {simulation_config.seed}."
-        )
-    if data_source.value != "Pre-computed demo":
-        if _size >= 64 or _estimated_runtime_s >= 20.0:
-            mo.stop(
-                not expensive_override.value,
-                mo.vstack(
-                    [
-                        mo.callout(
-                            f"This run is estimated at roughly **{_estimated_runtime_s:.0f} s** "
-                            "and is single-threaded. The estimate is order-of-magnitude only; "
-                            "the true cost depends strongly on the rate constants.",
-                            kind="warn",
-                        ),
-                        expensive_override,
-                    ]
-                ),
-            )
-        simulation = run(simulation_config)
-        experiment_detail = (
-            f"{experiment_detail} Estimated {_estimated_runtime_s:.1f} s; hop limit "
-            f"{_hop_distance}; sampled every {simulation_config.sample_every_ml:g} ML; "
-            f"event limit {simulation_config.max_events:,}."
-        )
+        simulation = run(_config)
 
-    coverage_axis = (
-        simulation.time_s * _growth_rate if _growth_rate else simulation.coverage_ml
-    )
+    coverage_axis = simulation.time_s * growth_rate if growth_rate else simulation.coverage_ml
     coverage_axis_label = (
-        "paper-predicted film coverage (ML)" if _growth_rate else "film coverage (ML)"
+        "paper-predicted film coverage (ML)" if growth_rate else "film coverage (ML)"
     )
     return coverage_axis, coverage_axis_label, experiment_detail, experiment_name, simulation
 
@@ -578,7 +281,7 @@ def _(coverage_axis, get_frame, mo, np, playback, set_frame, simulation):
     snapshot_slider = mo.ui.slider(
         0,
         len(simulation.snapshots) - 1,
-        value=min(get_frame(), len(simulation.snapshots) - 1),
+        value=_current_frame,
         label="Recorded growth frame",
         show_value=True,
         on_change=set_frame,
@@ -630,158 +333,18 @@ def _(coverage_axis, get_frame, mo, np, playback, set_frame, simulation):
 
 
 @app.cell
-def _(coverage_axis, coverage_axis_label, display_mode, get_frame, go, mo, np, simulation):
+def _(coverage_axis, coverage_axis_label, display_mode, figures, get_frame, mo, simulation):
     _frame = min(get_frame(), len(simulation.snapshots) - 1)
     _heights = simulation.snapshots[_frame]
-    _coverage = coverage_axis[_frame]
-    _proxy = simulation.rheed_proxy[_frame]
     _zmax = max(1, int(simulation.snapshots.max()))
-    _lattice_extent = len(_heights) - 0.5
-    if display_mode.value == "3D height surface":
-        surface_figure = go.Figure(
-            go.Surface(
-                z=_heights,
-                colorscale="Viridis",
-                cmin=0,
-                cmax=_zmax,
-                colorbar={"title": "height (ML)", "len": 0.7},
-                hovertemplate="x=%{x}<br>y=%{y}<br>height=%{z} ML<extra></extra>",
-                name="surface",
-            )
-        )
-        surface_figure.update_layout(
-            uirevision="surface-playback",
-            height=430,
-            margin={"l": 0, "r": 0, "t": 50, "b": 0},
-            title=f"Surface at {_coverage:.2f} ML",
-            scene={
-                "uirevision": "surface-playback",
-                "xaxis": {
-                    "title": "array x",
-                    "range": [-0.5, _lattice_extent],
-                    "autorange": False,
-                },
-                "yaxis": {
-                    "title": "array y",
-                    "range": [-0.5, _lattice_extent],
-                    "autorange": False,
-                },
-                "zaxis": {
-                    "title": "height (ML)",
-                    "range": [0, _zmax],
-                    "autorange": False,
-                },
-                "aspectmode": "manual",
-                "aspectratio": {"x": 1, "y": 1, "z": 0.55},
-                "camera": {"eye": {"x": 1.4, "y": 1.4, "z": 1.0}},
-            },
-        )
-    else:
-        _axial_y, _axial_x = np.indices(_heights.shape)
-        _hex_data = np.column_stack((_axial_x.ravel(), _axial_y.ravel(), _heights.ravel()))
-        surface_figure = go.Figure(
-            go.Scatter(
-                x=(_axial_x + 0.5 * _axial_y).ravel(),
-                y=(np.sqrt(3.0) / 2.0 * _axial_y).ravel(),
-                mode="markers",
-                marker={
-                    "symbol": "hexagon",
-                    "size": max(9, min(24, 320 / len(_heights))),
-                    "color": _heights.ravel(),
-                    "colorscale": "Viridis",
-                    "cmin": 0,
-                    "cmax": _zmax,
-                    "colorbar": {"title": "height (ML)", "len": 0.7},
-                    "line": {"color": "rgba(255,255,255,0.65)", "width": 0.5},
-                },
-                customdata=_hex_data,
-                hovertemplate=(
-                    "q=%{customdata[0]}<br>r=%{customdata[1]}<br>"
-                    "height=%{customdata[2]} ML<extra></extra>"
-                ),
-                name="hexagonal cells",
-            )
-        )
-        surface_figure.update_layout(
-            height=430,
-            margin={"l": 20, "r": 20, "t": 50, "b": 30},
-            title=f"Six-neighbor axial lattice at {_coverage:.2f} ML",
-            xaxis={"title": "axial q + r/2", "scaleanchor": "y", "scaleratio": 1},
-            yaxis={"title": "sqrt(3) r / 2"},
-        )
-    _first_layer = np.flatnonzero(coverage_axis <= 1.0)
-    _most_stepped = int(_first_layer[np.argmin(simulation.rheed_proxy[_first_layer])])
-    _cycle_targets = np.arange(0.0, min(2.0, float(coverage_axis[-1])) + 0.01, 0.5)
-    _cycle_indices = np.array(
-        [int(np.argmin(np.abs(coverage_axis - target))) for target in _cycle_targets]
+    _builder = (
+        figures.height_surface
+        if display_mode.value == "3D height surface"
+        else figures.hex_cells
     )
-    rheed_figure = go.Figure()
-    rheed_figure.add_trace(
-        go.Scatter(
-            x=[coverage_axis[0], coverage_axis[_most_stepped]],
-            y=[simulation.rheed_proxy[0], simulation.rheed_proxy[_most_stepped]],
-            mode="markers",
-            marker={
-                "color": ["#16a34a", "#7e22ce"],
-                "symbol": ["diamond", "x"],
-                "size": 12,
-            },
-            customdata=["initial flat surface", "most stepped stored frame through 1 ML"],
-            hovertemplate="%{customdata}<br>coverage=%{x:.2f} ML<br>proxy=%{y:.3f}<extra></extra>",
-            showlegend=False,
-        )
-    )
-    rheed_figure.add_trace(
-        go.Scatter(
-            x=coverage_axis,
-            y=simulation.rheed_proxy,
-            mode="lines",
-            line={"color": "#d62728", "width": 3},
-            name="normalized step-density RHEED proxy",
-        )
-    )
-    rheed_figure.add_trace(
-        go.Scatter(
-            x=coverage_axis[_cycle_indices],
-            y=simulation.rheed_proxy[_cycle_indices],
-            mode="markers+text",
-            marker={"color": "#f59e0b", "size": 8, "symbol": "circle-open"},
-            text=[f"{target:.1f}" for target in _cycle_targets],
-            textposition="top center",
-            name="0–2 ML cycle milestones",
-            hovertemplate=(
-                "nearest stored coverage=%{x:.2f} ML<br>observed proxy=%{y:.3f}<extra></extra>"
-            ),
-        )
-    )
-    rheed_figure.add_trace(
-        go.Scatter(
-            x=[_coverage, _coverage],
-            y=[0, 1.03],
-            mode="lines",
-            line={"color": "#111827", "dash": "dot"},
-            name="current frame",
-            hoverinfo="skip",
-        )
-    )
-    rheed_figure.add_trace(
-        go.Scatter(
-            x=[_coverage],
-            y=[_proxy],
-            mode="markers",
-            marker={"color": "#111827", "size": 10},
-            name="current proxy",
-            hovertemplate="coverage=%{x:.2f} ML<br>proxy=%{y:.3f}<extra></extra>",
-        )
-    )
-    rheed_figure.update_layout(
-        height=430,
-        margin={"l": 60, "r": 10, "t": 50, "b": 60},
-        title=f"RHEED proxy at {_coverage:.2f} ML",
-        legend={"orientation": "h", "y": -0.2},
-        xaxis_title=coverage_axis_label,
-        yaxis_title="normalized proxy",
-        yaxis_range=[0, 1.03],
+    surface_figure = _builder(_heights, float(coverage_axis[_frame]), _zmax)
+    rheed_figure = figures.rheed_trace(
+        coverage_axis, simulation.rheed_proxy, _frame, coverage_axis_label
     )
     mo.vstack(
         [
@@ -792,12 +355,7 @@ def _(coverage_axis, coverage_axis_label, display_mode, get_frame, go, mo, np, s
                 }
                 </style>
             """),
-            mo.hstack(
-                [surface_figure, rheed_figure],
-                widths="equal",
-                wrap=True,
-                align="center",
-            ),
+            mo.hstack([surface_figure, rheed_figure], widths="equal", wrap=True, align="center"),
             mo.md(
                 "The 3D height view uses array coordinates. **Hexagonal cells** maps the "
                 "same periodic axial lattice to Cartesian centers so its six-neighbor "
@@ -811,21 +369,14 @@ def _(coverage_axis, coverage_axis_label, display_mode, get_frame, go, mo, np, s
 
 
 @app.cell
-def _(coverage_axis, coverage_axis_label, mo, plt, simulation):
-    observable_figure, _axes = plt.subplots(
-        3, 1, figsize=(8, 7), sharex=True, constrained_layout=True
-    )
-    _axes[0].plot(coverage_axis, simulation.roughness_ml, color="tab:blue")
-    _axes[0].set_ylabel("RMS roughness (ML)")
-    _axes[1].plot(
+def _(coverage_axis, coverage_axis_label, figures, mo, simulation):
+    observable_figure = figures.observables(
         coverage_axis,
+        simulation.roughness_ml,
         simulation.island_density_per_site,
-        color="tab:green",
+        simulation.rheed_proxy,
+        coverage_axis_label,
     )
-    _axes[1].set_ylabel("islands / site")
-    _axes[2].plot(coverage_axis, simulation.rheed_proxy, color="tab:red")
-    _axes[2].set(xlabel=coverage_axis_label, ylabel=r"$1-S_d$ proxy")
-    observable_figure.suptitle("Growth observables")
     mo.vstack([mo.md("## 7. Growth observables"), observable_figure])
     return
 
@@ -837,36 +388,37 @@ def _(mo):
 
 
 @app.cell
-def _(Path, get_artifact_revision, json, mo):
+def _(ROOT, get_artifact_revision, json, mo):
     get_artifact_revision()
-    sweep_data = json.loads(
-        (Path(__file__).resolve().parents[1] / "data/processed/parameter_sweep.json").read_text()
-    )
+    sweep_data = json.loads((ROOT / "data/processed/parameter_sweep.json").read_text())
     _temperatures = sweep_data["temperatures_k"]
     _fluxes = sweep_data["fluxes_ml_s"]
     _default = {"temperature_k": _temperatures[1], "flux_ml_s": _fluxes[1]}
     get_sweep_selection, _set_sweep_selection = mo.state(_default)
-    sweep_controls = mo.md("""
+    sweep_form = (
+        mo.md("""
         | Sweep coordinate | Selection |
         |---|---|
         | Temperature | {temperature_k} |
         | Deposition flux | {flux_ml_s} |
-    """).batch(
-        temperature_k=mo.ui.dropdown(
-            {f"{value:.0f} K": value for value in _temperatures},
-            value=f"{_default['temperature_k']:.0f} K",
-            label="Temperature",
-        ),
-        flux_ml_s=mo.ui.dropdown(
-            {f"{value:.2f} ML/s": value for value in _fluxes},
-            value=f"{_default['flux_ml_s']:.2f} ML/s",
-            label="Deposition flux",
-        ),
-    )
-    sweep_form = sweep_controls.form(
-        submit_button_label="Run selected point",
-        bordered=True,
-        on_change=lambda value: _set_sweep_selection(value or _default),
+    """)
+        .batch(
+            temperature_k=mo.ui.dropdown(
+                {f"{value:.0f} K": value for value in _temperatures},
+                value=f"{_default['temperature_k']:.0f} K",
+                label="Temperature",
+            ),
+            flux_ml_s=mo.ui.dropdown(
+                {f"{value:.2f} ML/s": value for value in _fluxes},
+                value=f"{_default['flux_ml_s']:.2f} ML/s",
+                label="Deposition flux",
+            ),
+        )
+        .form(
+            submit_button_label="Run selected point",
+            bordered=True,
+            on_change=lambda value: _set_sweep_selection(value or _default),
+        )
     )
     mo.vstack(
         [
@@ -899,54 +451,21 @@ def _(SimulationConfig, get_sweep_selection, run):
 
 
 @app.cell
-def _(mo, np, plt, selected_sweep_result, sweep_data, sweep_selection):
-    _temperatures = np.asarray(sweep_data["temperatures_k"])
-    _fluxes = np.asarray(sweep_data["fluxes_ml_s"])
-    _amplitudes = np.asarray(sweep_data["mean_amplitude"])
-    _amplitude_stds = np.asarray(sweep_data["std_amplitude"])
-    _temperature_index = int(np.flatnonzero(_temperatures == sweep_selection["temperature_k"])[0])
-    _flux_index = int(np.flatnonzero(_fluxes == sweep_selection["flux_ml_s"])[0])
-    sweep_figure, _axes = plt.subplots(1, 3, figsize=(12, 3.5), constrained_layout=True)
-    _heatmap = _axes[0].imshow(_amplitudes, origin="lower", cmap="magma", aspect="auto")
-    _axes[0].scatter(
-        _flux_index,
-        _temperature_index,
-        marker="s",
-        s=120,
-        facecolors="none",
-        edgecolors="cyan",
-        linewidths=2,
+def _(figures, mo, np, selected_sweep_result, sweep_data, sweep_selection):
+    sweep_figure = figures.sweep_panels(sweep_data, sweep_selection, selected_sweep_result)
+    _row = int(
+        np.flatnonzero(np.asarray(sweep_data["temperatures_k"]) == sweep_selection["temperature_k"])[0]
     )
-    _axes[0].set(
-        title="Mean proxy amplitude",
-        xlabel="flux (ML/s)",
-        ylabel="temperature (K)",
-        xticks=range(len(_fluxes)),
-        xticklabels=_fluxes,
-        yticks=range(len(_temperatures)),
-        yticklabels=_temperatures,
-    )
-    sweep_figure.colorbar(_heatmap, ax=_axes[0], shrink=0.8)
-    _surface = _axes[1].imshow(selected_sweep_result.final_heights, origin="lower", cmap="viridis")
-    _axes[1].set(title="Selected final morphology", xlabel="lattice x", ylabel="lattice y")
-    sweep_figure.colorbar(_surface, ax=_axes[1], shrink=0.8, label="height (ML)")
-    _axes[2].plot(
-        selected_sweep_result.coverage_ml,
-        selected_sweep_result.rheed_proxy,
-        color="tab:red",
-    )
-    _axes[2].set(
-        title="Selected proxy trace",
-        xlabel="coverage (ML)",
-        ylabel=r"$1-S_d$",
-        ylim=(0, 1.03),
+    _column = int(
+        np.flatnonzero(np.asarray(sweep_data["fluxes_ml_s"]) == sweep_selection["flux_ml_s"])[0]
     )
     mo.vstack(
         [
             sweep_figure,
             mo.md(
-                f"Selected ensemble amplitude: **{_amplitudes[_temperature_index, _flux_index]:.3f} "
-                f"+/- {_amplitude_stds[_temperature_index, _flux_index]:.3f}**; "
+                f"Selected ensemble amplitude: "
+                f"**{sweep_data['mean_amplitude'][_row][_column]:.3f} "
+                f"+/- {sweep_data['std_amplitude'][_row][_column]:.3f}**; "
                 f"single-run final roughness: **{selected_sweep_result.roughness_ml[-1]:.3f} ML**."
             ),
         ]
@@ -955,156 +474,19 @@ def _(mo, np, plt, selected_sweep_result, sweep_data, sweep_selection):
 
 
 @app.cell
-def _(Path, get_artifact_revision, json):
+def _(ROOT, get_artifact_revision, json):
     get_artifact_revision()
     figure3_data = json.loads(
-        (
-            Path(__file__).resolve().parents[1] / "data/processed/figure3_simulated_smoke.json"
-        ).read_text()
+        (ROOT / "data/processed/figure3_simulated_smoke.json").read_text()
     )
     return (figure3_data,)
 
 
 @app.cell
-def _(figure3_data, go, make_subplots, mo, np):
-    figure3_figure = make_subplots(
-        rows=3,
-        cols=2,
-        shared_xaxes=True,
-        column_titles=("Figure-derived experimental RHEED", "Morphology-derived raw proxy"),
-        horizontal_spacing=0.10,
-        vertical_spacing=0.08,
-    )
-    _metric_rows = []
-
-    def _format_metric(value, digits=3, signed=False):
-        if value is None:
-            return "n/a"
-        return f"{value:+.{digits}f}" if signed else f"{value:.{digits}f}"
-
-    for _row, (_trace, _comparison) in enumerate(
-        zip(figure3_data["traces"], figure3_data["comparisons"], strict=True), start=1
-    ):
-        _time = np.asarray(_trace["time_s"])
-        _mean = np.asarray(_trace["rheed_proxy_mean"])
-        _std = np.asarray(_trace["rheed_proxy_std"])
-        _ratio = _trace["nominal_ga_n_ratio"]
-        _reference = _comparison["reference"]
-        _simulation = _comparison["simulation"]
-        figure3_figure.add_trace(
-            go.Scatter(
-                x=_trace["reference_time_s"],
-                y=_trace["reference_rheed_panel_coordinate"],
-                mode="lines",
-                line={"color": "#d62728", "width": 2},
-                name="figure-derived RHEED" if _row == 1 else None,
-                showlegend=_row == 1,
-                hovertemplate="time=%{x:.1f} s<br>figure coordinate=%{y:.3f}<extra></extra>",
-            ),
-            row=_row,
-            col=1,
-        )
-        for _values, _fill in (
-            (np.clip(_mean - _std, 0, 1), None),
-            (np.clip(_mean + _std, 0, 1), "tonexty"),
-        ):
-            figure3_figure.add_trace(
-                go.Scatter(
-                    x=_time,
-                    y=_values,
-                    mode="lines",
-                    line={"width": 0},
-                    fill=_fill,
-                    fillcolor="rgba(31,119,180,0.18)",
-                    hoverinfo="skip",
-                    showlegend=False,
-                ),
-                row=_row,
-                col=2,
-            )
-        figure3_figure.add_trace(
-            go.Scatter(
-                x=_time,
-                y=_mean,
-                mode="lines",
-                line={"color": "#1f77b4", "width": 2},
-                name="proxy mean +/- 1 SD" if _row == 1 else None,
-                showlegend=_row == 1,
-                hovertemplate="time=%{x:.1f} s<br>raw 1-Sd=%{y:.3f}<extra></extra>",
-            ),
-            row=_row,
-            col=2,
-        )
-        figure3_figure.update_yaxes(
-            title_text=f"Ga/N={_ratio:.2f}<br>panel coordinate", range=[0, 1], row=_row, col=1
-        )
-        figure3_figure.update_yaxes(title_text="raw 1-Sd", range=[0, 1], row=_row, col=2)
-        _metric_rows.append(
-            f"| {_ratio:.2f} | {_format_metric(_reference['period_ml'])} / "
-            f"{_format_metric(_simulation['period_ml'])} | "
-            f"{_format_metric(_comparison['absolute_peak_phase_difference_ml'])} | "
-            f"{_format_metric(_reference['damping_rate_per_ml'], signed=True)} / "
-            f"{_format_metric(_simulation['damping_rate_per_ml'], signed=True)} | "
-            f"{_format_metric(_reference['relative_detrended_amplitude'])} / "
-            f"{_format_metric(_simulation['relative_detrended_amplitude'])} |"
-        )
-    figure3_figure.update_xaxes(title_text="time (s)", range=[0, 40], row=3, col=1)
-    figure3_figure.update_xaxes(title_text="time (s)", range=[0, 40], row=3, col=2)
-    figure3_figure.update_layout(
-        height=800,
-        margin={"l": 80, "r": 20, "t": 95, "b": 80},
-        title="Figure 3 comparison: separate scales, shared time domain",
-        legend={"orientation": "h", "x": 0, "y": -0.08},
-    )
-
+def _(figure3_data, figures, mo):
+    figure3_figure, _metric_rows = figures.figure3_comparison(figure3_data)
     _morphology = figure3_data["morphology_sequence"]
-    _frames = _morphology["frames"]
-    morphology_figure = make_subplots(
-        rows=1,
-        cols=len(_frames),
-        subplot_titles=[
-            f"target {frame['target_predicted_coverage_ml']:.1f} ML<br>"
-            f"actual {frame['predicted_coverage_ml']:.2f} ML"
-            for frame in _frames
-        ],
-        horizontal_spacing=0.03,
-    )
-    _maximum_height = max(np.max(frame["height_ml"]) for frame in _frames)
-    for _column, _frame_data in enumerate(_frames, start=1):
-        _heights = np.asarray(_frame_data["height_ml"])
-        _y, _x = np.indices(_heights.shape)
-        morphology_figure.add_trace(
-            go.Scatter(
-                x=(_x + 0.5 * _y).ravel(),
-                y=(np.sqrt(3.0) / 2.0 * _y).ravel(),
-                mode="markers",
-                marker={
-                    "symbol": "hexagon",
-                    "size": 16,
-                    "color": _heights.ravel(),
-                    "coloraxis": "coloraxis",
-                    "line": {"color": "white", "width": 0.5},
-                },
-                customdata=_heights.ravel(),
-                hovertemplate="height=%{customdata} ML<extra></extra>",
-                showlegend=False,
-            ),
-            row=1,
-            col=_column,
-        )
-        morphology_figure.update_xaxes(visible=False, row=1, col=_column)
-        morphology_figure.update_yaxes(visible=False, row=1, col=_column)
-    morphology_figure.update_layout(
-        height=320,
-        margin={"l": 10, "r": 50, "t": 90, "b": 20},
-        title="Figure 4-inspired layer-cycle morphology - no strain or SK claim",
-        coloraxis={
-            "colorscale": "Viridis",
-            "cmin": 0,
-            "cmax": max(1, _maximum_height),
-            "colorbar": {"title": "height (ML)"},
-        },
-    )
+    morphology_figure = figures.morphology_sequence(_morphology)
     _provenance = figure3_data["provenance"]
     mo.vstack(
         [
@@ -1120,12 +502,11 @@ def _(figure3_data, go, make_subplots, mo, np):
                 "### Quantitative diagnostics\n\n"
                 "| Ga/N | period ref/sim (ML) | absolute peak-phase difference (ML) | "
                 "damping ref/sim (per ML) | relative amplitude ref/sim |\n"
-                "|---:|---:|---:|---:|---:|\n"
-                + "\n".join(_metric_rows)
-                + "\n\nRelative amplitude is referenced to Ga/N = 0.89 separately for each "
-                "signal. Diagnostics use paper-predicted coverage = growth rate x time after "
-                "linear detrending. Figure-derived normalization and 7x7 finite-size effects "
-                "prevent a quantitative agreement claim."
+                "|---:|---:|---:|---:|---:|\n" + _metric_rows + "\n\nRelative amplitude is "
+                "referenced to Ga/N = 0.89 separately for each signal. Diagnostics use "
+                "paper-predicted coverage = growth rate x time after linear detrending. "
+                "Figure-derived normalization and 7x7 finite-size effects prevent a "
+                "quantitative agreement claim."
             ),
             morphology_figure,
             mo.md(
@@ -1168,55 +549,11 @@ def _(mo):
 
 
 @app.cell
-def _(mo, time):
+def _(batch, mo):
     get_batch_request, set_batch_request = mo.state(None)
     get_batch_process, set_batch_process = mo.state(None, allow_self_loops=True)
-    batch_controls = mo.md("""
-        | Batch setting | Selection |
-        |---|---|
-        | Workflow | {workflow} |
-        | Worker processes | {workers} |
-        | Seed override | {seeds} |
-        | Lattice-size override | {sizes} |
-        | Confirm expensive workflow | {confirm_expensive} |
-    """).batch(
-        workflow=mo.ui.dropdown(
-            {
-                "Baseline reproduction": "baseline",
-                "GaN Ga/N comparison": "figure3",
-                "Temperature/flux sweep": "sweep",
-                "Generic convergence": "convergence",
-                "Figure 3 convergence": "figure3-convergence",
-                "Acceleration validation": "validate-acceleration",
-                "Scientific-trend validation": "validate-science",
-                "Sweep lattice validation": "validate-sweep",
-                "64/128/256 runtime benchmark": "benchmark-sizes",
-            },
-            value="GaN Ga/N comparison",
-            label="Workflow",
-        ),
-        workers=mo.ui.slider(1, 8, value=4, label="Worker processes"),
-        seeds=mo.ui.text(
-            value="",
-            placeholder="blank = canonical; e.g. 0,1,2",
-            label="Comma-separated seeds",
-        ),
-        sizes=mo.ui.text(
-            value="",
-            placeholder="blank = canonical; e.g. 8,16,32",
-            label="Comma-separated lattice sizes",
-        ),
-        confirm_expensive=mo.ui.checkbox(
-            value=False,
-            label="I understand that 64x64 convergence or 128/256 benchmarks may take minutes",
-        ),
-    )
-    batch_form = batch_controls.form(
-        submit_button_label="Launch batch workflow",
-        bordered=True,
-        on_change=lambda value: set_batch_request(
-            {**value, "request_id": time.time_ns()} if value else None
-        ),
+    batch_form = batch.controls(
+        on_change=lambda value: set_batch_request(dict(value) if value else None)
     )
     mo.vstack(
         [
@@ -1253,65 +590,28 @@ def _(mo, time):
 
 
 @app.cell
-def _(
-    Path,
-    get_batch_process,
-    get_batch_request,
-    mo,
-    set_batch_process,
-    subprocess,
-    sys,
-    time,
-):
+def _(batch, get_batch_process, get_batch_request, mo, set_batch_process):
     _request = get_batch_request()
     _existing = get_batch_process()
     if _request is None:
         batch_launch_message = mo.md("Select a workflow and press **Launch batch workflow**.")
     elif _existing is not None and _existing["process"].poll() is None:
         batch_launch_message = mo.callout(
-            "A batch is already running. Cancel it or wait for completion before launching another.",
+            "A batch is already running. Cancel it or wait for it to finish before "
+            "launching another.",
             kind="warn",
         )
-    elif (
-        _request["workflow"] == "benchmark-sizes" or "64" in _request["sizes"]
-    ) and not _request["confirm_expensive"]:
+    elif batch.needs_confirmation(_request) and not _request["confirm_expensive"]:
         batch_launch_message = mo.callout(
-            "This workflow is intentionally gated. Check the expensive-workflow confirmation and submit again.",
+            "This workflow is intentionally gated. Tick the expensive-workflow confirmation "
+            "and submit again.",
             kind="warn",
         )
     else:
-        _root = Path(__file__).resolve().parents[1]
-        _batch_id = f"notebook-{time.time_ns()}-{_request['workflow']}"
-        _command = [
-            sys.executable,
-            str(_root / "scripts/run_workflow.py"),
-            _request["workflow"],
-            "--workers",
-            str(_request["workers"]),
-            "--batch-id",
-            _batch_id,
-        ]
-        if _request["seeds"].strip():
-            _command.extend(("--seeds", _request["seeds"].strip()))
-        if _request["sizes"].strip():
-            _command.extend(("--sizes", _request["sizes"].strip()))
-        _process = subprocess.Popen(
-            _command,
-            cwd=_root,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        _state = {
-            "process": _process,
-            "workflow": _request["workflow"],
-            "manifest": _root / "outputs/batches" / _batch_id / "manifest.json",
-            "started": time.time(),
-            "reloaded": False,
-        }
+        _state = batch.launch(_request)
         set_batch_process(_state)
         batch_launch_message = mo.callout(
-            f"Launched `{_request['workflow']}` as process {_process.pid}.", kind="info"
+            f"Launched `{_request['workflow']}` as process {_state['process'].pid}.", kind="info"
         )
     batch_launch_message
     return
@@ -1320,72 +620,27 @@ def _(
 @app.cell
 def _(mo):
     batch_refresh = mo.ui.refresh(
-        options=[1.0, 2.0, 5.0],
-        default_interval=1.0,
-        label="Batch status refresh",
+        options=[1.0, 2.0, 5.0], default_interval=1.0, label="Batch status refresh"
     )
     return (batch_refresh,)
 
 
 @app.cell
-def _(
-    batch_refresh,
-    get_batch_process,
-    json,
-    mo,
-    os,
-    set_artifact_revision,
-    signal,
-    time,
-):
+def _(batch, batch_refresh, get_batch_process, mo, set_artifact_revision):
     batch_refresh.value
     _state = get_batch_process()
-
-    def _cancel_batch(_value):
-        _active = get_batch_process()
-        if _active is not None and _active["process"].poll() is None:
-            os.killpg(_active["process"].pid, signal.SIGTERM)
-
-    if _state is None:
-        _status = {"status": "idle", "completed": 0, "total": None}
-        _elapsed = 0.0
-    else:
-        _manifest = _state["manifest"]
-        _status = json.loads(_manifest.read_text()) if _manifest.exists() else {
-            "status": "starting",
-            "completed": 0,
-            "total": None,
-        }
-        _return_code = _state["process"].poll()
-        _elapsed = float(_status.get("elapsed_s", time.time() - _state["started"]))
-        if _return_code is not None and _status["status"] == "succeeded" and not _state["reloaded"]:
-            _state["reloaded"] = True
-            set_artifact_revision(lambda revision: revision + 1)
-    _total = _status.get("total")
-    _progress = (
-        f"{_status.get('completed', 0)}/{_total}"
-        if _total is not None
-        else str(_status.get("completed", 0))
-    )
-    _error = _status.get("error")
-    _error_text = f"\n\n```text\n{_error[-1500:]}\n```" if _error else ""
+    _status, _elapsed, _just_promoted = batch.read_status(_state)
+    if _just_promoted:
+        set_artifact_revision(lambda revision: revision + 1)
     cancel_batch = mo.ui.run_button(
         label="Cancel active batch",
         kind="danger",
         disabled=_state is None or _state["process"].poll() is not None,
-        on_change=_cancel_batch,
+        on_change=lambda _value: batch.cancel(get_batch_process()),
     )
     mo.vstack(
         [
-            mo.md(
-                f"**Status:** `{_status.get('status', 'unknown')}`  \n"
-                f"**Stage:** {_status.get('stage', 'waiting for worker')}  \n"
-                f"**Progress:** {_progress}  \n"
-                f"**Workers:** {_status.get('effective_workers', 'n/a')}  \n"
-                f"**Elapsed:** {_elapsed:.1f} s  \n"
-                f"**History:** `{_status.get('batch_directory', 'not created yet')}`"
-                f"{_error_text}"
-            ),
+            mo.md(batch.status_markdown(_status, _elapsed)),
             mo.hstack([batch_refresh, cancel_batch], justify="start", gap=2),
         ]
     )

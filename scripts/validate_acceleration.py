@@ -1,6 +1,5 @@
 """Compare accelerated and exact KMC ensemble observables on a small lattice."""
 
-import argparse
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -8,7 +7,11 @@ from pathlib import Path
 import numpy as np
 
 from mbe_rheed_sim import SimulationConfig, run
-from mbe_rheed_sim.workflows import artifact_root, parse_int_values, resolve_workers, run_parallel
+from mbe_rheed_sim.workflows import (
+    artifact_root,
+    parse_workflow_args,
+    run_parallel,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 SEEDS = tuple(range(100))
@@ -82,11 +85,4 @@ def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--workers", type=int)
-    parser.add_argument("--seeds")
-    arguments = parser.parse_args()
-    main(
-        workers=resolve_workers(arguments.workers),
-        seeds=parse_int_values(arguments.seeds, SEEDS),
-    )
+    main(**parse_workflow_args(seeds=SEEDS))

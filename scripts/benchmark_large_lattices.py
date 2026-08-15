@@ -1,6 +1,5 @@
 """Measure short paper-regime runs before scheduling large ensembles."""
 
-import argparse
 import json
 from pathlib import Path
 from time import perf_counter
@@ -10,7 +9,11 @@ import numpy as np
 from mbe_rheed_sim import run
 from mbe_rheed_sim.analysis import result_array_bytes
 from mbe_rheed_sim.paper import figure3_config
-from mbe_rheed_sim.workflows import artifact_root, parse_int_values, update_progress
+from mbe_rheed_sim.workflows import (
+    artifact_root,
+    parse_workflow_args,
+    update_progress,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 RATIO = 0.82
@@ -65,7 +68,4 @@ def main(*, sizes: tuple[int, ...] = SIZES) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--sizes")
-    arguments = parser.parse_args()
-    main(sizes=parse_int_values(arguments.sizes, SIZES))
+    main(**parse_workflow_args(workers=False, sizes=SIZES))

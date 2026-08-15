@@ -1,5 +1,6 @@
 """Bounded process execution and safe artifact handling for simulation workflows."""
 
+import argparse
 import fcntl
 import json
 import os
@@ -48,6 +49,36 @@ def parse_int_values(value: str | None, defaults: Sequence[int]) -> tuple[int, .
     if not values or any(item < 0 for item in values) or len(set(values)) != len(values):
         raise ValueError("values must be unique non-negative integers")
     return values
+
+
+def parse_workflow_args(
+    *,
+    workers: bool = True,
+    seeds: Sequence[int] | None = None,
+    sizes: Sequence[int] | None = None,
+) -> dict[str, object]:
+    """Parse the shared --workers/--seeds/--sizes CLI into `main()` keyword arguments.
+
+    Pass the script's canonical defaults for the overrides it accepts; omit the rest so the
+    parser rejects a flag the script cannot honour instead of silently ignoring it.
+    """
+    parser = argparse.ArgumentParser()
+    if workers:
+        parser.add_argument("--workers", type=int)
+    if seeds is not None:
+        parser.add_argument("--seeds")
+    if sizes is not None:
+        parser.add_argument("--sizes")
+    arguments = parser.parse_args()
+
+    options: dict[str, object] = {}
+    if workers:
+        options["workers"] = resolve_workers(arguments.workers)
+    if seeds is not None:
+        options["seeds"] = parse_int_values(arguments.seeds, seeds)
+    if sizes is not None:
+        options["sizes"] = parse_int_values(arguments.sizes, sizes)
+    return options
 
 
 def artifact_root(project_root: Path) -> Path:

@@ -1,0 +1,89 @@
+"""Checks for the notebook's presentation layer.
+
+The notebook itself is only exercised by `make check`; these cover the logic that was
+pulled out of it, so a broken form mapping or figure builder fails in CI rather than in a
+live demo.
+"""
+
+import numpy as np
+import pytest
+
+from mbe_rheed_notebook import batch, controls, figures
+
+
+def test_hand_tuned_parameters_map_to_a_valid_config() -> None:
+    config, estimate, growth_rate, name, detail = controls.build_run(
+        controls.DEFAULT_PARAMETERS
+    )
+    assert config.lattice_size == 16
+    assert config.target_coverage_ml == 2.0
+    assert config.target_time_s is None
+    assert growth_rate is None
+    assert estimate > 0
+    assert "Hand-tuned" in name and "seed 7" in detail
+
+
+def test_paper_mode_overrides_growth_conditions_but_keeps_numerical_choices() -> None:
+    parameters = controls.DEFAULT_PARAMETERS | {
+        "experiment_mode": controls.FROM_PAPER,
+        "figure3_ratio": 0.82,
+        "stop_mode": "Physical time",
+        "duration_s": 4.0,
+        "seed": 3,
+    }
+    config, _estimate, growth_rate, name, _detail = controls.build_run(parameters)
+
+    assert config.target_time_s == 4.0
+    assert config.target_coverage_ml is None
+    assert config.seed == 3
+    assert growth_rate is not None and growth_rate > 0
+    # Paper barriers, not the form's teaching defaults.
+    assert config.diffusion_barrier_ev != controls.DEFAULT_PARAMETERS["barrier_ev"]
+    assert "0.82" in name
+
+
+def test_hop_distance_is_clamped_to_the_periodic_lattice() -> None:
+    # 16 would exceed half of a 7x7 lattice; SimulationConfig would reject it.
+    config, *_ = controls.build_run(
+        controls.DEFAULT_PARAMETERS | {"size": 7, "hop_distance": 16}
+    )
+    assert config.max_isolated_hop_distance == 3
+
+
+def test_expensive_gate_trips_on_large_lattices() -> None:
+    small, small_estimate, *_ = controls.build_run(controls.DEFAULT_PARAMETERS)
+    large, large_estimate, *_ = controls.build_run(
+        controls.DEFAULT_PARAMETERS | {"size": 128}
+    )
+    assert not controls.is_expensive(small, small_estimate)
+    assert controls.is_expensive(large, large_estimate)
+
+
+@pytest.mark.parametrize("builder", [figures.height_surface, figures.hex_cells])
+def test_surface_builders_produce_one_trace(builder) -> None:
+    heights = np.array([[0, 1], [2, 1]], dtype=np.int64)
+    figure = builder(heights, coverage=1.0, zmax=2)
+    assert len(figure.data) == 1
+
+
+def test_rheed_trace_marks_the_current_frame() -> None:
+    coverage = np.linspace(0.0, 2.0, 21)
+    proxy = 0.75 + 0.2 * np.cos(2 * np.pi * coverage)
+    figure = figures.rheed_trace(coverage, proxy, frame=5, axis_label="coverage (ML)")
+    current = figure.data[-1]
+    assert current.x[0] == pytest.approx(coverage[5])
+    assert current.y[0] == pytest.approx(proxy[5])
+
+
+def test_batch_workflow_labels_match_the_cli() -> None:
+    """The dropdown must not offer a workflow run_workflow.py would reject."""
+    from run_workflow import WORKFLOWS
+
+    assert set(batch.WORKFLOW_LABELS.values()) <= set(WORKFLOWS)
+
+
+def test_expensive_batch_confirmation_covers_the_64_size_override() -> None:
+    request = {"workflow": "figure3-convergence", "sizes": "8,16,32,64"}
+    assert batch.needs_confirmation(request)
+    assert not batch.needs_confirmation({"workflow": "sweep", "sizes": "8,16"})
+    assert batch.needs_confirmation({"workflow": "benchmark-sizes", "sizes": ""})
