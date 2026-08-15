@@ -8,7 +8,7 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from time import perf_counter
+from time import perf_counter, sleep
 
 from mbe_rheed_sim.workflows import promote_artifacts, resolve_workers
 
@@ -31,6 +31,18 @@ WORKFLOWS = {
     "validate-science": ("validate_scientific_trends.py", True, True, False, ()),
     "validate-sweep": ("validate_sweep_lattice.py", True, True, False, ()),
     "benchmark-sizes": ("benchmark_large_lattices.py", False, False, True, ()),
+}
+WORKFLOW_PRESETS = {
+    "baseline": "8x8, 1 ML, seed 2026",
+    "publication": "7x7, 40 s, Ga/N 0.89/0.82/0.68, seeds 2026/2027/2028",
+    "sweep": "16x16, 2 ML, T=700/850/1000 K, flux=0.25/0.5/0.75 ML/s, seeds 0/1/2",
+    "convergence": "8/16/24, 2 ML, seeds 0/1/2",
+    "figure3-convergence": "8/16/32, Ga/N 0.82, 4 s, seeds 0/1/2",
+    "figure3-convergence-64": "8/16/32/64, Ga/N 0.82, 4 s, seeds 0/1/2",
+    "validate-acceleration": "7x7, 0.5 ML, 100 exact/accelerated seed pairs",
+    "validate-science": "8x8, 2 ML, three physics configurations, seeds 0-4",
+    "validate-sweep": "24x24, 2 ML, three temperatures/two fluxes, seeds 0/1/2",
+    "benchmark-sizes": "64/128/256, Ga/N 0.82, 0.1 s, seed 0; sequential",
 }
 
 
@@ -59,12 +71,31 @@ def _revision() -> dict[str, str | bool]:
     return {"git_commit": commit, "working_tree_dirty": dirty}
 
 
+def _emit_progress(manifest: dict[str, object]) -> None:
+    fields = (
+        "workflow",
+        "status",
+        "stage",
+        "completed",
+        "total",
+        "effective_workers",
+        "batch_directory",
+    )
+    line = json.dumps({key: manifest.get(key) for key in fields})
+    print(line, flush=True)
+    batch_directory = manifest.get("batch_directory")
+    if isinstance(batch_directory, str):
+        with (ROOT / batch_directory / "progress.jsonl").open("a") as stream:
+            stream.write(line + "\n")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("workflow", choices=WORKFLOWS)
     parser.add_argument("--workers", type=int)
     parser.add_argument("--seeds")
     parser.add_argument("--sizes")
+    parser.add_argument("--batch-id")
     arguments = parser.parse_args()
     script, supports_workers, supports_seeds, supports_sizes, fixed_arguments = WORKFLOWS[
         arguments.workflow
@@ -77,7 +108,10 @@ def main() -> None:
     requested_workers = resolve_workers(arguments.workers)
     effective_workers = requested_workers if supports_workers else 1
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
-    batch_dir = BATCH_ROOT / f"{timestamp}-{arguments.workflow}"
+    batch_id = arguments.batch_id or f"{timestamp}-{arguments.workflow}"
+    if Path(batch_id).name != batch_id or batch_id in {".", ".."}:
+        parser.error("batch ID must be a single path-safe name")
+    batch_dir = BATCH_ROOT / batch_id
     artifacts = batch_dir / "artifacts"
     manifest_path = batch_dir / "manifest.json"
     batch_dir.mkdir(parents=True)
@@ -89,7 +123,7 @@ def main() -> None:
     if arguments.sizes:
         command.extend(("--sizes", arguments.sizes))
     started_at = datetime.now(UTC)
-    _write_manifest(
+    manifest = _write_manifest(
         manifest_path,
         workflow=arguments.workflow,
         status="running",
@@ -102,9 +136,11 @@ def main() -> None:
         batch_directory=str(batch_dir.relative_to(ROOT)),
         artifact_directory=str(artifacts.relative_to(ROOT)),
         source_revision=_revision(),
+        configuration=WORKFLOW_PRESETS[arguments.workflow],
         completed=0,
         total=None,
     )
+    _emit_progress(manifest)
     environment = os.environ.copy()
     environment["MBE_ARTIFACT_ROOT"] = str(artifacts)
     environment["MBE_PROGRESS_FILE"] = str(manifest_path)
@@ -112,27 +148,50 @@ def main() -> None:
     process = None
 
     def interrupt(_signal_number, _frame) -> None:
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
         if process is not None and process.poll() is None:
-            process.terminate()
-            process.wait()
+            os.killpg(process.pid, signal.SIGTERM)
         _write_manifest(
             manifest_path,
             status="interrupted",
             finished_at=datetime.now(UTC).isoformat(),
             elapsed_s=perf_counter() - started,
         )
-        raise SystemExit(130)
+        os._exit(130)
 
     signal.signal(signal.SIGINT, interrupt)
     signal.signal(signal.SIGTERM, interrupt)
     with (batch_dir / "stdout.log").open("w") as stdout, (
         batch_dir / "stderr.log"
     ).open("w") as stderr:
-        process = subprocess.Popen(command, cwd=ROOT, env=environment, stdout=stdout, stderr=stderr)
-        return_code = process.wait()
+        process = subprocess.Popen(
+            command,
+            cwd=ROOT,
+            env=environment,
+            stdout=stdout,
+            stderr=stderr,
+            start_new_session=True,
+        )
+        last_progress = (
+            manifest.get("stage"),
+            manifest.get("completed"),
+            manifest.get("total"),
+        )
+        while (return_code := process.poll()) is None:
+            sleep(0.2)
+            progress = json.loads(manifest_path.read_text())
+            signature = (
+                progress.get("stage"),
+                progress.get("completed"),
+                progress.get("total"),
+            )
+            if signature != last_progress:
+                _emit_progress(progress)
+                last_progress = signature
     if return_code != 0:
         error_tail = (batch_dir / "stderr.log").read_text()[-4_000:]
-        _write_manifest(
+        manifest = _write_manifest(
             manifest_path,
             status="failed",
             return_code=return_code,
@@ -140,6 +199,7 @@ def main() -> None:
             finished_at=datetime.now(UTC).isoformat(),
             elapsed_s=perf_counter() - started,
         )
+        _emit_progress(manifest)
         raise SystemExit(return_code)
 
     promoted = promote_artifacts(artifacts, ROOT, BATCH_ROOT / ".promotion.lock")
@@ -152,7 +212,7 @@ def main() -> None:
         finished_at=datetime.now(UTC).isoformat(),
         elapsed_s=perf_counter() - started,
     )
-    print(json.dumps({"manifest": str(manifest_path.relative_to(ROOT)), **manifest}))
+    _emit_progress(manifest)
 
 
 if __name__ == "__main__":

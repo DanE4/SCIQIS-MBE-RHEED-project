@@ -7,6 +7,12 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     import json
+    import os
+    import signal
+    import subprocess
+    import sys
+    import time
+    from dataclasses import replace
     from pathlib import Path
 
     import marimo as mo
@@ -33,8 +39,14 @@ def _():
         make_subplots,
         mo,
         np,
+        os,
         plt,
+        replace,
         run,
+        signal,
+        subprocess,
+        sys,
+        time,
     )
 
 
@@ -143,12 +155,20 @@ def _(FIGURE3_NOMINAL_GA_N_RATIOS, mo):
         "figure3_ratio": 0.82,
         "temperature_k": 800,
         "flux_ml_s": 0.5,
+        "attempt_frequency_hz": 1_000.0,
         "barrier_ev": 0.15,
+        "bond_energy_ev": 0.05,
         "step_barrier_ev": 0.05,
         "desorption_barrier_ev": 0.65,
         "size": 16,
+        "stop_mode": "Coverage",
         "coverage_ml": 2.0,
+        "duration_s": 4.0,
+        "hop_distance": 1,
+        "sample_every_ml": 0.05,
+        "max_events": 2_000_000,
         "seed": 7,
+        "confirm_expensive": False,
     }
     get_parameters, _set_parameters = mo.state(default_parameters)
     parameter_controls = mo.md("""
@@ -165,7 +185,9 @@ def _(FIGURE3_NOMINAL_GA_N_RATIOS, mo):
         |---|---|
         | Temperature | {temperature_k} |
         | Deposition flux | {flux_ml_s} |
+        | Attempt frequency | {attempt_frequency_hz} |
         | Diffusion barrier | {barrier_ev} |
+        | Lateral bond energy | {bond_energy_ev} |
         | Down-step barrier | {step_barrier_ev} |
         | Desorption barrier | {desorption_barrier_ev} |
 
@@ -174,8 +196,14 @@ def _(FIGURE3_NOMINAL_GA_N_RATIOS, mo):
         | Quantity | Value |
         |---|---|
         | Lattice size | {size} |
+        | Stop by | {stop_mode} |
         | Target coverage | {coverage_ml} |
+        | Target physical time | {duration_s} |
+        | Isolated-adatom hop limit | {hop_distance} |
+        | Sampling interval | {sample_every_ml} |
+        | Maximum selected events | {max_events} |
         | RNG seed | {seed} |
+        | Confirm expensive run | {confirm_expensive} |
     """).batch(
         experiment_mode=mo.ui.radio(
             options=["Generic demonstration", "Paper Figure 3 preset"],
@@ -187,18 +215,90 @@ def _(FIGURE3_NOMINAL_GA_N_RATIOS, mo):
             value="Ga/N = 0.82",
             label="Figure 3 nominal Ga/N ratio",
         ),
-        temperature_k=mo.ui.slider(600, 1_100, step=25, value=800, label="Temperature (K)"),
-        flux_ml_s=mo.ui.slider(0.1, 1.0, step=0.1, value=0.5, label="Flux (ML/s)"),
-        barrier_ev=mo.ui.slider(0.10, 0.40, step=0.01, value=0.15, label="Diffusion barrier (eV)"),
+        temperature_k=mo.ui.slider(
+            start=500, stop=1_200, step=10, value=800, label="Temperature (K)"
+        ),
+        flux_ml_s=mo.ui.slider(
+            start=0.05, stop=1.5, step=0.05, value=0.5, label="Flux (ML/s)"
+        ),
+        attempt_frequency_hz=mo.ui.dropdown(
+            {
+                "1e3 Hz (teaching)": 1_000.0,
+                "1e6 Hz": 1e6,
+                "1e9 Hz": 1e9,
+                "1e13 Hz (atomistic)": 1e13,
+            },
+            value="1e3 Hz (teaching)",
+            label="Attempt frequency",
+        ),
+        barrier_ev=mo.ui.slider(
+            start=0.05, stop=2.5, step=0.01, value=0.15, label="Diffusion barrier (eV)"
+        ),
+        bond_energy_ev=mo.ui.slider(
+            start=0.0, stop=0.6, step=0.01, value=0.05, label="Lateral bond energy (eV)"
+        ),
         step_barrier_ev=mo.ui.slider(
-            0.0, 0.20, step=0.01, value=0.05, label="Down-step barrier (eV)"
+            start=0.0, stop=0.3, step=0.01, value=0.05, label="Down-step barrier (eV)"
         ),
         desorption_barrier_ev=mo.ui.slider(
-            0.4, 0.9, step=0.01, value=0.65, label="Desorption barrier (eV)"
+            start=0.2, stop=3.0, step=0.05, value=0.65, label="Desorption barrier (eV)"
         ),
-        size=mo.ui.slider(8, 24, step=2, value=16, label="Lattice size"),
-        coverage_ml=mo.ui.slider(0.5, 3.0, step=0.5, value=2.0, label="Target coverage (ML)"),
+        size=mo.ui.dropdown(
+            {
+                "7 x 7 — paper smoke": 7,
+                "8 x 8 — baseline": 8,
+                "12 x 12 — tiny": 12,
+                "16 x 16 — fast interactive": 16,
+                "24 x 24 — detailed interactive": 24,
+                "32 x 32 — science check": 32,
+                "48 x 48 — extended": 48,
+                "64 x 64 — publication candidate": 64,
+                "96 x 96 — expensive": 96,
+                "128 x 128 — benchmark": 128,
+                "256 x 256 — paper reference": 256,
+            },
+            value="16 x 16 — fast interactive",
+            label="Lattice size",
+        ),
+        stop_mode=mo.ui.radio(
+            options=["Coverage", "Physical time"], value="Coverage", label="Stopping criterion"
+        ),
+        coverage_ml=mo.ui.slider(
+            start=0.25, stop=10.0, step=0.25, value=2.0, label="Target coverage (ML)"
+        ),
+        duration_s=mo.ui.slider(
+            start=0.1, stop=40.0, step=0.1, value=4.0, label="Target time (s)"
+        ),
+        hop_distance=mo.ui.dropdown(
+            {
+                "1 (exact nearest-neighbor KMC)": 1,
+                "3 (accelerated)": 3,
+                "5 (accelerated)": 5,
+                "8 (accelerated)": 8,
+                "16 (accelerated)": 16,
+            },
+            value="1 (exact nearest-neighbor KMC)",
+            label="Maximum isolated-adatom hop distance",
+        ),
+        sample_every_ml=mo.ui.dropdown(
+            {str(value): value for value in (0.01, 0.025, 0.05, 0.1, 0.25)},
+            value="0.05",
+            label="Sample every (ML)",
+        ),
+        max_events=mo.ui.dropdown(
+            {
+                "2 million": 2_000_000,
+                "10 million": 10_000_000,
+                "50 million": 50_000_000,
+            },
+            value="2 million",
+            label="Event safety limit",
+        ),
         seed=mo.ui.number(start=0, stop=10_000, value=7, label="RNG seed"),
+        confirm_expensive=mo.ui.checkbox(
+            value=False,
+            label="I understand this run may keep the notebook busy for minutes or longer",
+        ),
     )
     parameter_form = parameter_controls.form(
         submit_button_label="Run simulation",
@@ -210,9 +310,11 @@ def _(FIGURE3_NOMINAL_GA_N_RATIOS, mo):
             mo.md(
                 "## 5. Run the virtual experiment\n"
                 "Choose **Generic demonstration** for editable teaching parameters or "
-                "**Paper Figure 3 preset** to load the complete 40 s paper-derived condition. "
-                "In paper mode the generic sliders are ignored. Frame scrubbing below reuses "
-                "the stored trajectory and does not rerun KMC."
+                "**Paper Figure 3 preset** to derive the growth rates and barriers from the "
+                "selected Ga/N ratio. Lattice size, stopping criterion, acceleration, sampling, "
+                "event limit, and seed apply in both modes; only the generic growth-condition "
+                "fields are ignored in paper mode. The unused coverage/time target is ignored. "
+                "Frame scrubbing below reuses the stored trajectory and does not rerun KMC."
             ),
             parameter_form,
         ]
@@ -221,45 +323,107 @@ def _(FIGURE3_NOMINAL_GA_N_RATIOS, mo):
 
 
 @app.cell
-def _(SimulationConfig, figure3_config, figure3_parameters, get_parameters, run):
+def _(SimulationConfig, figure3_config, figure3_parameters, get_parameters, mo, replace, run):
     selected_parameters = get_parameters()
+    _size = int(selected_parameters["size"])
+    _hop_distance = min(
+        int(selected_parameters["hop_distance"]), max(1, (_size - 1) // 2)
+    )
+    _stop_by_time = selected_parameters["stop_mode"] == "Physical time"
     if selected_parameters["experiment_mode"] == "Paper Figure 3 preset":
         _ratio = float(selected_parameters["figure3_ratio"])
         _paper_parameters = figure3_parameters(_ratio)
-        simulation_config = figure3_config(
-            _ratio,
-            lattice_size=7,
-            duration_s=40.0,
-            seed=int(selected_parameters["seed"]),
+        _duration_s = (
+            float(selected_parameters["duration_s"])
+            if _stop_by_time
+            else float(selected_parameters["coverage_ml"])
+            / _paper_parameters.predicted_growth_rate_ml_s
         )
-        experiment_name = f"Paper Figure 3 preset (Ga/N = {_ratio:.2f})"
+        simulation_config = replace(
+            figure3_config(
+                _ratio,
+                lattice_size=_size,
+                duration_s=_duration_s,
+                seed=int(selected_parameters["seed"]),
+            ),
+            max_isolated_hop_distance=_hop_distance,
+            sample_every_ml=float(selected_parameters["sample_every_ml"]),
+            max_events=int(selected_parameters["max_events"]),
+        )
+        _paper_acceleration_factor = {1: 8.0, 3: 2.0}.get(_hop_distance, 1.0)
+        _estimated_runtime_s = (
+            1.5 * (_size / 64) ** 2 * (_duration_s / 0.1) * _paper_acceleration_factor
+        )
+        experiment_name = f"Paper-derived experiment (Ga/N = {_ratio:.2f})"
         experiment_detail = (
             f"T = {_paper_parameters.temperature_k:.2f} K; effective Ga flux = "
             f"{_paper_parameters.effective_ga_flux_ml_s:.4f} ML/s; predicted growth rate = "
             f"{_paper_parameters.predicted_growth_rate_ml_s:.4f} ML/s; "
-            f"7x7 smoke lattice; 40 s; seed {simulation_config.seed}."
+            f"{_size}x{_size}; target {_duration_s:.2f} s; seed {simulation_config.seed}."
         )
     else:
         _paper_parameters = None
+        _target_coverage_ml = (
+            None if _stop_by_time else float(selected_parameters["coverage_ml"])
+        )
+        _target_time_s = float(selected_parameters["duration_s"]) if _stop_by_time else None
         simulation_config = SimulationConfig(
-            lattice_size=int(selected_parameters["size"]),
-            target_coverage_ml=float(selected_parameters["coverage_ml"]),
+            lattice_size=_size,
+            target_coverage_ml=_target_coverage_ml,
+            target_time_s=_target_time_s,
             temperature_k=float(selected_parameters["temperature_k"]),
             deposition_flux_ml_s=float(selected_parameters["flux_ml_s"]),
+            attempt_frequency_hz=float(selected_parameters["attempt_frequency_hz"]),
             diffusion_barrier_ev=float(selected_parameters["barrier_ev"]),
+            lateral_bond_energy_ev=float(selected_parameters["bond_energy_ev"]),
             step_barrier_ev=float(selected_parameters["step_barrier_ev"]),
             desorption_barrier_ev=float(selected_parameters["desorption_barrier_ev"]),
+            max_isolated_hop_distance=_hop_distance,
+            sample_every_ml=float(selected_parameters["sample_every_ml"]),
             seed=int(selected_parameters["seed"]),
+            max_events=int(selected_parameters["max_events"]),
         )
-        experiment_name = "Generic demonstration"
+        _estimated_coverage_ml = (
+            float(selected_parameters["coverage_ml"])
+            if _target_coverage_ml is not None
+            else float(selected_parameters["duration_s"])
+            * simulation_config.deposition_flux_ml_s
+        )
+        _acceleration_factor = 1.0 if _hop_distance == 1 else 0.35
+        _estimated_runtime_s = (
+            1.3
+            * (_size / 16) ** 2
+            * (_estimated_coverage_ml / 2.0)
+            * _acceleration_factor
+        )
+        experiment_name = "Custom generic experiment"
+        _target_description = (
+            f"{simulation_config.target_time_s:.2f} s"
+            if _target_time_s is not None
+            else f"{simulation_config.target_coverage_ml:.2f} ML"
+        )
         experiment_detail = (
             f"T = {simulation_config.temperature_k:.0f} K; flux = "
-            f"{simulation_config.deposition_flux_ml_s:.2f} ML/s; "
-            f"{simulation_config.lattice_size}x{simulation_config.lattice_size}; "
-            f"target {simulation_config.target_coverage_ml:.1f} ML; seed "
-            f"{simulation_config.seed}."
+            f"{simulation_config.deposition_flux_ml_s:.3f} ML/s; "
+            f"{_size}x{_size}; target {_target_description}; seed {simulation_config.seed}."
         )
+    _expensive = _size >= 64 or _estimated_runtime_s >= 15.0
+    mo.stop(
+        _expensive and not selected_parameters["confirm_expensive"],
+        mo.callout(
+            f"This configuration is estimated to take roughly {_estimated_runtime_s:.0f} s "
+            "on the development machine, but rate choices can change that substantially. "
+            "Enable **Confirm expensive run** and submit again to launch it.",
+            kind="warn",
+        ),
+    )
     simulation = run(simulation_config)
+    _runtime_note = (
+        f"Estimated before launch: {_estimated_runtime_s:.1f} s; isolated-adatom hop limit "
+        f"{_hop_distance}; sample interval {simulation_config.sample_every_ml:g} ML; "
+        f"event limit {simulation_config.max_events:,}."
+    )
+    experiment_detail = f"{experiment_detail} {_runtime_note}"
     coverage_axis = (
         simulation.time_s * _paper_parameters.predicted_growth_rate_ml_s
         if _paper_parameters is not None
@@ -372,6 +536,7 @@ def _(coverage_axis, coverage_axis_label, display_mode, get_frame, go, mo, np, s
     _coverage = coverage_axis[_frame]
     _proxy = simulation.rheed_proxy[_frame]
     _zmax = max(1, int(simulation.snapshots.max()))
+    _lattice_extent = len(_heights) - 0.5
     if display_mode.value == "3D height surface":
         surface_figure = go.Figure(
             go.Surface(
@@ -385,15 +550,29 @@ def _(coverage_axis, coverage_axis_label, display_mode, get_frame, go, mo, np, s
             )
         )
         surface_figure.update_layout(
+            uirevision="surface-playback",
             height=430,
             margin={"l": 0, "r": 0, "t": 50, "b": 0},
             title=f"Surface at {_coverage:.2f} ML",
             scene={
-                "xaxis_title": "array x",
-                "yaxis_title": "array y",
-                "zaxis_title": "height (ML)",
-                "zaxis": {"range": [0, _zmax]},
-                "aspectmode": "data",
+                "uirevision": "surface-playback",
+                "xaxis": {
+                    "title": "array x",
+                    "range": [-0.5, _lattice_extent],
+                    "autorange": False,
+                },
+                "yaxis": {
+                    "title": "array y",
+                    "range": [-0.5, _lattice_extent],
+                    "autorange": False,
+                },
+                "zaxis": {
+                    "title": "height (ML)",
+                    "range": [0, _zmax],
+                    "autorange": False,
+                },
+                "aspectmode": "manual",
+                "aspectratio": {"x": 1, "y": 1, "z": 0.55},
                 "camera": {"eye": {"x": 1.4, "y": 1.4, "z": 1.0}},
             },
         )
@@ -569,7 +748,14 @@ def _(coverage_axis, coverage_axis_label, mo, plt, simulation):
 
 
 @app.cell
-def _(Path, json, mo):
+def _(mo):
+    get_artifact_revision, set_artifact_revision = mo.state(0)
+    return get_artifact_revision, set_artifact_revision
+
+
+@app.cell
+def _(Path, get_artifact_revision, json, mo):
+    get_artifact_revision()
     sweep_data = json.loads(
         (Path(__file__).resolve().parents[1] / "data/processed/parameter_sweep.json").read_text()
     )
@@ -686,7 +872,8 @@ def _(mo, np, plt, selected_sweep_result, sweep_data, sweep_selection):
 
 
 @app.cell
-def _(Path, json):
+def _(Path, get_artifact_revision, json):
+    get_artifact_revision()
     figure3_data = json.loads(
         (
             Path(__file__).resolve().parents[1] / "data/processed/figure3_simulated_smoke.json"
@@ -871,9 +1058,235 @@ def _(figure3_data, go, make_subplots, mo, np):
 
 
 @app.cell
+def _(mo, time):
+    get_batch_request, set_batch_request = mo.state(None)
+    get_batch_process, set_batch_process = mo.state(None, allow_self_loops=True)
+    batch_controls = mo.md("""
+        | Batch setting | Selection |
+        |---|---|
+        | Workflow | {workflow} |
+        | Worker processes | {workers} |
+        | Seed override | {seeds} |
+        | Lattice-size override | {sizes} |
+        | Confirm expensive workflow | {confirm_expensive} |
+    """).batch(
+        workflow=mo.ui.dropdown(
+            {
+                "Baseline reproduction": "baseline",
+                "Publication comparison": "publication",
+                "Temperature/flux sweep": "sweep",
+                "Generic convergence": "convergence",
+                "Figure 3 convergence": "figure3-convergence",
+                "Figure 3 convergence through 64x64": "figure3-convergence-64",
+                "Acceleration validation": "validate-acceleration",
+                "Scientific-trend validation": "validate-science",
+                "Sweep lattice validation": "validate-sweep",
+                "64/128/256 runtime benchmark": "benchmark-sizes",
+            },
+            value="Publication comparison",
+            label="Workflow",
+        ),
+        workers=mo.ui.slider(1, 8, value=4, label="Worker processes"),
+        seeds=mo.ui.text(
+            value="",
+            placeholder="blank = canonical; e.g. 0,1,2",
+            label="Comma-separated seeds",
+        ),
+        sizes=mo.ui.text(
+            value="",
+            placeholder="blank = canonical; e.g. 8,16,32",
+            label="Comma-separated lattice sizes",
+        ),
+        confirm_expensive=mo.ui.checkbox(
+            value=False,
+            label="I understand that 64x64 convergence or 128/256 benchmarks may take minutes",
+        ),
+    )
+    batch_form = batch_controls.form(
+        submit_button_label="Launch batch workflow",
+        bordered=True,
+        on_change=lambda value: set_batch_request(
+            {**value, "request_id": time.time_ns()} if value else None
+        ),
+    )
+    mo.vstack(
+        [
+            mo.md(
+                "## 10. Batch workflows\n"
+                "These controls launch the same reproducible CLI used by `make`. Independent "
+                "seeds and parameter points use bounded spawn-based worker processes; one KMC "
+                "trajectory remains sequential. Blank overrides retain the preset below.\n\n"
+                "| Workflow | Canonical seeds | Canonical sizes / grid |\n"
+                "|---|---|---|\n"
+                "| Baseline | 2026 | 8x8 |\n"
+                "| Publication | 2026-2028 | 7x7, three Ga/N ratios |\n"
+                "| Sweep | 0-2 | 16x16, 3 temperatures x 3 fluxes |\n"
+                "| Generic convergence | 0-2 | 8/16/24 |\n"
+                "| Figure 3 convergence | 0-2 | 8/16/32 (or through 64) |\n"
+                "| Acceleration validation | 0-99 | 7x7 exact/accelerated pairs |\n"
+                "| Scientific trends | 0-4 | 8x8, three physics configurations |\n"
+                "| Sweep validation | 0-2 | 24x24, 3 temperatures x 2 fluxes |\n"
+                "| Runtime benchmark | 0 | 64/128/256, sequential |\n\n"
+                "Measured on the development M4 Pro: publication is about 16 s with four "
+                "workers; Figure 3 convergence through 64x64 is about 52 s with three effective "
+                "workers; the sequential 64/128/256 benchmark is about 34 s. Runtime varies "
+                "with load."
+            ),
+            batch_form,
+            mo.md(
+                "Successful jobs are first retained under `outputs/batches/`, then atomically "
+                "promoted to the canonical notebook artifacts. Failed or cancelled jobs never "
+                "replace canonical data. Only one batch can run in this notebook session."
+            ),
+        ]
+    )
+    return get_batch_process, get_batch_request, set_batch_process
+
+
+@app.cell
+def _(
+    Path,
+    get_batch_process,
+    get_batch_request,
+    mo,
+    set_batch_process,
+    subprocess,
+    sys,
+    time,
+):
+    _request = get_batch_request()
+    _existing = get_batch_process()
+    if _request is None:
+        batch_launch_message = mo.md("Select a workflow and press **Launch batch workflow**.")
+    elif _existing is not None and _existing["process"].poll() is None:
+        batch_launch_message = mo.callout(
+            "A batch is already running. Cancel it or wait for completion before launching another.",
+            kind="warn",
+        )
+    elif _request["workflow"] in {"figure3-convergence-64", "benchmark-sizes"} and not _request[
+        "confirm_expensive"
+    ]:
+        batch_launch_message = mo.callout(
+            "This workflow is intentionally gated. Check the expensive-workflow confirmation and submit again.",
+            kind="warn",
+        )
+    else:
+        _root = Path(__file__).resolve().parents[1]
+        _batch_id = f"notebook-{time.time_ns()}-{_request['workflow']}"
+        _command = [
+            sys.executable,
+            str(_root / "scripts/run_workflow.py"),
+            _request["workflow"],
+            "--workers",
+            str(_request["workers"]),
+            "--batch-id",
+            _batch_id,
+        ]
+        if _request["seeds"].strip():
+            _command.extend(("--seeds", _request["seeds"].strip()))
+        if _request["sizes"].strip():
+            _command.extend(("--sizes", _request["sizes"].strip()))
+        _process = subprocess.Popen(
+            _command,
+            cwd=_root,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        _state = {
+            "process": _process,
+            "workflow": _request["workflow"],
+            "manifest": _root / "outputs/batches" / _batch_id / "manifest.json",
+            "started": time.time(),
+            "reloaded": False,
+        }
+        set_batch_process(_state)
+        batch_launch_message = mo.callout(
+            f"Launched `{_request['workflow']}` as process {_process.pid}.", kind="info"
+        )
+    batch_launch_message
+    return
+
+
+@app.cell
+def _(mo):
+    batch_refresh = mo.ui.refresh(
+        options=[1.0, 2.0, 5.0],
+        default_interval=1.0,
+        label="Batch status refresh",
+    )
+    return (batch_refresh,)
+
+
+@app.cell
+def _(
+    batch_refresh,
+    get_batch_process,
+    json,
+    mo,
+    os,
+    set_artifact_revision,
+    signal,
+    time,
+):
+    batch_refresh.value
+    _state = get_batch_process()
+
+    def _cancel_batch(_value):
+        _active = get_batch_process()
+        if _active is not None and _active["process"].poll() is None:
+            os.killpg(_active["process"].pid, signal.SIGTERM)
+
+    if _state is None:
+        _status = {"status": "idle", "completed": 0, "total": None}
+        _elapsed = 0.0
+    else:
+        _manifest = _state["manifest"]
+        _status = json.loads(_manifest.read_text()) if _manifest.exists() else {
+            "status": "starting",
+            "completed": 0,
+            "total": None,
+        }
+        _return_code = _state["process"].poll()
+        _elapsed = float(_status.get("elapsed_s", time.time() - _state["started"]))
+        if _return_code is not None and _status["status"] == "succeeded" and not _state["reloaded"]:
+            _state["reloaded"] = True
+            set_artifact_revision(lambda revision: revision + 1)
+    _total = _status.get("total")
+    _progress = (
+        f"{_status.get('completed', 0)}/{_total}"
+        if _total is not None
+        else str(_status.get("completed", 0))
+    )
+    _error = _status.get("error")
+    _error_text = f"\n\n```text\n{_error[-1500:]}\n```" if _error else ""
+    cancel_batch = mo.ui.run_button(
+        label="Cancel active batch",
+        kind="danger",
+        disabled=_state is None or _state["process"].poll() is not None,
+        on_change=_cancel_batch,
+    )
+    mo.vstack(
+        [
+            mo.md(
+                f"**Status:** `{_status.get('status', 'unknown')}`  \n"
+                f"**Stage:** {_status.get('stage', 'waiting for worker')}  \n"
+                f"**Progress:** {_progress}  \n"
+                f"**Workers:** {_status.get('effective_workers', 'n/a')}  \n"
+                f"**Elapsed:** {_elapsed:.1f} s  \n"
+                f"**History:** `{_status.get('batch_directory', 'not created yet')}`"
+                f"{_error_text}"
+            ),
+            mo.hstack([batch_refresh, cancel_batch], justify="start", gap=2),
+        ]
+    )
+    return
+
+
+@app.cell
 def _(mo):
     mo.md(r"""
-    ## 10. Repeatability and model limits
+    ## 11. Repeatability and model limits
 
     The seed makes a run exactly reproducible, but one trajectory is not an uncertainty
     estimate. The scripted Stage 3 workflows now aggregate fixed seed ensembles: run

@@ -1,4 +1,5 @@
 from dataclasses import replace
+from multiprocessing import active_children
 
 import numpy as np
 import pytest
@@ -21,6 +22,9 @@ def test_worker_resolution_and_value_parsing(monkeypatch: pytest.MonkeyPatch) ->
         resolve_workers(0)
     with pytest.raises(ValueError):
         parse_int_values("1,1", (9,))
+    monkeypatch.setenv("MBE_WORKERS", "invalid")
+    with pytest.raises(ValueError):
+        resolve_workers()
 
 
 def test_parallel_simulations_preserve_order_and_results() -> None:
@@ -35,6 +39,12 @@ def test_parallel_simulations_preserve_order_and_results() -> None:
         assert expected.diffusion_events == actual.diffusion_events
         np.testing.assert_array_equal(expected.final_heights, actual.final_heights)
         np.testing.assert_array_equal(expected.rheed_proxy, actual.rheed_proxy)
+
+
+def test_parallel_failure_is_propagated() -> None:
+    with pytest.raises(ValueError):
+        run_parallel(int, ("1", "not-an-integer", "3"), workers=2, description="failure test")
+    assert not active_children()
 
 
 def test_promotion_keeps_history_and_replaces_canonical_atomically(tmp_path) -> None:

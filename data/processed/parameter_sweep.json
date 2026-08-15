@@ -30,6 +30,7 @@
     1,
     2
   ],
+  "effective_workers": 4,
   "amplitude_definition": "half of the 95th-minus-5th percentile proxy range",
   "mean_amplitude": [
     [

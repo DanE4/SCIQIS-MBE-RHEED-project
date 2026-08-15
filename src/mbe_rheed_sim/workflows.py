@@ -9,6 +9,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import get_context
 from pathlib import Path
 from time import perf_counter
+from typing import cast
 
 from mbe_rheed_sim.config import SimulationConfig
 from mbe_rheed_sim.kmc import SimulationResult, run
@@ -89,8 +90,9 @@ def run_parallel[T, R](
         return results
 
     for name in WORKER_ENVIRONMENT:
-        os.environ.setdefault(name, "1")
-    results: list[R | None] = [None] * len(items)
+        os.environ[name] = "1"
+    missing = object()
+    results: list[R | object] = [missing] * len(items)
     executor = ProcessPoolExecutor(
         max_workers=effective_workers,
         mp_context=get_context("spawn"),
@@ -108,7 +110,7 @@ def run_parallel[T, R](
         executor.shutdown(wait=True, cancel_futures=True)
         raise
     executor.shutdown(wait=True)
-    return [result for result in results if result is not None]
+    return [cast(R, result) for result in results]
 
 
 def run_timed(config: SimulationConfig) -> tuple[SimulationResult, float]:

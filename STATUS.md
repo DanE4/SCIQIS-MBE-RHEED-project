@@ -23,11 +23,16 @@ experiment.
 - **Presentation state:** the teaching flow, explicit experiment-mode selector, controls,
   playback, annotated synchronized layer-cycle view, hex-coordinate lattice view, separate-scale
   Figure 3 comparison, quantitative diagnostic table, and Figure 4-inspired morphology sequence
-  work. Replacing smoke-scale results with a converged ensemble remains.
+  work. The primary experiment form now exposes labelled lattice choices from 7x7 through
+  256x256 and every `SimulationConfig` field relevant to manual generic or paper-derived runs,
+  with expensive-run confirmation. Replacing smoke-scale results with a converged ensemble
+  remains.
 - **Current computational limit:** local event-catalogue updates reduce a paper-derived 64x64,
   4 s run from 131 s to about 38 s. An updateable rate tree reduces the 0.1 s envelope from
   10.6 to 6.1 s at 128x128 and from 105.8 to 24.8 s at 256x256 while preserving the existing
-  small-lattice path. The three-seed 4 s check now reaches 64x64 and remains unconverged;
+  small-lattice path. Bounded process workers now reduce independent-ensemble wall time without
+  changing trajectories: publication is 3.30x faster with four workers, and the three-seed
+  64x64 convergence workflow is 3.07x faster with three effective workers. Single-trajectory
   algorithmic efficiency is still the bottleneck for the next size.
 - **Size policy:** 16x16 is for responsive teaching, 64x64 is the current publication candidate,
   and 128x128/256x256 are benchmarks if runtime permits. Matching 256x256 exactly is not the
@@ -144,7 +149,8 @@ event counts, result-array footprint, oscillation metrics, final roughness/step 
 morphology summaries through an opt-in 64x64 run. An updateable rate tree removes whole-lattice
 cumulative scans at 128x128 and above; batched updates and cached discrete Arrhenius tables
 remove additional bookkeeping. Further local-rate-refresh work is required before a 128x128
-ensemble; parallel process orchestration is deferred because it would not reduce per-run cost.
+ensemble. Independent seeds now run in bounded spawn workers while lattice sizes remain
+sequential, reducing wall time without pretending to improve per-run scaling.
 
 **Validation:** successive sufficiently large lattices agree within a justified, documented
 tolerance for the principal observable and morphology statistics, with ensemble uncertainty.
@@ -294,8 +300,10 @@ smoke scale; publication convergence remains Stage 3 work.**
 - [x] Choose and justify a preliminary numerical successive-size convergence tolerance: the
   difference plus 1.96 pooled standard errors must fit inside 10% of the larger-size mean
   detrended amplitude. This is a finite-size numerical criterion, not experimental accuracy.
-- [x] Consider CPU-parallel independent seeds/parameter points and defer orchestration until
-  the single-run algorithm improves; parallelism cannot fix the measured per-run scaling.
+- [x] Add bounded spawn-based process parallelism for independent seeds and parameter points;
+  preserve deterministic input ordering and keep each trajectory sequential.
+- [x] Keep lattice sizes and timing benchmarks sequential where concurrent execution would
+  increase memory pressure or invalidate timing evidence.
 
 #### 3C - Parameter study
 
@@ -325,6 +333,9 @@ Matplotlib for static publication outputs. Do not begin Three.js work in this st
 
 - [x] Add an explicit `Generic demonstration | Paper Figure 3 preset` selector; load the full
   paper configuration and provenance through the existing paper helpers.
+- [x] Let both modes manually select lattice size, coverage/time stopping, acceleration,
+  sampling, event limit, and seed; expose all generic kinetic parameters rather than locking
+  the main panel to teaching-scale sliders.
 
 - [x] **01 What is MBE?** Show Ga source -> beam -> substrate -> growing surface.
 - [x] **02 What does an atom do?** Explain deposition, diffusion, attachment, and desorption.
@@ -337,7 +348,9 @@ Matplotlib for static publication outputs. Do not begin Three.js work in this st
 - [x] **08 Parameter sweep.** Show the Stage 3 regime map and selected run.
 - [x] **09 Paper reproduction smoke view.** Present the committed Figure 3 simulation ensemble.
 - [x] Upgrade Section 09 to the quantitative paper-comparison requirements in Stage 5.
-- [x] **10 Model limits.** State omitted physics and valid interpretation.
+- [x] **10 Batch workflows.** Expose every simulation workflow with guarded execution,
+  progress, cancellation, and artifact reload.
+- [x] **11 Model limits.** State omitted physics and valid interpretation.
 
 #### 4B - Interactive morphology
 
@@ -372,6 +385,25 @@ Matplotlib for static publication outputs. Do not begin Three.js work in this st
 - [x] Inspect desktop and narrow layouts.
 - [x] Check browser console and notebook kernel for errors.
 - [x] Confirm notebook execution and static HTML export remain automated.
+
+#### 4E - Parallel batch workflows
+
+- [x] Resolve worker count as CLI override, `MBE_WORKERS`, then default 4; reject values outside
+  `1..os.cpu_count()`.
+- [x] Run independent publication, sweep, acceleration, scientific-trend, and sweep-validation
+  configurations in spawn-based workers with stable result ordering.
+- [x] Run convergence seeds concurrently but lattice sizes sequentially; keep the deterministic
+  baseline and 64/128/256 timing benchmark sequential.
+- [x] Store every run under `outputs/batches/` with source revision, configuration, seed/size
+  overrides, effective workers, elapsed time, JSON-line progress, and final state.
+- [x] Promote canonical artifacts under a lock only after complete success; failed and
+  interrupted smoke tests leave canonical artifacts unchanged.
+- [x] Add notebook workflow, worker, seed, and size controls; gate the 64x64 convergence and
+  128/256 benchmark, run asynchronously, show progress, support cancellation, and reload
+  promoted publication/sweep data.
+- [x] Verify exact equality between one- and multi-worker scientific outputs.
+- [ ] Browser-check live batch launch, progress, cancellation, and data reload; the current
+  validation environment has no connected in-app browser session.
 
 **Exit criteria:** the notebook reads as one numerical experiment and physics explanation,
 not a sequence of unrelated controls and plots.
@@ -455,7 +487,7 @@ the interactive notebook using only the documented commands.
 ## Current validation record
 
 - [x] `uv sync --locked`
-- [x] `make test` - 20 tests pass
+- [x] `make test` - 24 tests pass
 - [x] `make check` - Ruff, strict Marimo check, and notebook execution pass
 - [x] `make reproduce` - deterministic fingerprint matches
 - [x] `make export` - HTML export succeeds
@@ -475,6 +507,11 @@ the interactive notebook using only the documented commands.
 - [x] `make convergence-figure3` - 8x8/16x16/32x32, three-seed 4 s bands generated
 - [x] `make convergence-figure3-64` - opt-in 64x64 point generated; 32x32 -> 64x64 fails
 - [x] `make benchmark-sizes` - controlled 64x64/128x128/256x256 runtime envelope generated
+- [x] Parallel acceptance - publication: 52.4 s with one worker versus 15.9 s with four
+  (3.30x); Figure 3 convergence through 64x64: 159.1 s with one worker versus 51.9 s with
+  three effective workers (3.07x); scientific arrays, event counts, metrics, and hashes match.
+- [x] Artifact-safety acceptance - failed and interrupted smoke workflows remain in batch
+  history and do not promote partial canonical artifacts.
 - [x] Browser-check synchronized frame scrubbing plus responsive desktop/narrow rendering
   with zero console errors
 
@@ -542,9 +579,9 @@ make export
 
 ## Last meaningful update
 
-2026-08-13 - Added uncertainty-aware oscillation metrics and convergence schemas, the dedicated
-Figure 3 notebook mode, annotated synchronized layer milestones, and large-lattice benchmarks.
-An updateable rate tree and cached rate tables cut the 256x256 short-run benchmark from 105.8
-to 24.8 s. The opt-in
-three-seed 64x64 convergence run completes but fails the predeclared 32x32 -> 64x64 criterion,
-so 64x64 remains a candidate rather than a publication preset.
+2026-08-13 - Added bounded spawn-based ensemble parallelism, safe batch-history promotion,
+JSON-line progress, worker/seed/size CLI overrides, and a guarded asynchronous Marimo batch
+runner for all simulation workflows. One- versus multi-worker publication and 64x64
+convergence outputs match exactly while wall time improves by 3.30x and 3.07x. The 64x64
+result still fails the predeclared finite-size criterion, so parallelism improves turnaround
+without changing that scientific limitation.
