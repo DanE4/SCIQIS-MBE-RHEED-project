@@ -290,7 +290,19 @@ def _(mo, set_frame, simulation):
 
 
 @app.cell
-def _(coverage_axis, get_frame, mo, np, playback, set_frame, simulation):
+def _(mo):
+    # Its own cell: the frame-following widgets below are rebuilt on every playback tick, and
+    # a rebuilt dropdown would snap back to its constructor value mid-animation.
+    display_mode = mo.ui.dropdown(
+        options=["3D height surface", "Hexagonal cells"],
+        value="3D height surface",
+        label="Surface view",
+    )
+    return (display_mode,)
+
+
+@app.cell
+def _(coverage_axis, display_mode, get_frame, mo, np, playback, set_frame, simulation):
     _current_frame = min(get_frame(), len(simulation.snapshots) - 1)
     _cycle_labels = {
         0.0: "flat reference",
@@ -324,11 +336,6 @@ def _(coverage_axis, get_frame, mo, np, playback, set_frame, simulation):
         label="Coverage milestone",
         on_change=set_frame,
     )
-    display_mode = mo.ui.dropdown(
-        options=["3D height surface", "Hexagonal cells"],
-        value="3D height surface",
-        label="Surface view",
-    )
     mo.vstack(
         [
             mo.md("## 6. Surface morphology and the RHEED proxy"),
@@ -358,7 +365,7 @@ def _(coverage_axis, get_frame, mo, np, playback, set_frame, simulation):
             ),
         ]
     )
-    return (display_mode,)
+    return
 
 
 @app.cell
