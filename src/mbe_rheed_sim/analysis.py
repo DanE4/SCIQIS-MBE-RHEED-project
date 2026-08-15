@@ -1,13 +1,11 @@
 """Small ensemble-analysis helpers for reproducible parameter studies."""
 
-from collections.abc import Iterable
-from dataclasses import asdict, dataclass, replace
+from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
 
-from mbe_rheed_sim.config import SimulationConfig
-from mbe_rheed_sim.kmc import SimulationResult, run
+from mbe_rheed_sim.kmc import SimulationResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,9 +21,6 @@ class OscillationMetrics:
     peak_phase_ml: float | None
     trough_phase_ml: float | None
     damping_rate_per_ml: float | None
-
-    def as_dict(self) -> dict[str, bool | float | int | None]:
-        return asdict(self)
 
 
 def result_array_bytes(result: SimulationResult) -> int:
@@ -214,28 +209,26 @@ def rheed_oscillation_metrics(
     )
 
 
-def rheed_proxy_ensemble(
-    config: SimulationConfig,
-    seeds: Iterable[int],
-    *,
-    points: int = 201,
-) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """Interpolate seeded RHEED-proxy runs onto one coverage or time grid."""
-    seed_values = tuple(seeds)
-    if not seed_values or points < 2:
-        raise ValueError("at least one seed and two interpolation points are required")
-    if config.target_time_s is not None and config.target_coverage_ml is None:
-        target = config.target_time_s
-        coordinate = "time_s"
-    elif config.target_coverage_ml is not None and config.target_time_s is None:
-        target = config.target_coverage_ml
-        coordinate = "coverage_ml"
-    else:
-        raise ValueError("ensemble config must have exactly one simulation target")
-
-    grid = np.linspace(0.0, target, points)
-    traces = []
-    for seed in seed_values:
-        result = run(replace(config, seed=seed))
-        traces.append(np.interp(grid, getattr(result, coordinate), result.rheed_proxy))
-    return grid, np.vstack(traces)
+def run_summary(result: SimulationResult, seed: int, elapsed: float) -> dict[str, object]:
+    """One per-seed record shared by every convergence and benchmark script."""
+    return {
+        "seed": seed,
+        "elapsed_s": elapsed,
+        "result_array_bytes": result_array_bytes(result),
+        "events": {
+            "deposited": result.deposited_events,
+            "selected_diffusion": result.selected_diffusion_events,
+            "equivalent_nearest_neighbor_hops": result.diffusion_events,
+            "long_hops": result.long_hop_events,
+            "desorbed": result.desorbed_events,
+        },
+        "final": {
+            "rms_roughness_ml": float(result.roughness_ml[-1]),
+            "step_density": float(1.0 - result.rheed_proxy[-1]),
+            "mean_height_ml": float(result.final_heights.mean()),
+            "height_std_ml": float(result.final_heights.std()),
+            "minimum_height_ml": int(result.final_heights.min()),
+            "maximum_height_ml": int(result.final_heights.max()),
+            "occupied_site_fraction": float(np.mean(result.final_heights > 0)),
+        },
+    }

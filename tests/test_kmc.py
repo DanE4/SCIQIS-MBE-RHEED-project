@@ -16,7 +16,7 @@ from mbe_rheed_sim.lattice import (
     long_hop,
     open_terrace_hop_distance,
 )
-from mbe_rheed_sim.rates import diffusion_rate
+from mbe_rheed_sim.rates import arrhenius_rate
 
 
 def test_deposition_only_limit_and_invariants() -> None:
@@ -120,13 +120,12 @@ def test_vectorized_long_hop_catalogue_matches_scalar_rules() -> None:
             assert hop_allowed(heights, source, target)
             if heights[source] > heights[target] + 1:
                 step_barrier = config.step_barrier_ev
-        expected = diffusion_rate(
+        expected = arrhenius_rate(
             config.attempt_frequency_hz,
-            config.diffusion_barrier_ev,
-            config.lateral_bond_energy_ev,
-            lateral_bonds(heights, *source),
+            config.diffusion_barrier_ev
+            + lateral_bonds(heights, *source) * config.lateral_bond_energy_ev
+            + step_barrier,
             config.temperature_k,
-            step_barrier,
         ) / (6 * distance**2)
         assert rate == pytest.approx(expected)
 

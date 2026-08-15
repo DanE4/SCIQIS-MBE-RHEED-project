@@ -1,7 +1,7 @@
 """Parameterization used for the paper's Figure 3 GaN homoepitaxy comparison."""
 
 import math
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 
 from mbe_rheed_sim.config import SimulationConfig
 from mbe_rheed_sim.rates import BOLTZMANN_EV_PER_K
@@ -26,9 +26,6 @@ class Figure3Parameters:
     lateral_bond_energy_ev: float
     desorption_barrier_ev: float
     step_barrier_ev: float
-
-    def as_dict(self) -> dict[str, float]:
-        return asdict(self)
 
 
 def gan_decomposition_flux(temperature_k: float) -> float:

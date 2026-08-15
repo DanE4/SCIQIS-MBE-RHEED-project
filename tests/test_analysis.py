@@ -1,33 +1,33 @@
 import numpy as np
 import pytest
 
-from mbe_rheed_sim import SimulationConfig
+from mbe_rheed_sim import SimulationConfig, run
 from mbe_rheed_sim.analysis import (
     oscillation_amplitude,
+    result_array_bytes,
     rheed_oscillation_metrics,
-    rheed_proxy_ensemble,
+    run_summary,
     successive_size_check,
 )
 
 
-def test_oscillation_amplitude_and_seed_ensemble() -> None:
+def test_oscillation_amplitude() -> None:
     assert oscillation_amplitude(np.tile([0.0, 1.0], 50)) == pytest.approx(0.5)
     with pytest.raises(ValueError):
         oscillation_amplitude(np.array([1.0]))
 
-    grid, traces = rheed_proxy_ensemble(
-        SimulationConfig(
-            lattice_size=4,
-            target_coverage_ml=0.5,
-            attempt_frequency_hz=0,
-            sample_every_ml=0.25,
-        ),
-        seeds=(1, 2, 3),
-        points=5,
+
+def test_run_summary_reports_events_and_final_surface() -> None:
+    result = run(
+        SimulationConfig(lattice_size=4, target_coverage_ml=0.5, sample_every_ml=0.25)
     )
-    assert grid.shape == (5,)
-    assert traces.shape == (3, 5)
-    assert np.all((0 <= traces) & (traces <= 1))
+    summary = run_summary(result, seed=0, elapsed=1.5)
+
+    assert (summary["seed"], summary["elapsed_s"]) == (0, 1.5)
+    assert summary["result_array_bytes"] == result_array_bytes(result)
+    assert summary["events"]["deposited"] == result.deposited_events
+    assert summary["final"]["maximum_height_ml"] == int(result.final_heights.max())
+    assert 0.0 <= summary["final"]["occupied_site_fraction"] <= 1.0
 
 
 def test_rheed_oscillation_metrics_distinguish_periodic_and_monotonic_traces() -> None:

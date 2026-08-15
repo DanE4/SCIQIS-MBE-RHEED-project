@@ -8,6 +8,7 @@ from time import perf_counter
 import numpy as np
 
 from mbe_rheed_sim import run
+from mbe_rheed_sim.analysis import result_array_bytes
 from mbe_rheed_sim.paper import figure3_config
 from mbe_rheed_sim.workflows import artifact_root, parse_int_values, update_progress
 
@@ -41,18 +42,7 @@ def main(*, sizes: tuple[int, ...] = SIZES) -> None:
                     "long_hops": result.long_hop_events,
                     "desorbed": result.desorbed_events,
                 },
-                "result_array_bytes": sum(
-                    array.nbytes
-                    for array in (
-                        result.final_heights,
-                        result.coverage_ml,
-                        result.time_s,
-                        result.roughness_ml,
-                        result.island_density_per_site,
-                        result.rheed_proxy,
-                        result.snapshots,
-                    )
-                ),
+                "result_array_bytes": result_array_bytes(result),
                 "final_rms_roughness_ml": float(result.roughness_ml[-1]),
                 "final_step_density": float(1.0 - result.rheed_proxy[-1]),
                 "maximum_height_ml": int(result.final_heights.max()),

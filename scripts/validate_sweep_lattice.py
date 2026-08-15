@@ -2,7 +2,7 @@
 
 import argparse
 import json
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import numpy as np
@@ -68,9 +68,9 @@ def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
     if failed:
         raise RuntimeError(f"high-flux amplitude trend did not survive at 24x24: {failed}")
     summary = {
-        "config": BASE.as_dict(),
+        "config": asdict(BASE),
         "seeds": seeds,
-        "effective_workers": min(resolve_workers(workers), len(configurations)),
+        "effective_workers": min(workers, len(configurations)),
         "low_flux_ml_s": LOW_FLUX_ML_S,
         "high_flux_ml_s": HIGH_FLUX_ML_S,
         "comparisons": comparisons,

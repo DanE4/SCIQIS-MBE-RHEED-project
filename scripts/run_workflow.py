@@ -10,83 +10,76 @@ from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter, sleep
 
-from mbe_rheed_sim.workflows import promote_artifacts, resolve_workers
+from mbe_rheed_sim.workflows import (
+    git_revision,
+    merge_json,
+    promote_artifacts,
+    resolve_workers,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 BATCH_ROOT = ROOT / "outputs" / "batches"
+# workers/seeds/sizes flag whether the underlying script accepts that override.
 WORKFLOWS = {
-    "baseline": ("reproduce_baseline.py", False, False, False, ()),
-    "publication": ("reproduce_figure3.py", True, True, False, ()),
-    "sweep": ("run_parameter_sweep.py", True, True, False, ()),
-    "convergence": ("check_lattice_convergence.py", True, True, True, ()),
-    "figure3-convergence": ("check_figure3_convergence.py", True, True, True, ()),
-    "figure3-convergence-64": (
-        "check_figure3_convergence.py",
-        True,
-        True,
-        True,
-        ("--include-64",),
-    ),
-    "validate-acceleration": ("validate_acceleration.py", True, True, False, ()),
-    "validate-science": ("validate_scientific_trends.py", True, True, False, ()),
-    "validate-sweep": ("validate_sweep_lattice.py", True, True, False, ()),
-    "benchmark-sizes": ("benchmark_large_lattices.py", False, False, True, ()),
+    "baseline": {
+        "script": "reproduce_baseline.py",
+        "preset": "8x8, 1 ML, seed 2026",
+    },
+    "publication": {
+        "script": "reproduce_figure3.py",
+        "workers": True,
+        "seeds": True,
+        "preset": "7x7, 40 s, Ga/N 0.89/0.82/0.68, seeds 2026/2027/2028",
+    },
+    "sweep": {
+        "script": "run_parameter_sweep.py",
+        "workers": True,
+        "seeds": True,
+        "preset": "16x16, 2 ML, T=700/850/1000 K, flux=0.25/0.5/0.75 ML/s, seeds 0/1/2",
+    },
+    "convergence": {
+        "script": "check_lattice_convergence.py",
+        "workers": True,
+        "seeds": True,
+        "sizes": True,
+        "preset": "8/16/24, 2 ML, seeds 0/1/2",
+    },
+    "figure3-convergence": {
+        "script": "check_figure3_convergence.py",
+        "workers": True,
+        "seeds": True,
+        "sizes": True,
+        "preset": "8/16/32, Ga/N 0.82, 4 s, seeds 0/1/2 (add 64 with --sizes 8,16,32,64)",
+    },
+    "validate-acceleration": {
+        "script": "validate_acceleration.py",
+        "workers": True,
+        "seeds": True,
+        "preset": "7x7, 0.5 ML, 100 exact/accelerated seed pairs",
+    },
+    "validate-science": {
+        "script": "validate_scientific_trends.py",
+        "workers": True,
+        "seeds": True,
+        "preset": "8x8, 2 ML, three physics configurations, seeds 0-4",
+    },
+    "validate-sweep": {
+        "script": "validate_sweep_lattice.py",
+        "workers": True,
+        "seeds": True,
+        "preset": "24x24, 2 ML, three temperatures/two fluxes, seeds 0/1/2",
+    },
+    "benchmark-sizes": {
+        "script": "benchmark_large_lattices.py",
+        "sizes": True,
+        "preset": "64/128/256, Ga/N 0.82, 0.1 s, seed 0; sequential",
+    },
 }
-WORKFLOW_PRESETS = {
-    "baseline": "8x8, 1 ML, seed 2026",
-    "publication": "7x7, 40 s, Ga/N 0.89/0.82/0.68, seeds 2026/2027/2028",
-    "sweep": "16x16, 2 ML, T=700/850/1000 K, flux=0.25/0.5/0.75 ML/s, seeds 0/1/2",
-    "convergence": "8/16/24, 2 ML, seeds 0/1/2",
-    "figure3-convergence": "8/16/32, Ga/N 0.82, 4 s, seeds 0/1/2",
-    "figure3-convergence-64": "8/16/32/64, Ga/N 0.82, 4 s, seeds 0/1/2",
-    "validate-acceleration": "7x7, 0.5 ML, 100 exact/accelerated seed pairs",
-    "validate-science": "8x8, 2 ML, three physics configurations, seeds 0-4",
-    "validate-sweep": "24x24, 2 ML, three temperatures/two fluxes, seeds 0/1/2",
-    "benchmark-sizes": "64/128/256, Ga/N 0.82, 0.1 s, seed 0; sequential",
-}
-
-
-def _write_manifest(path: Path, **fields: object) -> dict[str, object]:
-    data = json.loads(path.read_text()) if path.exists() else {}
-    data.update(fields)
-    temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(data, indent=2) + "\n")
-    os.replace(temporary, path)
-    return data
-
-
-def _revision() -> dict[str, str | bool]:
-    commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True
-    ).stdout.strip()
-    dirty = bool(
-        subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout.strip()
-    )
-    return {"git_commit": commit, "working_tree_dirty": dirty}
+PROGRESS_FIELDS = ("workflow", "status", "stage", "completed", "total", "effective_workers")
 
 
 def _emit_progress(manifest: dict[str, object]) -> None:
-    fields = (
-        "workflow",
-        "status",
-        "stage",
-        "completed",
-        "total",
-        "effective_workers",
-        "batch_directory",
-    )
-    line = json.dumps({key: manifest.get(key) for key in fields})
-    print(line, flush=True)
-    batch_directory = manifest.get("batch_directory")
-    if isinstance(batch_directory, str):
-        with (ROOT / batch_directory / "progress.jsonl").open("a") as stream:
-            stream.write(line + "\n")
+    print(json.dumps({key: manifest.get(key) for key in PROGRESS_FIELDS}), flush=True)
 
 
 def main() -> None:
@@ -97,16 +90,13 @@ def main() -> None:
     parser.add_argument("--sizes")
     parser.add_argument("--batch-id")
     arguments = parser.parse_args()
-    script, supports_workers, supports_seeds, supports_sizes, fixed_arguments = WORKFLOWS[
-        arguments.workflow
-    ]
-    if arguments.seeds and not supports_seeds:
-        parser.error(f"{arguments.workflow} does not accept seed overrides")
-    if arguments.sizes and not supports_sizes:
-        parser.error(f"{arguments.workflow} does not accept size overrides")
+    workflow = WORKFLOWS[arguments.workflow]
+    for name in ("seeds", "sizes"):
+        if getattr(arguments, name) and not workflow.get(name):
+            parser.error(f"{arguments.workflow} does not accept {name[:-1]} overrides")
 
     requested_workers = resolve_workers(arguments.workers)
-    effective_workers = requested_workers if supports_workers else 1
+    effective_workers = requested_workers if workflow.get("workers") else 1
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
     batch_id = arguments.batch_id or f"{timestamp}-{arguments.workflow}"
     if Path(batch_id).name != batch_id or batch_id in {".", ".."}:
@@ -115,15 +105,15 @@ def main() -> None:
     artifacts = batch_dir / "artifacts"
     manifest_path = batch_dir / "manifest.json"
     batch_dir.mkdir(parents=True)
-    command = [sys.executable, str(ROOT / "scripts" / script), *fixed_arguments]
-    if supports_workers:
+    command = [sys.executable, str(ROOT / "scripts" / workflow["script"])]
+    if workflow.get("workers"):
         command.extend(("--workers", str(requested_workers)))
     if arguments.seeds:
         command.extend(("--seeds", arguments.seeds))
     if arguments.sizes:
         command.extend(("--sizes", arguments.sizes))
     started_at = datetime.now(UTC)
-    manifest = _write_manifest(
+    manifest = merge_json(
         manifest_path,
         workflow=arguments.workflow,
         status="running",
@@ -135,8 +125,8 @@ def main() -> None:
         command=command,
         batch_directory=str(batch_dir.relative_to(ROOT)),
         artifact_directory=str(artifacts.relative_to(ROOT)),
-        source_revision=_revision(),
-        configuration=WORKFLOW_PRESETS[arguments.workflow],
+        source_revision=git_revision(ROOT),
+        configuration=workflow["preset"],
         completed=0,
         total=None,
     )
@@ -152,7 +142,7 @@ def main() -> None:
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
         if process is not None and process.poll() is None:
             os.killpg(process.pid, signal.SIGTERM)
-        _write_manifest(
+        merge_json(
             manifest_path,
             status="interrupted",
             finished_at=datetime.now(UTC).isoformat(),
@@ -191,7 +181,7 @@ def main() -> None:
                 last_progress = signature
     if return_code != 0:
         error_tail = (batch_dir / "stderr.log").read_text()[-4_000:]
-        manifest = _write_manifest(
+        manifest = merge_json(
             manifest_path,
             status="failed",
             return_code=return_code,
@@ -203,7 +193,7 @@ def main() -> None:
         raise SystemExit(return_code)
 
     promoted = promote_artifacts(artifacts, ROOT, BATCH_ROOT / ".promotion.lock")
-    manifest = _write_manifest(
+    manifest = merge_json(
         manifest_path,
         status="succeeded",
         return_code=0,

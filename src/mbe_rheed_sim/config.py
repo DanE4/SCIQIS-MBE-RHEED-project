@@ -1,4 +1,4 @@
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +54,3 @@ class SimulationConfig:
             raise ValueError("max_isolated_hop_distance is too large for the periodic lattice")
         if self.max_events < 1:
             raise ValueError("max_events must be positive")
-
-    def as_dict(self) -> dict[str, int | float | None]:
-        return asdict(self)

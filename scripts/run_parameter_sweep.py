@@ -2,7 +2,7 @@
 
 import argparse
 import json
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import matplotlib
@@ -80,15 +80,15 @@ def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
             oscillatory_fraction[temperature_index, flux_index] = np.mean(
                 [metric.is_oscillatory for metric in metrics]
             )
-            temperature_metrics.append([metric.as_dict() for metric in metrics])
+            temperature_metrics.append([asdict(metric) for metric in metrics])
         metrics_by_point.append(temperature_metrics)
 
     summary = {
-        "base_config": BASE.as_dict(),
+        "base_config": asdict(BASE),
         "temperatures_k": TEMPERATURES_K,
         "fluxes_ml_s": FLUXES_ML_S,
         "seeds": seeds,
-        "effective_workers": min(resolve_workers(workers), len(configurations)),
+        "effective_workers": min(workers, len(configurations)),
         "amplitude_definition": "half of the 95th-minus-5th percentile proxy range",
         "mean_amplitude": mean_amplitude.tolist(),
         "std_amplitude": std_amplitude.tolist(),

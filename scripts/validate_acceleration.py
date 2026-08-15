@@ -61,7 +61,7 @@ def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
         "lattice_size": BASE.lattice_size,
         "target_coverage_ml": BASE.target_coverage_ml,
         "seeds": list(seeds),
-        "effective_workers": min(resolve_workers(workers), len(configurations)),
+        "effective_workers": min(workers, len(configurations)),
         "maximum_hop_distance": 3,
         "acceptance_tolerance": "absolute mean difference <= 0.25 exact-model standard deviation",
         "metrics": {

@@ -4,7 +4,7 @@ import argparse
 import csv
 import hashlib
 import json
-import subprocess
+from dataclasses import asdict
 from pathlib import Path
 
 import matplotlib
@@ -16,7 +16,13 @@ import numpy as np
 from mbe_rheed_sim import run
 from mbe_rheed_sim.analysis import rheed_oscillation_metrics
 from mbe_rheed_sim.paper import FIGURE3_NOMINAL_GA_N_RATIOS, figure3_config, figure3_parameters
-from mbe_rheed_sim.workflows import artifact_root, parse_int_values, resolve_workers, run_parallel
+from mbe_rheed_sim.workflows import (
+    artifact_root,
+    git_revision,
+    parse_int_values,
+    resolve_workers,
+    run_parallel,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE_PATH = ROOT / "data" / "reference" / "figure3_experimental_digitized.json"
@@ -33,28 +39,11 @@ def _sha256(path: Path) -> str:
 
 
 def _git_version() -> dict[str, str | bool]:
-    commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True
-    ).stdout.strip()
-    dirty = bool(
-        subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout.strip()
-    )
     source_digest = hashlib.sha256()
-    source_paths = [Path(__file__), *sorted((ROOT / "src/mbe_rheed_sim").glob("*.py"))]
-    for path in source_paths:
+    for path in [Path(__file__), *sorted((ROOT / "src/mbe_rheed_sim").glob("*.py"))]:
         source_digest.update(str(path.relative_to(ROOT)).encode())
         source_digest.update(path.read_bytes())
-    return {
-        "git_commit_at_generation": commit,
-        "working_tree_dirty": dirty,
-        "generation_source_sha256": source_digest.hexdigest(),
-    }
+    return {**git_revision(ROOT), "generation_source_sha256": source_digest.hexdigest()}
 
 
 def _circular_difference(left: float | None, right: float | None) -> float | None:
@@ -234,23 +223,23 @@ def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
         traces.append(
             {
                 "nominal_ga_n_ratio": ratio,
-                "paper_parameters": parameters.as_dict(),
-                "simulation_config": results[0].config.as_dict(),
+                "paper_parameters": asdict(parameters),
+                "simulation_config": asdict(results[0].config),
                 "seeds": seeds,
                 "time_s": TIME_GRID_S.tolist(),
                 "predicted_coverage_ml": predicted_coverage.tolist(),
                 "rheed_proxy_mean": mean.tolist(),
                 "rheed_proxy_std": std.tolist(),
-                "simulation_metrics": simulation_metrics.as_dict(),
+                "simulation_metrics": asdict(simulation_metrics),
                 "reference_time_s": reference["time_s"],
                 "reference_rheed_panel_coordinate": reference["rheed_panel_coordinate"],
-                "reference_metrics": reference_metrics.as_dict(),
+                "reference_metrics": asdict(reference_metrics),
             }
         )
         ratio_label = f"{ratio:.2f}".replace(".", "")
         np.savez_compressed(
             run_dir / f"figure3_ratio_{ratio_label}.npz",
-            config_json=json.dumps(results[0].config.as_dict(), sort_keys=True),
+            config_json=json.dumps(asdict(results[0].config), sort_keys=True),
             seeds=np.asarray(seeds),
             code_version_json=json.dumps(code_version, sort_keys=True),
             time_s=TIME_GRID_S,
@@ -263,11 +252,11 @@ def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
         )
         summaries.append(
             {
-                "paper_parameters": parameters.as_dict(),
-                "simulation_config": results[0].config.as_dict(),
+                "paper_parameters": asdict(parameters),
+                "simulation_config": asdict(results[0].config),
                 "seeds": seeds,
-                "simulation_metrics": simulation_metrics.as_dict(),
-                "reference_metrics": reference_metrics.as_dict(),
+                "simulation_metrics": asdict(simulation_metrics),
+                "reference_metrics": asdict(reference_metrics),
                 "runs": [
                     {
                         "final_coverage_ml": float(result.coverage_ml[-1]),
@@ -330,7 +319,7 @@ def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
         "reference_json_sha256": _sha256(REFERENCE_PATH),
         "lattice_size": LATTICE_SIZE,
         "seeds": seeds,
-        "effective_workers": min(resolve_workers(workers), len(configurations)),
+        "effective_workers": min(workers, len(configurations)),
         "classification": "qualitative finite-size smoke comparison; amplitude not converged",
     }
     artifact = {

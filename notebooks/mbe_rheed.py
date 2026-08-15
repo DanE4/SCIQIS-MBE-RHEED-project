@@ -27,11 +27,13 @@ def _():
         figure3_config,
         figure3_parameters,
     )
+    from mbe_rheed_sim.rates import arrhenius_rate
 
     return (
         FIGURE3_NOMINAL_GA_N_RATIOS,
         Path,
         SimulationConfig,
+        arrhenius_rate,
         figure3_config,
         figure3_parameters,
         go,
@@ -323,13 +325,47 @@ def _(FIGURE3_NOMINAL_GA_N_RATIOS, mo):
 
 
 @app.cell
-def _(SimulationConfig, figure3_config, figure3_parameters, get_parameters, mo, replace, run):
+def _(
+    SimulationConfig,
+    arrhenius_rate,
+    figure3_config,
+    figure3_parameters,
+    get_parameters,
+    mo,
+    replace,
+    run,
+):
     selected_parameters = get_parameters()
     _size = int(selected_parameters["size"])
+    # SimulationConfig rejects a hop longer than half the periodic lattice.
     _hop_distance = min(
         int(selected_parameters["hop_distance"]), max(1, (_size - 1) // 2)
     )
     _stop_by_time = selected_parameters["stop_mode"] == "Physical time"
+
+    # ponytail: order-of-magnitude gate only. Selected KMC events are deposition events times
+    # the isolated-adatom hops each one survives, divided by the hops an accelerated long jump
+    # collapses into one selection. Throughput is a single measured constant and the exact and
+    # accelerated regimes straddle it by roughly an order of magnitude either way -- fine for a
+    # "this may take minutes" warning, not a scheduler. Re-measure on new hardware.
+    _selected_events_per_s = 3e5
+
+    def _estimate_runtime_s(config, coverage_ml):
+        hops_per_atom = (
+            arrhenius_rate(
+                config.attempt_frequency_hz,
+                config.diffusion_barrier_ev,
+                config.temperature_k,
+            )
+            / config.deposition_flux_ml_s
+        )
+        selected_events = (
+            config.lattice_size**2
+            * coverage_ml
+            * (1.0 + hops_per_atom / config.max_isolated_hop_distance**2)
+        )
+        return selected_events / _selected_events_per_s
+
     if selected_parameters["experiment_mode"] == "Paper Figure 3 preset":
         _ratio = float(selected_parameters["figure3_ratio"])
         _paper_parameters = figure3_parameters(_ratio)
@@ -350,9 +386,8 @@ def _(SimulationConfig, figure3_config, figure3_parameters, get_parameters, mo, 
             sample_every_ml=float(selected_parameters["sample_every_ml"]),
             max_events=int(selected_parameters["max_events"]),
         )
-        _paper_acceleration_factor = {1: 8.0, 3: 2.0}.get(_hop_distance, 1.0)
-        _estimated_runtime_s = (
-            1.5 * (_size / 64) ** 2 * (_duration_s / 0.1) * _paper_acceleration_factor
+        _estimated_runtime_s = _estimate_runtime_s(
+            simulation_config, _duration_s * _paper_parameters.predicted_growth_rate_ml_s
         )
         experiment_name = f"Paper-derived experiment (Ga/N = {_ratio:.2f})"
         experiment_detail = (
@@ -383,18 +418,11 @@ def _(SimulationConfig, figure3_config, figure3_parameters, get_parameters, mo, 
             seed=int(selected_parameters["seed"]),
             max_events=int(selected_parameters["max_events"]),
         )
-        _estimated_coverage_ml = (
-            float(selected_parameters["coverage_ml"])
+        _estimated_runtime_s = _estimate_runtime_s(
+            simulation_config,
+            _target_coverage_ml
             if _target_coverage_ml is not None
-            else float(selected_parameters["duration_s"])
-            * simulation_config.deposition_flux_ml_s
-        )
-        _acceleration_factor = 1.0 if _hop_distance == 1 else 0.35
-        _estimated_runtime_s = (
-            1.3
-            * (_size / 16) ** 2
-            * (_estimated_coverage_ml / 2.0)
-            * _acceleration_factor
+            else _target_time_s * simulation_config.deposition_flux_ml_s,
         )
         experiment_name = "Custom generic experiment"
         _target_description = (
@@ -411,15 +439,15 @@ def _(SimulationConfig, figure3_config, figure3_parameters, get_parameters, mo, 
     mo.stop(
         _expensive and not selected_parameters["confirm_expensive"],
         mo.callout(
-            f"This configuration is estimated to take roughly {_estimated_runtime_s:.0f} s "
-            "on the development machine, but rate choices can change that substantially. "
-            "Enable **Confirm expensive run** and submit again to launch it.",
+            f"Rough order-of-magnitude estimate: {_estimated_runtime_s:.0f} s. The true "
+            "runtime can differ by roughly ten times either way depending on the rate "
+            "constants. Enable **Confirm expensive run** and submit again to launch it.",
             kind="warn",
         ),
     )
     simulation = run(simulation_config)
     _runtime_note = (
-        f"Estimated before launch: {_estimated_runtime_s:.1f} s; isolated-adatom hop limit "
+        f"Rough estimate before launch: {_estimated_runtime_s:.1f} s; isolated-adatom hop limit "
         f"{_hop_distance}; sample interval {simulation_config.sample_every_ml:g} ML; "
         f"event limit {simulation_config.max_events:,}."
     )
@@ -1077,7 +1105,6 @@ def _(mo, time):
                 "Temperature/flux sweep": "sweep",
                 "Generic convergence": "convergence",
                 "Figure 3 convergence": "figure3-convergence",
-                "Figure 3 convergence through 64x64": "figure3-convergence-64",
                 "Acceleration validation": "validate-acceleration",
                 "Scientific-trend validation": "validate-science",
                 "Sweep lattice validation": "validate-sweep",
@@ -1122,7 +1149,7 @@ def _(mo, time):
                 "| Publication | 2026-2028 | 7x7, three Ga/N ratios |\n"
                 "| Sweep | 0-2 | 16x16, 3 temperatures x 3 fluxes |\n"
                 "| Generic convergence | 0-2 | 8/16/24 |\n"
-                "| Figure 3 convergence | 0-2 | 8/16/32 (or through 64) |\n"
+                "| Figure 3 convergence | 0-2 | 8/16/32; add 64 via the size override |\n"
                 "| Acceleration validation | 0-99 | 7x7 exact/accelerated pairs |\n"
                 "| Scientific trends | 0-4 | 8x8, three physics configurations |\n"
                 "| Sweep validation | 0-2 | 24x24, 3 temperatures x 2 fluxes |\n"
@@ -1163,9 +1190,9 @@ def _(
             "A batch is already running. Cancel it or wait for completion before launching another.",
             kind="warn",
         )
-    elif _request["workflow"] in {"figure3-convergence-64", "benchmark-sizes"} and not _request[
-        "confirm_expensive"
-    ]:
+    elif (
+        _request["workflow"] == "benchmark-sizes" or "64" in _request["sizes"]
+    ) and not _request["confirm_expensive"]:
         batch_launch_message = mo.callout(
             "This workflow is intentionally gated. Check the expensive-workflow confirmation and submit again.",
             kind="warn",

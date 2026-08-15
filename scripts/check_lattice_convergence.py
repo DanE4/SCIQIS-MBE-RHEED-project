@@ -2,7 +2,7 @@
 
 import argparse
 import json
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import matplotlib
@@ -14,8 +14,8 @@ import numpy as np
 from mbe_rheed_sim import SimulationConfig
 from mbe_rheed_sim.analysis import (
     oscillation_amplitude,
-    result_array_bytes,
     rheed_oscillation_metrics,
+    run_summary,
     successive_size_check,
 )
 from mbe_rheed_sim.workflows import (
@@ -62,31 +62,13 @@ def main(
             metrics = rheed_oscillation_metrics(result.coverage_ml, result.rheed_proxy)
             results.append(result)
             runs.append(
-                {
-                    "seed": seed,
-                    "elapsed_s": elapsed,
-                    "result_array_bytes": result_array_bytes(result),
-                    "events": {
-                        "deposited": result.deposited_events,
-                        "selected_diffusion": result.selected_diffusion_events,
-                        "equivalent_nearest_neighbor_hops": result.diffusion_events,
-                        "long_hops": result.long_hop_events,
-                        "desorbed": result.desorbed_events,
-                    },
+                run_summary(result, seed, elapsed)
+                | {
                     "trace": {
                         "coverage_ml": result.coverage_ml.tolist(),
                         "rheed_proxy": result.rheed_proxy.tolist(),
                     },
-                    "oscillation_metrics": metrics.as_dict(),
-                    "final": {
-                        "rms_roughness_ml": float(result.roughness_ml[-1]),
-                        "step_density": float(1.0 - result.rheed_proxy[-1]),
-                        "mean_height_ml": float(result.final_heights.mean()),
-                        "height_std_ml": float(result.final_heights.std()),
-                        "minimum_height_ml": int(result.final_heights.min()),
-                        "maximum_height_ml": int(result.final_heights.max()),
-                        "occupied_site_fraction": float(np.mean(result.final_heights > 0)),
-                    },
+                    "oscillation_metrics": asdict(metrics),
                 }
             )
         roughness = np.array([result.roughness_ml[-1] for result in results])
@@ -125,10 +107,10 @@ def main(
         )
 
     summary = {
-        "base_config": BASE.as_dict(),
+        "base_config": asdict(BASE),
         "lattice_sizes": sizes,
         "seeds": seeds,
-        "effective_workers": min(resolve_workers(workers), len(seeds)),
+        "effective_workers": min(workers, len(seeds)),
         "roughness_mean_ml": roughness_means,
         "roughness_std_ml": roughness_stds,
         "proxy_amplitude_mean": amplitude_means,

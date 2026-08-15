@@ -1,7 +1,6 @@
 from collections import deque
 
 import numpy as np
-from numpy.typing import NDArray
 
 from mbe_rheed_sim.lattice import HEX_DIRECTIONS, HeightField, neighbors
 
@@ -12,11 +11,6 @@ def coverage_ml(heights: HeightField) -> float:
 
 def rms_roughness_ml(heights: HeightField) -> float:
     return float(np.std(heights))
-
-
-def layer_coverages(heights: HeightField) -> NDArray[np.float64]:
-    maximum = int(np.max(heights, initial=0))
-    return np.array([np.mean(heights >= layer) for layer in range(1, maximum + 1)])
 
 
 def step_density(heights: HeightField) -> float:
@@ -59,3 +53,8 @@ def island_sizes(heights: HeightField, layer: int | None = None) -> list[int]:
 
 def island_density_per_site(heights: HeightField) -> float:
     return len(island_sizes(heights)) / heights.size
+
+
+def step_density_proxy(heights: HeightField) -> float:
+    """Dimensionless morphology proxy; this is not a RHEED diffraction calculation."""
+    return 1.0 - step_density(heights)

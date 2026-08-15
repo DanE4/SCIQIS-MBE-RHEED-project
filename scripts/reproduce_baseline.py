@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from dataclasses import asdict
 from pathlib import Path
 
 import matplotlib
@@ -57,7 +58,7 @@ def main() -> None:
     result.save_npz(run_dir / "baseline.npz")
 
     summary = {
-        "config": CONFIG.as_dict(),
+        "config": asdict(CONFIG),
         **actual,
         "simulation_time_s": float(result.time_s[-1]),
         "roughness_ml": float(result.roughness_ml[-1]),

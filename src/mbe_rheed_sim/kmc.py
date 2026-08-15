@@ -1,6 +1,6 @@
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from functools import cache
 from pathlib import Path
 
@@ -15,9 +15,13 @@ from mbe_rheed_sim.lattice import (
     empty_lattice,
     long_hop,
 )
-from mbe_rheed_sim.observables import coverage_ml, island_density_per_site, rms_roughness_ml
+from mbe_rheed_sim.observables import (
+    coverage_ml,
+    island_density_per_site,
+    rms_roughness_ml,
+    step_density_proxy,
+)
 from mbe_rheed_sim.rates import BOLTZMANN_EV_PER_K
-from mbe_rheed_sim.rheed import step_density_proxy
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,7 +46,7 @@ class SimulationResult:
         output.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(
             output,
-            config_json=json.dumps(self.config.as_dict(), sort_keys=True),
+            config_json=json.dumps(asdict(self.config), sort_keys=True),
             final_heights=self.final_heights,
             coverage_ml=self.coverage_ml,
             time_s=self.time_s,

@@ -2,7 +2,7 @@
 
 import argparse
 import json
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import numpy as np
@@ -48,9 +48,9 @@ def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
         raise RuntimeError(f"expected smoothing/mounding ordering changed: {means}")
 
     summary = {
-        "config": BASE.as_dict(),
+        "config": asdict(BASE),
         "seeds": list(seeds),
-        "effective_workers": min(resolve_workers(workers), len(configurations)),
+        "effective_workers": min(workers, len(configurations)),
         "final_roughness_ml": regimes,
         "mean_final_roughness_ml": means,
     }

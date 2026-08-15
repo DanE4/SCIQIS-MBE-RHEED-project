@@ -4,6 +4,7 @@ import fcntl
 import json
 import os
 import shutil
+import subprocess
 from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import get_context
@@ -54,17 +55,34 @@ def artifact_root(project_root: Path) -> Path:
     return Path(os.environ.get("MBE_ARTIFACT_ROOT", project_root))
 
 
-def update_progress(**fields: object) -> None:
-    """Atomically merge progress into the active batch manifest, when configured."""
-    path_value = os.environ.get("MBE_PROGRESS_FILE")
-    if path_value is None:
-        return
-    path = Path(path_value)
+def merge_json(path: Path, **fields: object) -> dict[str, object]:
+    """Atomically merge fields into a JSON file, creating it when absent."""
     data = json.loads(path.read_text()) if path.exists() else {}
     data.update(fields)
     temporary = path.with_suffix(".tmp")
     temporary.write_text(json.dumps(data, indent=2) + "\n")
     os.replace(temporary, path)
+    return data
+
+
+def update_progress(**fields: object) -> None:
+    """Merge progress into the active batch manifest, when the supervisor configured one."""
+    path = os.environ.get("MBE_PROGRESS_FILE")
+    if path is not None:
+        merge_json(Path(path), **fields)
+
+
+def git_revision(root: Path) -> dict[str, str | bool]:
+    """Record the commit and whether the working tree had uncommitted changes."""
+    def git(*arguments: str) -> str:
+        return subprocess.run(
+            ["git", *arguments], cwd=root, check=True, capture_output=True, text=True
+        ).stdout.strip()
+
+    return {
+        "git_commit": git("rev-parse", "HEAD"),
+        "working_tree_dirty": bool(git("status", "--porcelain")),
+    }
 
 
 def run_parallel[T, R](

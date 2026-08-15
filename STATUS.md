@@ -505,7 +505,7 @@ the interactive notebook using only the documented commands.
 - [x] `make validate-sweep` - 24x24 low/high-flux direction passes at all three temperatures
 - [x] `make convergence` - 8x8/16x16/24x24, three-seed sensitivity artifacts generated
 - [x] `make convergence-figure3` - 8x8/16x16/32x32, three-seed 4 s bands generated
-- [x] `make convergence-figure3-64` - opt-in 64x64 point generated; 32x32 -> 64x64 fails
+- [x] `make figure3-convergence SIZES=8,16,32,64` - opt-in 64x64 point generated; 32x32 -> 64x64 fails
 - [x] `make benchmark-sizes` - controlled 64x64/128x128/256x256 runtime envelope generated
 - [x] Parallel acceptance - publication: 52.4 s with one worker versus 15.9 s with four
   (3.30x); Figure 3 convergence through 64x64: 159.1 s with one worker versus 51.9 s with
@@ -572,7 +572,7 @@ make test
 make check
 make validate-sweep
 make convergence-figure3
-make convergence-figure3-64
+make figure3-convergence SIZES=8,16,32,64
 make benchmark-sizes
 make export
 ```
