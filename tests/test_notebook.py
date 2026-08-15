@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from mbe_rheed_notebook import batch, controls, figures
+from mbe_rheed_sim.paper import FIGURE3_NOMINAL_GA_N_RATIOS
 
 
 def test_hand_tuned_parameters_map_to_a_valid_config() -> None:
@@ -59,8 +60,11 @@ def test_a_preset_reproduces_the_stored_run_it_names(name: str) -> None:
     something subtly different from the trajectory the caption describes.
     """
     meta = _gallery()[name]
-    config, *_ = controls.build_run(controls.preset_parameters(meta))
+    values = controls.preset_parameters(meta)
+    config, *_ = controls.build_run(values)
     assert asdict(config) == meta["config"]
+    # And the form must actually build on them: every dropdown value needs a matching option.
+    controls.parameter_form(FIGURE3_NOMINAL_GA_N_RATIOS, on_change=lambda _: None, values=values)
 
 
 def test_hop_distance_is_clamped_to_the_periodic_lattice() -> None:

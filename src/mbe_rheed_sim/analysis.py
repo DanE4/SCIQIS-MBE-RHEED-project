@@ -24,17 +24,13 @@ class OscillationMetrics:
 
 
 def result_array_bytes(result: SimulationResult) -> int:
-    """Return the reproducible storage footprint of arrays retained in one result."""
-    names = (
-        "final_heights",
-        "coverage_ml",
-        "time_s",
-        "roughness_ml",
-        "island_density_per_site",
-        "rheed_proxy",
-        "snapshots",
-    )
-    return sum(getattr(result, name).nbytes for name in names)
+    """Return the reproducible storage footprint of arrays retained in one result.
+
+    Derived from the slots so a new array field is counted without editing a name list;
+    the config and the scalar event counters are not arrays and drop out.
+    """
+    values = (getattr(result, name) for name in result.__slots__)
+    return sum(value.nbytes for value in values if isinstance(value, np.ndarray))
 
 
 def successive_size_check(

@@ -267,7 +267,8 @@ def preset_parameters(meta: dict) -> dict:
     stop_by_time = config["target_coverage_ml"] is None
     return DEFAULT_PARAMETERS | {
         "experiment_mode": FROM_PAPER if from_paper else HAND_TUNED,
-        "figure3_ratio": meta.get("figure3_ratio", DEFAULT_PARAMETERS["figure3_ratio"]),
+        # The key is present but null for hand-tuned runs, so `.get` default never fires.
+        "figure3_ratio": meta.get("figure3_ratio") or DEFAULT_PARAMETERS["figure3_ratio"],
         "temperature_k": config["temperature_k"],
         "flux_ml_s": config["deposition_flux_ml_s"],
         "attempt_frequency_hz": config["attempt_frequency_hz"],
