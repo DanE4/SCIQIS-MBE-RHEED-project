@@ -25,8 +25,12 @@ experiment.
   Figure 3 comparison, quantitative diagnostic table, and Figure 4-inspired morphology sequence
   work. The primary experiment form now exposes labelled lattice choices from 7x7 through
   256x256 and every `SimulationConfig` field relevant to manual generic or paper-derived runs,
-  with expensive-run confirmation. Replacing smoke-scale results with a converged ensemble
-  remains.
+  with expensive-run confirmation. The notebook is now ordered as the argument runs rather than
+  as the code was built (D-019): question, model, experiment, proxy, paper reproduction,
+  exploration, limits, conclusions, with reproducibility and batch machinery last; the parameter
+  form folds its energetics and numerics behind **Advanced parameters**, and the conclusions and
+  the Figure 3 headline are computed from the artifact. Replacing smoke-scale results with a
+  converged ensemble remains.
 - **Current computational limit:** single-trajectory cost is no longer the binding constraint.
   Batched neighbourhood gathers, skipping empty sites in the local refresh, sampling from the
   occupied sites only, and compiled Numba kernels for refresh, rate-tree update and sampling
@@ -582,6 +586,11 @@ make export
 ```
 
 ## Last meaningful update
+
+2026-08-16 - The notebook now opens on a three-image physical introduction (MBE chamber, growth
+modes, RHEED surface sensitivity) before section 1, replacing the mermaid growth flowchart and
+the duplicated grazing-incidence prose in section 3. Images are reused Wikimedia schematics,
+credited in captions and `docs/REFERENCES.md` (D-020).
 
 2026-08-15 - Section 5 can now save the active result to `outputs/saved/` and reload one
 through a third **Saved run** source, reusing `SimulationResult.save_npz`/`load_npz`.

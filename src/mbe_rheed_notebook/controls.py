@@ -1,4 +1,4 @@
-"""Input widgets and the selection-to-SimulationConfig mapping for section 5.
+"""Input widgets and the selection-to-SimulationConfig mapping for the growth experiment.
 
 Every function here *builds* a marimo UI object and returns it. The notebook cell is what
 assigns the result to a global name, which is what marimo requires for interactivity:
@@ -46,8 +46,10 @@ DEFAULT_PARAMETERS = {
 
 # (row label, form key, what the quantity does). The help text becomes a hover tooltip on the
 # row label; every statement here must match the rate expressions in docs/SCIENCE_MODEL.md.
+# Sections listed in `_ADVANCED_SECTIONS` are folded away behind a <details> so the everyday
+# form stays six rows tall.
 _FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
-    "Parameter source": (
+    "Growth conditions": (
         (
             "Parameter source",
             "experiment_mode",
@@ -64,8 +66,6 @@ _FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
                 "the paper."
             ),
         ),
-    ),
-    "Growth conditions": (
         (
             "Temperature",
             "temperature_k",
@@ -82,6 +82,24 @@ _FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
                 "number of lattice sites, independent of the current surface."
             ),
         ),
+        (
+            "Lattice size",
+            "size",
+            (
+                "Edge length of the periodic lattice. Sites, and so the cost of one monolayer, "
+                "scale as the square of this number."
+            ),
+        ),
+        (
+            "RNG seed",
+            "seed",
+            (
+                "Seeds the random stream. The same seed and parameters reproduce a trajectory "
+                "exactly; a different seed is a different sample of the same physics."
+            ),
+        ),
+    ),
+    "Energetics": (
         (
             "Attempt frequency",
             "attempt_frequency_hz",
@@ -125,14 +143,6 @@ _FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
     ),
     "Numerical controls": (
         (
-            "Lattice size",
-            "size",
-            (
-                "Edge length of the periodic lattice. Sites, and so the cost of one monolayer, "
-                "scale as the square of this number."
-            ),
-        ),
-        (
             "Stop by",
             "stop_mode",
             (
@@ -167,32 +177,35 @@ _FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
                 "reached within this many selected events."
             ),
         ),
-        (
-            "RNG seed",
-            "seed",
-            (
-                "Seeds the random stream. The same seed and parameters reproduce a trajectory "
-                "exactly; a different seed is a different sample of the same physics."
-            ),
-        ),
     ),
 }
 
+_ADVANCED_SECTIONS = ("Energetics", "Numerical controls")
+
 
 def _layout() -> str:
-    """Render `_FIELDS` as the `mo.md(...).batch(...)` template, help text as row tooltips."""
-    blocks = []
+    """Render `_FIELDS` as the `mo.md(...).batch(...)` template, help text as row tooltips.
+
+    Raw HTML rather than markdown tables: marimo's markdown renderer leaves the body of a
+    `<details>` unparsed, so the folded sections have to arrive as HTML anyway.
+    """
+    blocks = {}
     for section, rows in _FIELDS.items():
-        table = "\n".join(
+        body = "".join(
             # marimo's own tooltip: its RenderHTML wraps any element carrying data-tooltip and
             # styles it with a dotted underline. A plain title= is a bare browser tooltip that
             # takes a second to appear and shows no affordance.
-            f'| {label} <span data-tooltip="{help_text}" '
-            f'style="text-decoration:none;cursor:help">&#9432;</span> | {{{key}}} |'
+            f"<tr><td>{label} "
+            f'<span data-tooltip="{help_text}" style="cursor:help">&#9432;</span></td>'
+            f"<td>{{{key}}}</td></tr>"
             for label, key, help_text in rows
         )
-        blocks.append(f"### {section}\n\n| Quantity | Value |\n|---|---|\n{table}")
-    return "\n\n".join(blocks)
+        blocks[section] = f"<h3>{section}</h3><table><tbody>{body}</tbody></table>"
+    advanced = "".join(blocks.pop(section) for section in _ADVANCED_SECTIONS)
+    return (
+        "".join(blocks.values())
+        + f"<details><summary><b>Advanced parameters</b></summary>{advanced}</details>"
+    )
 
 
 _LAYOUT = _layout()
