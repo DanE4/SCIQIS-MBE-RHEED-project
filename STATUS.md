@@ -583,6 +583,9 @@ make export
 
 ## Last meaningful update
 
+2026-08-15 - Section 5 can now save the active result to `outputs/saved/` and reload one
+through a third **Saved run** source, reusing `SimulationResult.save_npz`/`load_npz`.
+
 2026-08-13 - Added bounded spawn-based ensemble parallelism, safe batch-history promotion,
 JSON-line progress, worker/seed/size CLI overrides, and a guarded asynchronous Marimo batch
 runner for all simulation workflows. One- versus multi-worker publication and 64x64

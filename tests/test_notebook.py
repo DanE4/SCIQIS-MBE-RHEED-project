@@ -112,3 +112,15 @@ def test_expensive_batch_confirmation_covers_the_64_size_override() -> None:
     assert batch.needs_confirmation(request)
     assert not batch.needs_confirmation({"workflow": "sweep", "sizes": "8,16"})
     assert batch.needs_confirmation({"workflow": "benchmark-sizes", "sizes": ""})
+
+
+def test_save_result_round_trips_through_the_saved_directory(tmp_path: Path) -> None:
+    from mbe_rheed_sim import SimulationConfig, run
+    from mbe_rheed_sim.kmc import SimulationResult
+
+    result = run(SimulationConfig(lattice_size=6, target_coverage_ml=0.2, seed=3))
+    message = controls.save_result(result, tmp_path, "my run/2")
+
+    saved = tmp_path / "my_run_2.npz"
+    assert saved.exists() and str(saved) in message
+    assert SimulationResult.load_npz(saved).config == result.config

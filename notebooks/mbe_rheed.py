@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.23.16"
-app = marimo.App(width="medium")
+app = marimo.App(width="full")
 
 
 @app.cell
@@ -20,11 +20,13 @@ def _():
     ROOT = Path(__file__).resolve().parents[1]
     GALLERY_DIR = ROOT / "data" / "gallery"
     GALLERY = json.loads((GALLERY_DIR / "index.json").read_text())
+    SAVED_DIR = ROOT / "outputs" / "saved"
     return (
         FIGURE3_NOMINAL_GA_N_RATIOS,
         GALLERY,
         GALLERY_DIR,
         ROOT,
+        SAVED_DIR,
         SimulationConfig,
         SimulationResult,
         batch,
@@ -139,24 +141,35 @@ def _(mo):
 
 
 @app.cell
-def _(GALLERY, controls, mo):
+def _(GALLERY, SAVED_DIR, controls, mo):
     data_source, gallery_choice = controls.source_selector(GALLERY)
+    saved_browser = controls.saved_browser(SAVED_DIR)
     mo.vstack(
         [
             mo.md(
                 "## 5. Run the virtual experiment\n"
                 "**Pre-computed demo** loads a stored trajectory instantly — use this when "
-                "presenting. **Simulate now** runs the model live with the parameters below.\n\n"
-                "One KMC trajectory is strictly sequential: every event changes the surface "
-                "that the next event is drawn from, so a single run cannot be spread across "
-                "cores no matter how many are free. Cores only help across *independent* runs, "
-                "which is what the batch workflows in the last section use. That is why a live "
-                "run here is single-threaded and why the stored trajectories exist."
+                "presenting. **Simulate now** runs the model live with the parameters below. "
+                "**Saved run** reloads a trajectory you stored yourself, from the file browser "
+                "beside the radio.\n\n"
+                "One KMC trajectory is sequential *in this algorithm*: every event changes the "
+                "surface the next event is drawn from, and the random stream is ordered, so "
+                "this run cannot be split across cores. Parallel KMC does exist — "
+                "domain-decomposition and synchronous-sublattice schemes partition the lattice "
+                "across processors — but those are a different algorithm with different "
+                "statistics, not this one run divided up. Here, cores help across *independent* "
+                "runs, which is what the batch workflows in the last section use. That is why a "
+                "live run is single-threaded and why the stored trajectories exist."
             ),
-            mo.hstack([data_source, gallery_choice], justify="start", gap=2, wrap=True),
+            mo.hstack(
+                [data_source, gallery_choice, saved_browser],
+                justify="start",
+                gap=2,
+                wrap=True,
+            ),
         ]
     )
-    return data_source, gallery_choice
+    return data_source, gallery_choice, saved_browser
 
 
 @app.cell
@@ -218,8 +231,20 @@ def _(
     gallery_choice,
     get_parameters,
     mo,
+    saved_browser,
 ):
-    if data_source.value == controls.PRE_COMPUTED:
+    if data_source.value == controls.SAVED_RUN:
+        mo.stop(
+            not saved_browser.value,
+            mo.md("Pick a saved `.npz` file in the browser above."),
+        )
+        _path = saved_browser.path(0)
+        simulation = SimulationResult.load_npz(_path)
+        growth_rate = None
+        experiment_name = _path.stem
+        experiment_detail = controls.saved_detail(simulation.config)
+        experiment_source = f"saved run `{_path}` — nothing was simulated"
+    elif data_source.value == controls.PRE_COMPUTED:
         _entry = gallery_choice.value
         _meta = GALLERY[_entry]
         simulation = SimulationResult.load_npz(GALLERY_DIR / f"{_entry}.npz")
@@ -274,6 +299,25 @@ def _(experiment_detail, experiment_name, experiment_source, mo, simulation):
 
 
 @app.cell
+def _(controls, mo):
+    # Own cell for the same reason as the override button: reading a run button resets it.
+    save_name, save_button = controls.save_controls()
+    mo.hstack([save_name, save_button], justify="start", gap=1, wrap=True)
+    return save_button, save_name
+
+
+@app.cell
+def _(SAVED_DIR, controls, mo, save_button, save_name, simulation):
+    mo.md(
+        controls.save_result(simulation, SAVED_DIR, save_name.value)
+        if save_button.value
+        else "Saving writes the arrays and the configuration to `outputs/saved/`, which "
+        "**Result source → Saved run** reads back."
+    )
+    return
+
+
+@app.cell
 def _(mo, simulation):
     get_frame, set_frame = mo.state(len(simulation.snapshots) - 1, allow_self_loops=True)
     return get_frame, set_frame
@@ -302,7 +346,16 @@ def _(mo):
 
 
 @app.cell
-def _(coverage_axis, display_mode, get_frame, mo, np, playback, set_frame, simulation):
+def _(
+    coverage_axis,
+    display_mode,
+    get_frame,
+    mo,
+    np,
+    playback,
+    set_frame,
+    simulation,
+):
     _current_frame = min(get_frame(), len(simulation.snapshots) - 1)
     _cycle_labels = {
         0.0: "flat reference",

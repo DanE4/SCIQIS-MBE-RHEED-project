@@ -28,6 +28,8 @@ from mbe_rheed_sim.rates import BOLTZMANN_EV_PER_K
 
 _EMPTY_RATES = np.zeros(0, dtype=float)
 _SMALLEST_NORMAL = float(np.finfo(float).tiny)
+# Events between progress reports, on top of the coverage-sampled ones.
+_PROGRESS_EVENT_INTERVAL = 4_096
 
 
 @dataclass(frozen=True, slots=True)
@@ -557,6 +559,14 @@ def run(
     rheed_history: list[float] = []
     snapshots: list[HeightField] = []
 
+    def report_progress() -> None:
+        if on_progress is None:
+            return
+        if target_atoms:
+            on_progress(min(1.0, (deposited - desorbed) / target_atoms))
+        elif config.target_time_s:
+            on_progress(min(1.0, time / config.target_time_s))
+
     def record() -> None:
         coverage_history.append(coverage_ml(heights))
         time_history.append(time)
@@ -564,31 +574,15 @@ def run(
         island_history.append(island_density_per_site(heights))
         rheed_history.append(step_density_proxy(heights))
         snapshots.append(heights.copy())
-        if on_progress is not None:
-            if target_atoms:
-                on_progress(min(1.0, (deposited - desorbed) / target_atoms))
-            elif config.target_time_s:
-                on_progress(min(1.0, time / config.target_time_s))
+        report_progress()
 
-    local_catalogue = (
-        _LocalLongHopCatalogue(heights, config) if config.max_isolated_hop_distance > 1 else None
-    )
+    local_catalogue = _LocalLongHopCatalogue(heights, config)
     record()
-    for _ in range(config.max_events):
+    for event_index in range(config.max_events):
         if target_atoms is not None and deposited - desorbed >= target_atoms:
             break
 
-        if local_catalogue is None:
-            bond_counts = _bond_counts(heights)
-            occupied_sources = np.argwhere(heights > 0).astype(np.int64)
-            diffusion_events = _diffusion_events(heights, config, bond_counts, occupied_sources)
-            desorption_rates, desorption_sources = _desorption_events(
-                heights, config, bond_counts, occupied_sources
-            )
-            total_diffusion_rate = diffusion_events.total_rate
-            total_desorption_rate = float(desorption_rates[-1]) if desorption_rates.size else 0.0
-            total_surface_rate = total_diffusion_rate + total_desorption_rate
-        elif local_catalogue.rate_tree is None:
+        if local_catalogue.rate_tree is None:
             total_diffusion_rate, total_desorption_rate = local_catalogue.surface_totals()
             total_surface_rate = total_diffusion_rate + total_desorption_rate
         else:
@@ -607,7 +601,7 @@ def run(
             deposit(heights, int(y), int(x))
             changed_sites = ((int(y), int(x)),)
             deposited += 1
-        elif local_catalogue is not None and local_catalogue.rate_tree is not None:
+        elif local_catalogue.rate_tree is not None:
             selected_rate -= deposition_rate
             source, direction_index, distance = local_catalogue.select(selected_rate)
             if direction_index is None:
@@ -631,16 +625,8 @@ def run(
                     long_hops += 1
         elif selected_rate < deposition_rate + total_diffusion_rate:
             selected_rate -= deposition_rate
-            if local_catalogue is None:
-                event_index = int(
-                    np.searchsorted(diffusion_events.cumulative_rates, selected_rate, side="right")
-                )
-                source = tuple(diffusion_events.sources[event_index])
-                direction = HEX_DIRECTIONS[diffusion_events.directions[event_index]]
-                distance = int(diffusion_events.distances[event_index])
-            else:
-                source, direction_index, distance = local_catalogue.select_diffusion(selected_rate)
-                direction = HEX_DIRECTIONS[direction_index]
+            source, direction_index, distance = local_catalogue.select_diffusion(selected_rate)
+            direction = HEX_DIRECTIONS[direction_index]
             target = (
                 (source[0] + distance * direction[0]) % config.lattice_size,
                 (source[1] + distance * direction[1]) % config.lattice_size,
@@ -654,21 +640,21 @@ def run(
                 long_hops += 1
         else:
             selected_rate -= deposition_rate + total_diffusion_rate
-            if local_catalogue is None:
-                event_index = int(np.searchsorted(desorption_rates, selected_rate, side="right"))
-                source = tuple(desorption_sources[event_index])
-            else:
-                source = local_catalogue.select_desorption(selected_rate)
+            source = local_catalogue.select_desorption(selected_rate)
             heights[source] -= 1
             changed_sites = (source,)
             desorbed += 1
 
-        if local_catalogue is not None:
-            local_catalogue.refresh_near(changed_sites)
+        local_catalogue.refresh_near(changed_sites)
 
         if deposited - desorbed >= next_sample:
             record()
             next_sample += sample_atoms
+        elif not event_index % _PROGRESS_EVENT_INTERVAL:
+            # Sampling is coverage-based, so a slow run can sit between two frames for
+            # minutes. Reporting on an event count as well keeps the caller's progress bar
+            # and ETA alive without storing a snapshot.
+            report_progress()
     else:
         raise RuntimeError(
             f"simulation target not reached within max_events={config.max_events}; "

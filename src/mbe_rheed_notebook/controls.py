@@ -5,7 +5,9 @@ assigns the result to a global name, which is what marimo requires for interacti
 https://docs.marimo.io/guides/interactivity/
 """
 
+import re
 from dataclasses import replace
+from pathlib import Path
 from time import perf_counter
 
 import marimo as mo
@@ -19,6 +21,7 @@ HAND_TUNED = "Hand-tuned parameters"
 FROM_PAPER = "GaN parameters from the paper"
 PRE_COMPUTED = "Pre-computed demo"
 SIMULATE_NOW = "Simulate now"
+SAVED_RUN = "Saved run"
 DEFAULT_PRESET = "Teaching defaults"
 
 DEFAULT_PARAMETERS = {
@@ -237,13 +240,52 @@ def source_selector(gallery: dict) -> tuple[mo.ui.radio, mo.ui.dropdown]:
     """Radio for pre-computed vs live, plus the pre-computed run picker."""
     return (
         mo.ui.radio(
-            options=[PRE_COMPUTED, SIMULATE_NOW], value=PRE_COMPUTED, label="Result source"
+            options=[PRE_COMPUTED, SIMULATE_NOW, SAVED_RUN],
+            value=PRE_COMPUTED,
+            label="Result source",
         ),
         mo.ui.dropdown(
             {meta["title"]: name for name, meta in gallery.items()},
             value=next(iter(gallery.values()))["title"],
             label="Pre-computed run",
         ),
+    )
+
+
+def saved_browser(saved_dir: Path) -> mo.ui.file_browser:
+    """Pick a `.npz` written by `save_result`.
+
+    A file browser reads the directory when the user opens it, so a run saved during this
+    session appears without any reactive refresh of the widget.
+    """
+    saved_dir.mkdir(parents=True, exist_ok=True)
+    return mo.ui.file_browser(
+        initial_path=saved_dir, filetypes=[".npz"], multiple=False, label="Saved run file"
+    )
+
+
+def save_controls() -> tuple[mo.ui.text, mo.ui.run_button]:
+    """Name field and button for storing the active result. Read the button in another cell."""
+    return (
+        mo.ui.text(placeholder="my_run", label="Save as"),
+        mo.ui.run_button(label="Save this result"),
+    )
+
+
+def save_result(result: SimulationResult, saved_dir: Path, name: str) -> str:
+    """Write the active result to `saved_dir/<name>.npz` and report where it went."""
+    stem = re.sub(r"[^A-Za-z0-9_-]", "_", name.strip()) or "run"
+    path = saved_dir / f"{stem}.npz"
+    result.save_npz(path)
+    return f"Saved to `{path}`. Load it again with **Result source → {SAVED_RUN}**."
+
+
+def saved_detail(config: SimulationConfig) -> str:
+    return (
+        f"Reloaded from disk, so nothing was simulated: "
+        f"{config.lattice_size}x{config.lattice_size}, seed {config.seed}, "
+        f"T = {config.temperature_k:.1f} K, flux = {config.deposition_flux_ml_s:.3f} ML/s, "
+        f"max hop {config.max_isolated_hop_distance}."
     )
 
 

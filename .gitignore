@@ -162,6 +162,7 @@ outputs/figures/*
 outputs/animations/*
 outputs/runs/*
 outputs/batches/*
+outputs/saved/*
 data/raw/*
 data/processed/*
 !outputs/figures/.gitkeep
