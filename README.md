@@ -6,6 +6,7 @@ lattice, with a step-density RHEED proxy plotted alongside the surface morpholog
 
 The RHEED signal here is a step-density proxy, not a diffraction calculation. Scope and known
 limitations: [`STATUS.md`](STATUS.md). Source paper: `nanomaterials-12-03052.pdf` (CC BY).
+MIT licensed, except the paper and the three Wikimedia schematics: [`LICENSE`](LICENSE).
 
 ## Results so far
 

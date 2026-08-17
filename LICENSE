@@ -1,0 +1,53 @@
+MIT License
+
+Copyright (c) 2026 DanE
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--------------------------------------------------------------------------------
+
+Third-party material
+
+The MIT grant above covers this project's own code, notebook and generated
+results. The files below are not ours to relicense and stay under their own
+terms, which the MIT grant does not extend to or override. The same credits
+appear in the notebook captions where the images are displayed.
+
+nanomaterials-12-03052.pdf, and data/reference/figure3_experimental_digitized.json
+derived from its Figure 3
+    J. A. Budagosky and A. Garcia-Cristobal, "Multiscale Kinetic Monte Carlo
+    Simulation of Self-Organized Growth of GaN/AlN Quantum Dots",
+    Nanomaterials 12, 3052 (2022). https://doi.org/10.3390/nano12173052
+    Creative Commons Attribution 4.0 (CC BY 4.0).
+
+notebooks/public/01_mbe_chamber_schematic.png
+    Vegar Ottesen, Wikimedia Commons, CC BY-SA 3.0.
+    https://commons.wikimedia.org/wiki/File:MBE.png
+
+notebooks/public/02_thin_film_growth_modes.png
+    Acarlso3, Wikimedia Commons, public domain.
+    https://commons.wikimedia.org/wiki/File:GrowthModes.png
+
+notebooks/public/03_rheed_surface_patterns.png
+    EWEp, Wikimedia Commons, CC BY-SA 4.0.
+    https://commons.wikimedia.org/wiki/File:RHEED_patterns_for_different_surfaces.png
+
+The two CC BY-SA images carry share-alike terms for adaptations of those
+images. They are reproduced here unmodified, and the condition does not reach
+this project's code.

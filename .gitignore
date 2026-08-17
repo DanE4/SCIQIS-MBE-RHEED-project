@@ -172,7 +172,7 @@ data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/processed/parameter_sweep.json
-!data/processed/figure3_simulated_smoke.json
+!data/processed/figure3_simulated_reduced.json
 
 # Spyder project settings
 .spyderproject
