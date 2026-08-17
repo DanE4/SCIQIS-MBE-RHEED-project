@@ -91,6 +91,38 @@ def test_surface_builders_produce_one_trace(builder) -> None:
     assert len(figure.data) == 1
 
 
+def test_beam_geometry_is_specular_at_the_requested_grazing_angle() -> None:
+    """Both rays must carry the true angle in data coordinates, and nothing may be diffracted.
+
+    The rendered figure stretches z, so the check is on the underlying data: incoming and
+    outgoing slopes equal tan(angle) with opposite signs about the impact point.
+    """
+    heights = np.zeros((16, 16), dtype=np.int64)
+    angle = 2.0
+    figure = figures.rheed_geometry(heights, coverage=1.0, zmax=2, grazing_angle_deg=angle)
+    incident, specular = figure.data[1], figure.data[2]
+    expected = np.tan(np.radians(angle))
+    incoming = (incident.z[1] - incident.z[0]) / (incident.x[1] - incident.x[0])
+    outgoing = (specular.z[1] - specular.z[0]) / (specular.x[1] - specular.x[0])
+    assert incoming == pytest.approx(-expected)
+    assert outgoing == pytest.approx(expected)
+    # The rays must actually meet on the surface, not float above or cut through it.
+    assert incident.x[1] == pytest.approx(specular.x[0])
+    assert incident.z[1] == pytest.approx(float(heights[8, 8]))
+    # Stage 6J mandates this exact wording on any beam/detector overlay.
+    assert figures.BEAM_GEOMETRY_LABEL in figure.layout.title.text
+    # A screen with a single specular marker, and no intensity pattern anywhere.
+    assert {trace.name for trace in figure.data} == {
+        "surface",
+        "incident beam",
+        "specular direction",
+        "detector screen",
+        "specular spot",
+    }
+    with pytest.raises(ValueError):
+        figures.rheed_geometry(heights, coverage=1.0, zmax=2, grazing_angle_deg=90.0)
+
+
 def test_rheed_trace_marks_the_current_frame() -> None:
     coverage = np.linspace(0.0, 2.0, 21)
     proxy = 0.75 + 0.2 * np.cos(2 * np.pi * coverage)

@@ -8,6 +8,7 @@ from mbe_rheed_sim import SimulationConfig, run
 from mbe_rheed_sim.workflows import (
     log_progress,
     parse_int_values,
+    parse_workflow_args,
     promote_artifacts,
     resolve_workers,
     run_parallel,
@@ -27,6 +28,21 @@ def test_worker_resolution_and_value_parsing(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setenv("MBE_WORKERS", "invalid")
     with pytest.raises(ValueError):
         resolve_workers()
+
+
+def test_workflow_args_honour_and_reject_duration(monkeypatch: pytest.MonkeyPatch) -> None:
+    """--duration must reach `main()`, default when absent, and refuse a non-physical window."""
+    monkeypatch.setattr("sys.argv", ["script", "--duration", "40"])
+    assert parse_workflow_args(workers=False, duration_s=4.0) == {"duration_s": 40.0}
+    monkeypatch.setattr("sys.argv", ["script"])
+    assert parse_workflow_args(workers=False, duration_s=4.0) == {"duration_s": 4.0}
+    monkeypatch.setattr("sys.argv", ["script", "--duration", "0"])
+    with pytest.raises(ValueError):
+        parse_workflow_args(workers=False, duration_s=4.0)
+    # A script that does not declare the override must not silently swallow the flag.
+    monkeypatch.setattr("sys.argv", ["script", "--duration", "40"])
+    with pytest.raises(SystemExit):
+        parse_workflow_args(workers=False)
 
 
 def test_parallel_simulations_preserve_order_and_results() -> None:

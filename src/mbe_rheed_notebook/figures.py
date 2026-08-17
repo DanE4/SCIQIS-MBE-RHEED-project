@@ -13,6 +13,17 @@ from plotly.subplots import make_subplots
 HEX_SYMBOL = "hexagon"
 PROXY_COLOR = "#d62728"
 SIMULATION_COLOR = "#1f77b4"
+BEAM_COLOR = "#ff7f0e"
+# Typical RHEED incidence is 1-3 degrees (docs/REFERENCES.md 3-7). This is a visualization
+# assumption for drawing the geometry, not a value taken from the primary paper, which reports
+# no beam angle. Nothing downstream of this figure consumes it.
+GRAZING_ANGLE_DEG = 2.0
+# Mandated wording for any beam/detector overlay (STATUS.md Stage 6J). Kept as a constant so the
+# figure and its test cannot drift apart from the requirement.
+BEAM_GEOMETRY_LABEL = "explanatory geometry only — diffraction is not simulated"
+# One monolayer of height drawn as one in-plane site spacing. For GaN that is c/2 = 0.259 nm
+# against a = 0.319 nm, so the true vertical:lateral aspect is 0.81 of what the beam shows.
+ML_PER_SITE_SPACING = 1.0
 
 
 def _axial_to_cartesian(heights: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -86,6 +97,131 @@ def hex_cells(heights: np.ndarray, coverage: float, zmax: int) -> go.Figure:
         title=f"Six-neighbor axial lattice at {coverage:.2f} ML",
         xaxis={"title": "axial q + r/2", "scaleanchor": "y", "scaleratio": 1},
         yaxis={"title": "sqrt(3) r / 2"},
+    )
+    return figure
+
+
+def rheed_geometry(
+    heights: np.ndarray,
+    coverage: float,
+    zmax: int,
+    *,
+    grazing_angle_deg: float = GRAZING_ANGLE_DEG,
+) -> go.Figure:
+    """The simulated surface with the RHEED beam and screen placed on it.
+
+    Geometry only. The outgoing ray is the specular mirror direction about the surface plane;
+    no diffracted intensity is computed here or anywhere else in this project, so the screen
+    carries a single specular spot and no pattern. The rays are built in true data coordinates
+    at `grazing_angle_deg`, but the z axis is stretched exactly as in `height_surface` so a few
+    monolayers stay visible against a lattice hundreds of sites wide. The rendered beam
+    therefore looks far steeper than it is; the returned title states both the true angle and
+    the stretch factor.
+    """
+    if heights.ndim != 2 or min(heights.shape) < 2 or not 0 < grazing_angle_deg < 45:
+        raise ValueError("beam geometry needs a 2D lattice and a grazing angle in (0, 45)")
+    rows, columns = heights.shape
+    slope = np.tan(np.radians(grazing_angle_deg)) * ML_PER_SITE_SPACING
+    # Impact at the lattice centre, on the real local height so the ray meets the drawn surface.
+    impact_x, impact_y = 0.5 * (columns - 1), 0.5 * (rows - 1)
+    impact_z = float(heights[rows // 2, columns // 2])
+    # Half a lattice width of run-up each side: enough for the grazing rise to read, while
+    # keeping the drawn box near 2:1 so the wide scene still fits the default camera framing.
+    standoff = 0.5 * columns
+    entry_x, screen_x = -standoff, (columns - 1) + standoff
+    entry_z = impact_z + (impact_x - entry_x) * slope
+    spot_z = impact_z + (screen_x - impact_x) * slope
+
+    figure = go.Figure(
+        go.Surface(
+            z=heights,
+            colorscale="Viridis",
+            cmin=0,
+            cmax=zmax,
+            colorbar={"title": "height (ML)", "len": 0.7},
+            hovertemplate="x=%{x}<br>y=%{y}<br>height=%{z} ML<extra></extra>",
+            name="surface",
+        )
+    )
+    for label, xs, zs in (
+        ("incident beam", (entry_x, impact_x), (entry_z, impact_z)),
+        ("specular direction", (impact_x, screen_x), (impact_z, spot_z)),
+    ):
+        figure.add_trace(
+            go.Scatter3d(
+                x=xs,
+                y=(impact_y, impact_y),
+                z=zs,
+                mode="lines",
+                line={"color": BEAM_COLOR, "width": 6},
+                name=label,
+                hovertemplate=f"{label}<extra></extra>",
+            )
+        )
+    screen_top = max(float(zmax), spot_z * 1.6)
+    screen_half_width = 0.35 * rows
+    figure.add_trace(
+        go.Mesh3d(
+            x=[screen_x] * 4,
+            y=[
+                impact_y - screen_half_width,
+                impact_y + screen_half_width,
+                impact_y + screen_half_width,
+                impact_y - screen_half_width,
+            ],
+            z=[0.0, 0.0, screen_top, screen_top],
+            i=[0, 0],
+            j=[1, 2],
+            k=[2, 3],
+            color="#94a3b8",
+            opacity=0.28,
+            name="detector screen",
+            hovertemplate="detector screen<extra></extra>",
+            showlegend=True,
+        )
+    )
+    figure.add_trace(
+        go.Scatter3d(
+            x=[screen_x],
+            y=[impact_y],
+            z=[spot_z],
+            mode="markers",
+            marker={"color": BEAM_COLOR, "size": 6, "symbol": "circle"},
+            name="specular spot",
+            hovertemplate="specular spot (geometric, not diffracted)<extra></extra>",
+        )
+    )
+
+    z_top = max(float(zmax), entry_z, screen_top)
+    x_span = screen_x - entry_x
+    # Both axes are in site units, so the disclosed stretch is the ratio of drawn units per
+    # data unit on z against x, using the aspect numbers set immediately below.
+    x_aspect = x_span / columns
+    stretch = (0.55 / z_top) / (x_aspect / x_span)
+    figure.update_layout(
+        uirevision="beam-geometry",
+        height=430,
+        margin={"l": 0, "r": 0, "t": 70, "b": 0},
+        legend={"orientation": "h", "y": -0.02},
+        title=(
+            f"Beam geometry at {coverage:.2f} ML — {grazing_angle_deg:g}° grazing incidence, "
+            + (
+                f"z stretched {stretch:.0f}x for visibility"
+                if stretch >= 1.5
+                else "drawn to scale"
+            )
+            + f"<br><sub>{BEAM_GEOMETRY_LABEL}</sub>"
+        ),
+        scene={
+            "uirevision": "beam-geometry",
+            "xaxis": {"title": "array x", "range": [entry_x, screen_x], "autorange": False},
+            "yaxis": {"title": "array y", "range": [-0.5, rows - 0.5], "autorange": False},
+            "zaxis": {"title": "height (ML)", "range": [0, z_top], "autorange": False},
+            "aspectmode": "manual",
+            "aspectratio": {"x": x_aspect, "y": 1, "z": 0.55},
+            # Near side-on, looking along the beam's plane, so grazing incidence reads as grazing.
+            "camera": {"eye": {"x": 0.15, "y": -2.9, "z": 0.5}},
+        },
     )
     return figure
 

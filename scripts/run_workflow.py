@@ -19,7 +19,7 @@ from mbe_rheed_sim.workflows import (
 
 ROOT = Path(__file__).resolve().parents[1]
 BATCH_ROOT = ROOT / "outputs" / "batches"
-# workers/seeds/sizes flag whether the underlying script accepts that override.
+# workers/seeds/sizes/duration flag whether the underlying script accepts that override.
 WORKFLOWS = {
     "baseline": {
         "script": "reproduce_baseline.py",
@@ -29,6 +29,7 @@ WORKFLOWS = {
         "script": "reproduce_figure3.py",
         "workers": True,
         "seeds": True,
+        "sizes": True,
         "preset": "7x7, 40 s, Ga/N 0.89/0.82/0.68, seeds 2026/2027/2028",
     },
     "sweep": {
@@ -49,7 +50,11 @@ WORKFLOWS = {
         "workers": True,
         "seeds": True,
         "sizes": True,
-        "preset": "8/16/32, Ga/N 0.82, 4 s, seeds 0/1/2 (add 64 with --sizes 8,16,32,64)",
+        "duration": True,
+        "preset": (
+            "8/16/32, Ga/N 0.82, 4 s, seeds 0/1/2; the accepted study is "
+            "--sizes 32,64,128 --duration 40 --seeds 0,1,2,3,4"
+        ),
     },
     "validate-acceleration": {
         "script": "validate_acceleration.py",
@@ -105,12 +110,13 @@ def main() -> None:
     parser.add_argument("--workers", type=int)
     parser.add_argument("--seeds")
     parser.add_argument("--sizes")
+    parser.add_argument("--duration")
     parser.add_argument("--batch-id")
     arguments = parser.parse_args()
     workflow = WORKFLOWS[arguments.workflow]
-    for name in ("seeds", "sizes"):
+    for name in ("seeds", "sizes", "duration"):
         if getattr(arguments, name) and not workflow.get(name):
-            parser.error(f"{arguments.workflow} does not accept {name[:-1]} overrides")
+            parser.error(f"{arguments.workflow} does not accept --{name}")
 
     requested_workers = resolve_workers(arguments.workers)
     effective_workers = requested_workers if workflow.get("workers") else 1
@@ -129,6 +135,8 @@ def main() -> None:
         command.extend(("--seeds", arguments.seeds))
     if arguments.sizes:
         command.extend(("--sizes", arguments.sizes))
+    if arguments.duration:
+        command.extend(("--duration", arguments.duration))
     started_at = datetime.now(UTC)
     manifest = merge_json(
         manifest_path,
@@ -139,6 +147,7 @@ def main() -> None:
         effective_workers=effective_workers,
         seeds=arguments.seeds or "canonical defaults",
         sizes=arguments.sizes or "canonical defaults",
+        duration_s=arguments.duration or "canonical default",
         command=command,
         batch_directory=str(batch_dir.relative_to(ROOT)),
         artifact_directory=str(artifacts.relative_to(ROOT)),

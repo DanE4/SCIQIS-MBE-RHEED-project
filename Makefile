@@ -10,6 +10,7 @@ MARIMO_PORT ?= 2718
 WORKER_ARG = $(if $(WORKERS),--workers $(WORKERS),)
 SEED_ARG = $(if $(SEEDS),--seeds $(SEEDS),)
 SIZE_ARG = $(if $(SIZES),--sizes $(SIZES),)
+DURATION_ARG = $(if $(DURATION),--duration $(DURATION),)
 
 setup:
 	uv sync --locked
@@ -26,7 +27,7 @@ check:
 	uv run python $(NOTEBOOK)
 
 $(WORKFLOWS):
-	uv run python scripts/run_workflow.py $@ $(WORKER_ARG) $(SEED_ARG) $(SIZE_ARG)
+	uv run python scripts/run_workflow.py $@ $(WORKER_ARG) $(SEED_ARG) $(SIZE_ARG) $(DURATION_ARG)
 
 # Long-standing aliases kept so documented commands keep working.
 reproduce: baseline

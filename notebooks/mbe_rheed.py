@@ -345,7 +345,7 @@ def _(mo):
     # Its own cell: the frame-following widgets below are rebuilt on every playback tick, and
     # a rebuilt dropdown would snap back to its constructor value mid-animation.
     display_mode = mo.ui.dropdown(
-        options=["3D height surface", "Hexagonal cells"],
+        options=["3D height surface", "Hexagonal cells", "RHEED beam geometry"],
         value="3D height surface",
         label="Surface view",
     )
@@ -439,11 +439,11 @@ def _(
     _frame = min(get_frame(), len(simulation.snapshots) - 1)
     _heights = simulation.snapshots[_frame]
     _zmax = max(1, int(simulation.snapshots.max()))
-    _builder = (
-        figures.height_surface
-        if display_mode.value == "3D height surface"
-        else figures.hex_cells
-    )
+    _builder = {
+        "3D height surface": figures.height_surface,
+        "Hexagonal cells": figures.hex_cells,
+        "RHEED beam geometry": figures.rheed_geometry,
+    }[display_mode.value]
     surface_figure = _builder(_heights, float(coverage_axis[_frame]), _zmax)
     rheed_figure = figures.rheed_trace(
         coverage_axis, simulation.rheed_proxy, _frame, coverage_axis_label
@@ -461,7 +461,11 @@ def _(
             mo.md(
                 "The 3D height view uses array coordinates. **Hexagonal cells** maps the "
                 "same periodic axial lattice to Cartesian centers so its six-neighbor "
-                "topology is shown without implying a square metric. On the RHEED trace, "
+                "topology is shown without implying a square metric. **RHEED beam geometry** "
+                "places a 2° grazing ray and a detector screen on the same surface to show "
+                "what the experiment looks at; the outgoing ray is the specular *direction* "
+                "only and the screen carries no pattern, because no diffraction is computed. "
+                "On the RHEED trace, "
                 "the **green diamond** is the initially flat maximum and the **purple x** "
                 "is the most stepped stored frame through the first monolayer."
             ),

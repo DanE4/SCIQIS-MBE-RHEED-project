@@ -30,15 +30,21 @@ RATIO = 0.82
 DURATION_S = 4.0
 SIZES = (8, 16, 32)
 SEEDS = (0, 1, 2)
-TIME_S = np.linspace(0.0, DURATION_S, 101)
 RELATIVE_TOLERANCE = 0.10
 
 
 def main(
-    *, workers: int = 4, seeds: tuple[int, ...] = SEEDS, sizes: tuple[int, ...] = SIZES
+    *,
+    workers: int = 4,
+    seeds: tuple[int, ...] = SEEDS,
+    sizes: tuple[int, ...] = SIZES,
+    duration_s: float = DURATION_S,
 ) -> None:
     if len(sizes) < 2 or any(size < 2 for size in sizes):
         raise ValueError("at least two lattice sizes of 2 or greater are required")
+    # One common resampling grid, kept at ~25 points per second of the default window so a
+    # longer run is not resolved more coarsely than the 4 s default it must be compared with.
+    time_s = np.linspace(0.0, duration_s, round(25 * duration_s) + 1)
     output_root = artifact_root(ROOT)
     run_dir = output_root / "outputs" / "runs"
     figure_dir = output_root / "outputs" / "figures"
@@ -49,7 +55,7 @@ def main(
         results = []
         runs = []
         configurations = [
-            figure3_config(RATIO, lattice_size=size, duration_s=DURATION_S, seed=seed)
+            figure3_config(RATIO, lattice_size=size, duration_s=duration_s, seed=seed)
             for seed in seeds
         ]
         timed_results = run_parallel(
@@ -74,7 +80,7 @@ def main(
                 }
             )
         traces = np.vstack(
-            [np.interp(TIME_S, result.time_s, result.rheed_proxy) for result in results]
+            [np.interp(time_s, result.time_s, result.rheed_proxy) for result in results]
         )
         roughness = np.array([result.roughness_ml[-1] for result in results])
         amplitudes = np.array([oscillation_amplitude(trace) for trace in traces])
@@ -97,9 +103,9 @@ def main(
                 "runs": runs,
             }
         )
-        axis.plot(TIME_S, mean, color="tab:blue")
+        axis.plot(time_s, mean, color="tab:blue")
         axis.fill_between(
-            TIME_S,
+            time_s,
             np.clip(mean - std, 0, 1),
             np.clip(mean + std, 0, 1),
             color="tab:blue",
@@ -107,7 +113,10 @@ def main(
         )
         axis.set(title=f"{size}x{size}", xlabel="time (s)", ylim=(0, 1.03))
     axes[0].set_ylabel(r"$1-S_d$")
-    figure.suptitle("Figure 3 ratio 0.82: 4 s size sensitivity (mean +/- SD, 3 seeds)")
+    figure.suptitle(
+        f"Figure 3 ratio {RATIO}: {duration_s:g} s size sensitivity "
+        f"(mean +/- SD, {len(seeds)} seeds)"
+    )
 
     successive_checks = []
     for smaller, larger in pairwise(summaries):
@@ -126,7 +135,7 @@ def main(
 
     output = {
         "nominal_ga_n_ratio": RATIO,
-        "duration_s": DURATION_S,
+        "duration_s": duration_s,
         "seeds": seeds,
         "effective_workers": min(workers, len(seeds)),
         "paper_parameters": asdict(parameters),
@@ -139,7 +148,11 @@ def main(
             ),
         },
         "successive_size_checks": successive_checks,
-        "note": "pass --sizes 8,16,32,64 to include the expensive 64x64 point",
+        "coverage_window_ml": duration_s * parameters.predicted_growth_rate_ml_s,
+        "note": (
+            "pass --sizes/--duration to widen the study; the 4 s default spans under one "
+            "monolayer, so its detrended amplitude measures a partial period"
+        ),
         "sizes": summaries,
     }
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -151,4 +164,4 @@ def main(
 
 
 if __name__ == "__main__":
-    main(**parse_workflow_args(seeds=SEEDS, sizes=SIZES))
+    main(**parse_workflow_args(seeds=SEEDS, sizes=SIZES, duration_s=DURATION_S))

@@ -91,8 +91,9 @@ def parse_workflow_args(
     workers: bool = True,
     seeds: Sequence[int] | None = None,
     sizes: Sequence[int] | None = None,
+    duration_s: float | None = None,
 ) -> dict[str, object]:
-    """Parse the shared --workers/--seeds/--sizes CLI into `main()` keyword arguments.
+    """Parse the shared --workers/--seeds/--sizes/--duration CLI into `main()` keywords.
 
     Pass the script's canonical defaults for the overrides it accepts; omit the rest so the
     parser rejects a flag the script cannot honour instead of silently ignoring it.
@@ -105,6 +106,8 @@ def parse_workflow_args(
         parser.add_argument("--seeds")
     if sizes is not None:
         parser.add_argument("--sizes")
+    if duration_s is not None:
+        parser.add_argument("--duration", type=float, default=duration_s)
     arguments = parser.parse_args()
 
     options: dict[str, object] = {}
@@ -114,6 +117,10 @@ def parse_workflow_args(
         options["seeds"] = parse_int_values(arguments.seeds, seeds)
     if sizes is not None:
         options["sizes"] = parse_int_values(arguments.sizes, sizes)
+    if duration_s is not None:
+        if not 0 < arguments.duration <= 1000:
+            raise ValueError("duration must be greater than 0 and no more than 1000 s")
+        options["duration_s"] = arguments.duration
     return options
 
 

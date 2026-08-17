@@ -47,7 +47,15 @@ def _circular_difference(left: float | None, right: float | None) -> float | Non
     return min(difference, 1.0 - difference)
 
 
-def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
+def main(
+    *,
+    workers: int = 4,
+    seeds: tuple[int, ...] = SEEDS,
+    sizes: tuple[int, ...] = (LATTICE_SIZE,),
+) -> None:
+    if len(sizes) != 1:
+        raise ValueError("the Ga/N comparison runs one lattice size; pass a single --sizes")
+    (lattice_size,) = sizes
     output_root = artifact_root(ROOT)
     run_dir = output_root / "outputs" / "runs"
     figure_dir = output_root / "outputs" / "figures"
@@ -66,7 +74,7 @@ def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
     morphology_growth_rate = None
 
     configurations = [
-        figure3_config(ratio, lattice_size=LATTICE_SIZE, seed=seed)
+        figure3_config(ratio, lattice_size=lattice_size, seed=seed)
         for ratio in FIGURE3_NOMINAL_GA_N_RATIOS
         for seed in seeds
     ]
@@ -191,7 +199,7 @@ def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
         "code_version": code_version,
         "source_pdf_sha256": _sha256(SOURCE_PDF),
         "reference_json_sha256": _sha256(REFERENCE_PATH),
-        "lattice_size": LATTICE_SIZE,
+        "lattice_size": lattice_size,
         "seeds": seeds,
         "effective_workers": min(workers, len(configurations)),
         "classification": "qualitative finite-size smoke comparison; amplitude not converged",
@@ -251,4 +259,4 @@ def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
 
 
 if __name__ == "__main__":
-    main(**parse_workflow_args(seeds=SEEDS))
+    main(**parse_workflow_args(seeds=SEEDS, sizes=(LATTICE_SIZE,)))
