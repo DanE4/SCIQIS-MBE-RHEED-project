@@ -14,6 +14,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 MORPHOLOGY_TARGETS_ML = (0.0, 0.5, 1.0, 1.5, 2.0)
+# The two figures copied into assets/ by `make readme-figures` are fetched on every GitHub
+# README load, where the column is under 900 px wide, so print resolution only costs bytes.
+README_DPI = 120
 
 
 def plot_comparison(traces: list[dict[str, object]], figure_dir: Path) -> None:
@@ -56,7 +59,7 @@ def plot_comparison(traces: list[dict[str, object]], figure_dir: Path) -> None:
         "Figure 3 comparison — separate scales, shared time domain\n"
         "Reference is figure-derived; proxy amplitude is not finite-size converged"
     )
-    figure.savefig(figure_dir / "figure3_comparison.png", dpi=180)
+    figure.savefig(figure_dir / "figure3_comparison.png", dpi=README_DPI)
     plt.close(figure)
 
 
@@ -133,7 +136,7 @@ def morphology_sequence(
         "Figure 4-inspired homoepitaxial morphology sequence — "
         f"Ga/N={ratio:.2f}, seed {morphology_seed}; no strain"
     )
-    figure.savefig(figure_dir / "figure4_inspired_morphology.png", dpi=180)
+    figure.savefig(figure_dir / "figure4_inspired_morphology.png", dpi=README_DPI)
     plt.close(figure)
     return {
         "classification": "homoepitaxial layer-cycle illustration; not a strain/SK reproduction",
