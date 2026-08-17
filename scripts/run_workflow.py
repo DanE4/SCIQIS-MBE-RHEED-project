@@ -11,10 +11,12 @@ from pathlib import Path
 from time import perf_counter, sleep
 
 from mbe_rheed_sim.workflows import (
+    NEW_PROCESS_GROUP,
     git_revision,
     merge_json,
     promote_artifacts,
     resolve_workers,
+    terminate_process_group,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -166,8 +168,8 @@ def main() -> None:
     def interrupt(_signal_number, _frame) -> None:
         signal.signal(signal.SIGINT, signal.SIG_IGN)
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
-        if process is not None and process.poll() is None:
-            os.killpg(process.pid, signal.SIGTERM)
+        if process is not None:
+            terminate_process_group(process)
         merge_json(
             manifest_path,
             status="interrupted",
@@ -187,7 +189,7 @@ def main() -> None:
             env=environment,
             stdout=stdout,
             stderr=stderr,
-            start_new_session=True,
+            **NEW_PROCESS_GROUP,
         )
         last_progress = (
             manifest.get("stage"),

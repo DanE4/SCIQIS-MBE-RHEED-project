@@ -1,3 +1,6 @@
+import os
+import subprocess
+import sys
 from dataclasses import replace
 from multiprocessing import active_children
 
@@ -6,17 +9,21 @@ import pytest
 
 from mbe_rheed_sim import SimulationConfig, run
 from mbe_rheed_sim.workflows import (
+    NEW_PROCESS_GROUP,
     log_progress,
     parse_int_values,
     parse_workflow_args,
     promote_artifacts,
     resolve_workers,
     run_parallel,
+    terminate_process_group,
     update_progress,
 )
 
 
 def test_worker_resolution_and_value_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Pin the core count: CI runners have as few as two, and the resolver validates against it.
+    monkeypatch.setattr(os, "cpu_count", lambda: 4)
     monkeypatch.setenv("MBE_WORKERS", "3")
     assert resolve_workers() == 3
     assert resolve_workers(1) == 1
@@ -103,3 +110,17 @@ def test_promotion_keeps_history_and_replaces_canonical_atomically(tmp_path) -> 
     assert promoted == ["outputs/runs/result.json"]
     assert canonical.read_text() == '{"new": true}\n'
     assert generated.read_text() == '{"new": true}\n'
+
+
+def test_spawned_group_is_terminated_and_exited_processes_are_left_alone() -> None:
+    # The kwargs differ per platform, so a wrong one would silently spawn outside the group
+    # and leave workers running when a batch is cancelled.
+    expected = "creationflags" if sys.platform == "win32" else "start_new_session"
+    assert set(NEW_PROCESS_GROUP) == {expected}
+
+    process = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"], **NEW_PROCESS_GROUP
+    )
+    terminate_process_group(process)
+    assert process.wait(timeout=10) != 0
+    terminate_process_group(process)  # already exited: must be a no-op, not an error

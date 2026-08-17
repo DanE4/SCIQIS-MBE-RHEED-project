@@ -1,11 +1,11 @@
 """Bounded process execution and safe artifact handling for simulation workflows."""
 
 import argparse
-import fcntl
 import json
 import logging
 import os
 import shutil
+import signal
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
@@ -17,6 +17,45 @@ from typing import cast
 
 from mbe_rheed_sim.config import SimulationConfig
 from mbe_rheed_sim.kmc import SimulationResult, run
+
+if sys.platform == "win32":
+    import msvcrt
+
+    # msvcrt locks a byte range at the current file offset, so both calls seek to byte 0
+    # first; a lock taken at an append position would not exclude anyone.
+    def _lock_file(handle) -> None:
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+
+    def _unlock_file(handle) -> None:
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+
+    # Windows has no POSIX process group, and `start_new_session` is silently ignored
+    # there. A new console process group is the equivalent, and a break event is the one
+    # signal that reaches all of it, so workers still die with their supervisor.
+    NEW_PROCESS_GROUP = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+
+    def terminate_process_group(process: subprocess.Popen) -> None:
+        """Stop a supervisor and the workers it started; pair with `**NEW_PROCESS_GROUP`."""
+        if process.poll() is None:
+            os.kill(process.pid, signal.CTRL_BREAK_EVENT)
+else:
+    import fcntl
+
+    def _lock_file(handle) -> None:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+
+    def _unlock_file(handle) -> None:
+        fcntl.flock(handle, fcntl.LOCK_UN)
+
+    NEW_PROCESS_GROUP = {"start_new_session": True}
+
+    def terminate_process_group(process: subprocess.Popen) -> None:
+        """Stop a supervisor and the workers it started; pair with `**NEW_PROCESS_GROUP`."""
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGTERM)
+
 
 DEFAULT_WORKERS = min(10, max(1, (os.cpu_count() or 1) - 1))
 WORKER_ENVIRONMENT = (
@@ -59,6 +98,7 @@ def log_progress(label: str) -> Callable[[float], None]:
             log.info("%s %3.0f%%", label, fraction * 100)
 
     return report
+
 
 def resolve_workers(requested: int | None = None) -> int:
     """Resolve CLI, environment, then safe-default worker count."""
@@ -224,7 +264,7 @@ def promote_artifacts(source_root: Path, project_root: Path, lock_path: Path) ->
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     promoted = []
     with lock_path.open("a+") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+        _lock_file(lock)
         for source in files:
             relative = source.relative_to(source_root)
             destination = project_root / relative
@@ -232,6 +272,7 @@ def promote_artifacts(source_root: Path, project_root: Path, lock_path: Path) ->
             temporary = destination.with_name(f".{destination.name}.promoting")
             shutil.copy2(source, temporary)
             os.replace(temporary, destination)
-            promoted.append(str(relative))
-        fcntl.flock(lock, fcntl.LOCK_UN)
+            # as_posix keeps promoted paths identical across platforms, for artifact manifests.
+            promoted.append(relative.as_posix())
+        _unlock_file(lock)
     return promoted

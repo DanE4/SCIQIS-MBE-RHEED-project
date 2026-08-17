@@ -166,9 +166,9 @@ live or read the committed artifacts, which is why it opens instantly when prese
 
 ## Setup
 
-Requires [Git](https://git-scm.com/), [uv](https://docs.astral.sh/uv/getting-started/installation/),
-and optionally `make`. Python 3.12.0 is pinned in `.python-version`, dependencies in `uv.lock`;
-uv installs both.
+Requires [Git](https://git-scm.com/) and [uv](https://docs.astral.sh/uv/getting-started/installation/);
+`make` is optional. Python 3.12 is pinned in `.python-version`, dependencies in `uv.lock`; uv
+installs both, so nothing else has to be on the machine — no system Python, no compiler.
 
 ```bash
 git clone <repo>
@@ -176,10 +176,63 @@ cd SCIQIS-MBE-RHEED-project
 uv sync          # or: make setup, which refuses to change the lockfile
 ```
 
+### Getting uv (and make)
+
+**macOS** — Homebrew, or the standalone installer:
+
+```bash
+brew install uv          # curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+`make` comes with the Xcode command line tools (`xcode-select --install`).
+
+**Linux** — the standalone installer works on any distro:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+`make` is usually already there; otherwise `sudo apt install make` / `sudo dnf install make`.
+
+**Windows** — PowerShell, or winget:
+
+```powershell
+winget install --id=astral-sh.uv -e    # irm https://astral.sh/uv/install.ps1 | iex
+```
+
+There is no `make` on Windows by default and you do not need one. Every target in the
+[Commands](#commands) table below is a one-line `uv run` command, and the table shows it:
+`make figure3` is `uv run python scripts/run_workflow.py figure3`, `make notebook` is
+`uv run marimo edit notebooks/mbe_rheed.py --no-token --port 2718`, `make test` is
+`uv run pytest`. Two syntax differences in PowerShell:
+
+```powershell
+$env:MBE_KMC_BACKEND = "reference"; uv run pytest     # not MBE_KMC_BACKEND=... uv run
+uv run python scripts/run_workflow.py figure3 --workers 4   # not make figure3 WORKERS=4
+```
+
+If you would rather use the make targets, install [Git for Windows](https://gitforwindows.org/)
+and run the commands from Git Bash with `make` from [Chocolatey](https://chocolatey.org/)
+(`choco install make`), or work inside WSL and follow the Linux instructions.
+
+Poppler (`pdftocairo`) is only needed for `make digitize-figure3`, never for setup or
+reproduction: `brew install poppler`, `sudo apt install poppler-utils`, or
+`winget install oschwartz10612.Poppler`.
+
+### Checking it worked
+
+```bash
+uv run pytest                                      # make test
+uv run python scripts/run_workflow.py baseline     # make reproduce
+```
+
+The baseline is an 8x8, 1 ML run that verifies event counts and a final-height SHA-256, so it
+finishes in seconds and tells you the physics matches the committed reference on your machine.
+
 ## Notebook
 
 ```bash
-make notebook    # uv run marimo edit notebooks/mbe_rheed.py
+make notebook    # uv run marimo edit notebooks/mbe_rheed.py --no-token --port 2718
 ```
 
 Section **5** asks where results come from:
@@ -199,7 +252,9 @@ workflows** is for; it drives the same CLI as `make` and reloads promoted data i
 
 ## Commands
 
-Every workflow name is a make target and a `scripts/run_workflow.py` argument:
+Every workflow name is both a make target and a `scripts/run_workflow.py` argument, so
+`make <name>` is always `uv run python scripts/run_workflow.py <name>` — use whichever your shell
+has. The non-workflow targets are listed with their commands at the bottom of the table.
 
 | Command | What it does |
 |---|---|
@@ -210,9 +265,11 @@ Every workflow name is a make target and a `scripts/run_workflow.py` argument:
 | `make convergence`, `make figure3-convergence` | finite-size sensitivity; add `SIZES=8,16,32,64` for the ~2 min 64x64 point |
 | `make validate-acceleration`, `-science`, `-sweep` | accelerated vs. exact ensembles and model trends |
 | `make benchmark-sizes` | sequential 64/128/256 runtime envelope |
-| `make gallery` | rebuild the notebook demos |
-| `make readme-figures` | rerun `figure3` + `sweep` and refresh the images above |
-| `make test`, `make check`, `make export` | pytest; Ruff + strict marimo check + notebook run; HTML export |
+| `make gallery` | rebuild the notebook demos — `uv run python scripts/build_gallery.py` |
+| `make readme-figures` | rerun `figure3` + `sweep`, then copy the three PNGs from `outputs/figures/` into `assets/` |
+| `make test` | `uv run pytest` |
+| `make check` | `uv run ruff check .`, `uv run marimo check --strict notebooks/mbe_rheed.py`, `uv run python notebooks/mbe_rheed.py` |
+| `make export` | `uv run marimo export html notebooks/mbe_rheed.py -o outputs/mbe_rheed.html -f` |
 
 Output goes to `outputs/`, which is Git-ignored and can always be rebuilt. Committed notebook
 inputs live in `data/processed/`, figure-derived reference curves in `data/reference/`.
@@ -275,8 +332,11 @@ may not reassign a variable another cell defines (hence the `_`-prefixed locals)
 
 ## Troubleshooting
 
-- **`uv: command not found`**: install uv, rerun `uv sync`.
-- **Python 3.12.0 missing**: `uv python install`.
+- **`uv: command not found`**: install uv ([Setup](#getting-uv-and-make)) and open a new shell —
+  the installer adds `~/.local/bin` (or `%USERPROFILE%\.local\bin`) to PATH only for new sessions.
+- **`make: command not found`** / **`'make' is not recognized`**: you do not need make. Run the
+  `uv run` command from the [Commands](#commands) table instead.
+- **Python 3.12 missing**: `uv python install`.
 - **Lockfile mismatch**: `uv lock`, check the dependency change, commit `uv.lock`.
 - **Marimo token or port trouble**: close old tabs, then `make notebook MARIMO_PORT=2721`.
 - **Import errors**: run commands from the repository root after `uv sync`.

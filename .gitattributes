@@ -1,0 +1,5 @@
+# Provenance digests hash the bytes of committed sources and reference JSON, so the checkout
+# has to be byte-identical on every platform, not CRLF-translated on Windows.
+* text=auto eol=lf
+*.png binary
+*.pdf binary

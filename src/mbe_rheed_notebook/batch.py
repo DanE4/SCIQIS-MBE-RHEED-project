@@ -5,14 +5,14 @@ to re-poll). Process control and manifest reading live here so they stay testabl
 """
 
 import json
-import os
-import signal
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 import marimo as mo
+
+from mbe_rheed_sim.workflows import NEW_PROCESS_GROUP, terminate_process_group
 
 ROOT = Path(__file__).resolve().parents[2]
 EXPENSIVE_WORKFLOWS = frozenset({"benchmark-sizes"})
@@ -88,7 +88,7 @@ def launch(request: dict) -> dict:
         cwd=ROOT,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-        start_new_session=True,
+        **NEW_PROCESS_GROUP,
     )
     return {
         "process": process,
@@ -101,8 +101,8 @@ def launch(request: dict) -> dict:
 
 def cancel(state: dict | None) -> None:
     """Terminate the whole process group so worker processes die with the supervisor."""
-    if state is not None and state["process"].poll() is None:
-        os.killpg(state["process"].pid, signal.SIGTERM)
+    if state is not None:
+        terminate_process_group(state["process"])
 
 
 def read_status(state: dict | None) -> tuple[dict, float, bool]:
