@@ -3,7 +3,7 @@ WORKFLOWS := baseline figure3 sweep convergence figure3-convergence \
 	validate-acceleration validate-science validate-sweep benchmark-sizes
 
 .PHONY: setup notebook test check export figure3-parameters digitize-figure3 \
-	reproduce reproduce-figure3 convergence-figure3 gallery $(WORKFLOWS)
+	reproduce reproduce-figure3 convergence-figure3 gallery readme-figures $(WORKFLOWS)
 
 NOTEBOOK := notebooks/mbe_rheed.py
 MARIMO_PORT ?= 2718
@@ -42,6 +42,10 @@ figure3-parameters:
 
 digitize-figure3:
 	uv run python scripts/extract_figure3_reference.py
+
+readme-figures: figure3 sweep
+	cp outputs/figures/figure3_comparison.png outputs/figures/figure4_inspired_morphology.png \
+		outputs/figures/parameter_sweep.png assets/
 
 export:
 	mkdir -p outputs

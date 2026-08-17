@@ -47,7 +47,7 @@ def plot_comparison(traces: list[dict[str, object]], figure_dir: Path) -> None:
         axes[row, 1].set_ylim(0, 1)
         axes[row, 1].set_ylabel(r"raw $1-S_d$")
     axes[0, 0].set_title("Figure-derived experimental RHEED\n(panel-coordinate normalized)")
-    axes[0, 1].set_title("This model: morphology-derived proxy\n(7x7, 3-seed smoke ensemble)")
+    axes[0, 1].set_title("This model: morphology-derived proxy\n(7x7, 3-seed ensemble)")
     axes[0, 1].legend(loc="lower right")
     for axis in axes[-1]:
         axis.set_xlabel("time (s)")

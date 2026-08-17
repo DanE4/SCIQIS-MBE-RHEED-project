@@ -1,6 +1,6 @@
 """Prove the incremental catalogue reproduces the full-rebuild exact KMC at hop limit 1.
 
-Before D-016, `run()` rebuilt the entire rate catalogue on every event whenever
+`run()` used to rebuild the entire rate catalogue on every event whenever
 `max_isolated_hop_distance == 1`. That branch no longer exists in production. `_reference_run`
 below *is* that deleted loop, kept here as an independent oracle.
 
@@ -466,7 +466,7 @@ def test_large_lattices_reassociate_the_total_rate_without_changing_the_event_se
       * the tree, being a balanced summation, is the more accurate of the two.
 
     No committed workflow runs hop limit 1 at this size, so no stored artifact depends on the
-    old rounding. See docs/DECISIONS.md D-018.
+    old rounding, so the tree total is the one asserted here.
     """
     config = SimulationConfig(
         lattice_size=128, target_coverage_ml=1.0, max_isolated_hop_distance=1

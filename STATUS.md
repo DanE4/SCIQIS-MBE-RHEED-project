@@ -9,27 +9,27 @@ experiment.
 
 ## Current state
 
-- **Active stage:** Stage 5 smoke-scale publication workflow plus unresolved finite-size
+- **Active stage:** Stage 5 reduced-scale publication workflow plus unresolved finite-size
   convergence before final delivery.
 - **Estimated completion:** roughly 90% of the intended final project.
 - **Working baseline:** deterministic deposition/diffusion/desorption KMC and Marimo notebook.
 - **Main scientific gap:** finite-size convergence. Figure 3-like periodicity is reproduced at
-  smoke scale, but proxy amplitude remains strongly lattice-size dependent and is not converged
+  reduced scale, but proxy amplitude remains strongly lattice-size dependent and is not converged
   through 64x64. This prevents publication-quality amplitude claims.
 - **Interpretation:** the imperfect/noisy morphology and RHEED proxy are expected at this
   stage. Current evidence does not isolate one obvious implementation bug. The remaining work
-  is predominantly scale, convergence, oscillation analysis, quantitative comparison, and
-  communication—not a missing fundamental KMC framework.
+  is predominantly scale, convergence, oscillation analysis, quantitative comparison and
+  communication. The KMC framework itself is in place.
 - **Presentation state:** the teaching flow, explicit experiment-mode selector, controls,
   playback, annotated synchronized layer-cycle view, hex-coordinate lattice view, separate-scale
   Figure 3 comparison, quantitative diagnostic table, and Figure 4-inspired morphology sequence
   work. The primary experiment form now exposes labelled lattice choices from 7x7 through
   256x256 and every `SimulationConfig` field relevant to manual generic or paper-derived runs,
   with expensive-run confirmation. The notebook is now ordered as the argument runs rather than
-  as the code was built (D-019): question, model, experiment, proxy, paper reproduction,
+  as the code was built: question, model, experiment, proxy, paper reproduction,
   exploration, limits, conclusions, with reproducibility and batch machinery last; the parameter
   form folds its energetics and numerics behind **Advanced parameters**, and the conclusions and
-  the Figure 3 headline are computed from the artifact. Replacing smoke-scale results with a
+  the Figure 3 headline are computed from the artifact. Replacing reduced-scale results with a
   converged ensemble remains.
 - **Current computational limit:** single-trajectory cost is no longer the binding constraint.
   Batched neighbourhood gathers, skipping empty sites in the local refresh, sampling from the
@@ -39,7 +39,7 @@ experiment.
   1.73 s. Every one of those runs is bit-identical to the trajectory it replaced. The
   three-seed Figure 3 convergence study now reaches 128x128 in 12 s of wall time, so finite-size
   convergence is a science question about how many seeds and sizes to average, not a runtime
-  question. Bounded process workers add about 5.6x on top with eight workers on the M4 Pro.
+  question. Bounded process workers add about 5.6x on top at eight workers.
   What now dominates is Python-level per-event overhead: the event loop, RNG draws and the
   per-call boundary into the kernels, at roughly 6.5 microseconds per event.
 - **Size policy:** 16x16 is for responsive teaching, 64x64 is the current publication candidate,
@@ -57,7 +57,7 @@ and automated test, check, export, and reproduction commands.
 
 ## Why the current result does not yet look like the paper
 
-1. **Finite-size/statistical effects:** smoke lattices exaggerate fluctuations, and the measured
+1. **Finite-size/statistical effects:** small lattices exaggerate fluctuations, and the measured
    proxy signal changes strongly through 64x64. Three seeds are enough to expose
    sensitivity, not to establish publication convergence.
 2. **Demonstration parameters:** the generic interactive model uses fast effective values and
@@ -100,7 +100,7 @@ Do not begin Stage 7 while these items remain unresolved:
 
 1. Reduce the remaining local-rate refresh cost before attempting a 128x128, 4 s ensemble.
 2. Finalize ensemble/statistical reporting at the accepted lattice size.
-3. Replace the Stage 5 smoke traces without changing its comparison/provenance protocol.
+3. Replace the Stage 5 reduced-scale traces without changing its comparison/provenance protocol.
 4. Only then reconsider Three.js.
 5. Only after homoepitaxial validation consider strain-driven GaN/AlN physics.
 
@@ -232,7 +232,7 @@ without local paths or undocumented dependencies. **Met.**
 **Exit criteria:** focused invariants, seeded reproducibility, strict notebook checking, export,
 and the canonical baseline all pass. **Met.**
 
-### Stage 2 - Figure 3 homoepitaxial reproduction (complete at smoke scale)
+### Stage 2 - Figure 3 homoepitaxial reproduction (complete at reduced scale)
 
 Goal: establish `KMC growth -> step density -> 1-S_d -> Figure 3 comparison` without the
 GaN/AlN strain model. Figure 3 is the main target because the homoepitaxial calculation omits
@@ -241,7 +241,7 @@ GaN/AlN strain model. Figure 3 is the main target because the homoepitaxial calc
 #### 2A - Paper data and provenance
 
 - [x] Record Figure 3 temperature, fluxes, Ga/N ratios, time axis, normalization limits, and
-  initial conditions in `docs/PAPER_NOTES.md`.
+  initial conditions alongside the digitized reference in `data/reference/`.
 - [x] Determine which experimental curves can be digitized or compared qualitatively under
   copyright and available-data constraints.
 - [x] Record every fitted parameter equation, unit, validity range, and paper source.
@@ -274,11 +274,11 @@ GaN/AlN strain model. Figure 3 is the main target because the homoepitaxial calc
   completion.
 - [x] Compare phase, damping, and relative oscillation amplitude qualitatively with Figure 3:
   periodicity is reproduced; damping and amplitude remain finite-size/normalization limited.
-- [x] Classify the result as a qualitative smoke reproduction, not quantitative agreement.
+- [x] Classify the result as a qualitative reduced-scale reproduction, not quantitative agreement.
 
 **Exit criteria:** at least one documented homoepitaxial configuration shows defensible
 layer-by-layer oscillations, and the comparison can be rerun from one command. **Met at 7x7
-smoke scale; publication convergence remains Stage 3 work.**
+reduced scale; publication convergence remains Stage 3 work.**
 
 ### Stage 3 - Ensembles and parameter studies
 
@@ -296,7 +296,7 @@ smoke scale; publication convergence remains Stage 3 work.**
 - [x] Add reusable interpolation of seeded RHEED-proxy ensembles.
 - [x] Run three independent seeds per point in the 16x16 sweep.
 - [x] Plot mean +/- standard deviation for the initial sweep and lattice-size morphology metric.
-- [x] Plot three-seed mean +/- standard deviation traces for the Figure 3 smoke ensemble.
+- [x] Plot three-seed mean +/- standard deviation traces for the Figure 3 reduced-size ensemble.
 - [x] Run an initial 8x8/16x16/24x24 lattice-size and three-seed sensitivity check.
 - [x] Run the default three-seed, 4 s paper-derived size check through 32x32.
 - [x] Run the opt-in three-seed, 4 s paper-derived 64x64 check; 32x32 -> 64x64 does not pass.
@@ -354,7 +354,7 @@ Matplotlib for static publication outputs. Do not begin Three.js work in this st
 - [x] **07 Experiment.** Present temperature, flux, barriers, size, and seed as a designed
   control panel rather than a raw dictionary.
 - [x] **08 Parameter sweep.** Show the Stage 3 regime map and selected run.
-- [x] **09 Paper reproduction smoke view.** Present the committed Figure 3 simulation ensemble.
+- [x] **09 Paper reproduction view.** Present the committed Figure 3 simulation ensemble.
 - [x] Upgrade Section 09 to the quantitative paper-comparison requirements in Stage 5.
 - [x] **10 Batch workflows.** Expose every simulation workflow with guarded execution,
   progress, cancellation, and artifact reload.
@@ -405,7 +405,7 @@ Matplotlib for static publication outputs. Do not begin Three.js work in this st
 - [x] Store every run under `outputs/batches/` with source revision, configuration, seed/size
   overrides, effective workers, elapsed time, JSON-line progress, and final state.
 - [x] Promote canonical artifacts under a lock only after complete success; failed and
-  interrupted smoke tests leave canonical artifacts unchanged.
+  interrupted trial runs leave canonical artifacts unchanged.
 - [x] Add notebook workflow, worker, seed, and size controls; gate the 64x64 convergence and
   128/256 benchmark, run asynchronously, show progress, support cancellation, and reload
   promoted publication/sweep data.
@@ -437,7 +437,7 @@ not a sequence of unrelated controls and plots.
 - [x] Regenerate all main figures through the documented `make figure3` command.
 
 **Exit criteria:** every final figure is traceable to a configuration, seed set, code version,
-and generated data artifact. **Met for the smoke-scale publication artifacts; Stage 5 remains
+and generated data artifact. **Met for the reduced-scale publication artifacts; Stage 5 remains
 open only because the full-window accepted-size ensemble is not computationally established.**
 
 ### Stage 6 - Optional Three.js/AnyWidget `GrowthViewer`
@@ -473,7 +473,7 @@ logic into JavaScript or breaking notebook portability.
   scope unless separately justified.
 
 **Exit criteria:** any claimed Stranski-Krastanov behavior depends on an implemented, documented,
-and tested strain model—not merely on mound formation in the generic KMC.
+and tested strain model, and never on mound formation in the generic KMC alone.
 
 This stage is specifically for GaN/AlN heteroepitaxy, Stranski-Krastanov growth, the 2D-to-3D
 transition, quantum-dot formation, and critical thickness near the reported 2.25 ML regime.
@@ -499,7 +499,7 @@ the interactive notebook using only the documented commands.
 - [x] `make check` - Ruff, strict Marimo check, and notebook execution pass
 - [x] `make reproduce` - deterministic fingerprint matches
 - [x] `make export` - HTML export succeeds
-- [x] Validate Figure 3-like oscillatory behavior at smoke scale
+- [x] Validate Figure 3-like oscillatory behavior at reduced scale
 - [x] Validate corrected-model smoothing and step-barrier mounding trends
 - [x] Run an initial generic-regime lattice-size sensitivity check
 - [x] Re-inspect desktop and narrow layouts after the visual redesign
@@ -518,7 +518,7 @@ the interactive notebook using only the documented commands.
 - [x] Parallel acceptance - publication: 52.4 s with one worker versus 15.9 s with four
   (3.30x); Figure 3 convergence through 64x64: 159.1 s with one worker versus 51.9 s with
   three effective workers (3.07x); scientific arrays, event counts, metrics, and hashes match.
-- [x] Artifact-safety acceptance - failed and interrupted smoke workflows remain in batch
+- [x] Artifact-safety acceptance - failed and interrupted trial workflows remain in batch
   history and do not promote partial canonical artifacts.
 - [x] Browser-check synchronized frame scrubbing plus responsive desktop/narrow rendering
   with zero console errors
@@ -540,7 +540,7 @@ repeatability, not scientific agreement.
 - Figure 3 homoepitaxial GaN is the near-term target because it does not require `E_str`.
 - A fixed seed gives repeatability; uncertainty claims require seed ensembles.
 - The generic reproducible baseline is too rough and does not show the target oscillation.
-- The 7x7 Figure 3 amplitude is a finite-size smoke result, not a publication observable.
+- The 7x7 Figure 3 amplitude is a finite-size result, not a publication observable.
 - The red Stage 5 reference is a CC BY figure-derived panel coordinate, not raw experimental
   detector data; its source, extraction, axis mapping, and limitations are recorded.
 
@@ -590,7 +590,7 @@ make export
 2026-08-16 - The notebook now opens on a three-image physical introduction (MBE chamber, growth
 modes, RHEED surface sensitivity) before section 1, replacing the mermaid growth flowchart and
 the duplicated grazing-incidence prose in section 3. Images are reused Wikimedia schematics,
-credited in captions and `docs/REFERENCES.md` (D-020).
+credited in the captions.
 
 2026-08-15 - Section 5 can now save the active result to `outputs/saved/` and reload one
 through a third **Saved run** source, reusing `SimulationResult.save_npz`/`load_npz`.

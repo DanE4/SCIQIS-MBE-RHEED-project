@@ -14,7 +14,7 @@ HEX_SYMBOL = "hexagon"
 PROXY_COLOR = "#d62728"
 SIMULATION_COLOR = "#1f77b4"
 BEAM_COLOR = "#ff7f0e"
-# Typical RHEED incidence is 1-3 degrees (docs/REFERENCES.md 3-7). This is a visualization
+# Typical RHEED incidence is 1-3 degrees. This is a visualization
 # assumption for drawing the geometry, not a value taken from the primary paper, which reports
 # no beam angle. Nothing downstream of this figure consumes it.
 GRAZING_ANGLE_DEG = 2.0

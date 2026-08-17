@@ -9,7 +9,7 @@ def test_publication_inputs_are_traceable_and_distinguish_signals() -> None:
     reference = json.loads(
         (ROOT / "data/reference/figure3_experimental_digitized.json").read_text()
     )
-    artifact = json.loads((ROOT / "data/processed/figure3_simulated_smoke.json").read_text())
+    artifact = json.loads((ROOT / "data/processed/figure3_simulated_reduced.json").read_text())
 
     assert reference["classification"] == "digitized visual reference; not raw experimental data"
     assert [trace["nominal_ga_n_ratio"] for trace in reference["traces"]] == [0.89, 0.82, 0.68]

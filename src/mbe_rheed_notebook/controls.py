@@ -45,7 +45,7 @@ DEFAULT_PARAMETERS = {
 }
 
 # (row label, form key, what the quantity does). The help text becomes a hover tooltip on the
-# row label; every statement here must match the rate expressions in docs/SCIENCE_MODEL.md.
+# row label; every statement here must match the rate expressions in mbe_rheed_sim.rates.
 # Sections listed in `_ADVANCED_SECTIONS` are folded away behind a <details> so the everyday
 # form stays six rows tall.
 _FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
@@ -220,7 +220,7 @@ def _label(options: dict, value) -> str:
 
 
 LATTICE_SIZES = {
-    "7 x 7 — paper smoke": 7,
+    "7 x 7 — paper reduced": 7,
     "8 x 8 — baseline": 8,
     "12 x 12 — tiny": 12,
     "16 x 16 — fast interactive": 16,

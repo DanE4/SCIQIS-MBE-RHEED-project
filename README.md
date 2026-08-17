@@ -7,6 +7,163 @@ lattice, with a step-density RHEED proxy plotted alongside the surface morpholog
 The RHEED signal here is a step-density proxy, not a diffraction calculation. Scope and known
 limitations: [`STATUS.md`](STATUS.md). Source paper: `nanomaterials-12-03052.pdf` (CC BY).
 
+## Results so far
+
+Work in progress. The figures below are the current state, at reduced lattice sizes; the open
+items are listed in [`STATUS.md`](STATUS.md).
+
+Oscillations against the paper's Figure 3, for three Ga/N ratios. Left is digitized from the
+published figure, right is a three-seed ensemble of this model. Periods line up; the proxy
+amplitude is smaller and still lattice-size dependent (`make figure3`).
+
+![RHEED oscillations for three Ga/N ratios, experiment beside model](assets/figure3_comparison.png)
+
+The surface behind those oscillations, 0 to 2 ML of homoepitaxial growth. Each layer fills before
+the next nucleates, which is what makes the proxy oscillate (`make figure3`).
+
+![Surface height maps from 0 to 2 ML](assets/figure4_inspired_morphology.png)
+
+Proxy amplitude against temperature and flux, three seeds per point. Higher flux raises it at
+every temperature; the temperature trend is weaker and not monotonic at the lowest flux
+(`make sweep`).
+
+![Temperature/flux heatmap of proxy amplitude](assets/parameter_sweep.png)
+
+The notebook adds the interactive versions: a rotatable surface, playback over the recorded
+frames, and a frame slider tied to the RHEED trace. `make export` writes the whole thing to
+`outputs/mbe_rheed.html`.
+
+## How it works
+
+### Why kinetic Monte Carlo
+
+RHEED oscillations are a kinetic effect, not an equilibrium one: the same temperature and flux
+give layers or mounds depending on whether atoms find a step edge before the next layer starts
+landing on them. So the method has to follow individual events in real time. Molecular dynamics
+would resolve lattice vibrations at femtoseconds, while a diffusion hop happens on microseconds
+and growing one monolayer takes seconds, which is far too many timesteps to reach. Rate equations
+integrate faster but average the surface away, and the surface is exactly what the RHEED signal
+responds to.
+
+KMC sits between the two: it keeps individual events but skips the waiting between them, jumping
+straight from one event to the next with the correct exponential waiting time. The paper this
+project follows (Budagosky and Garcia-Cristobal, 2022) uses KMC for the same reason.
+
+### The surface
+
+The lattice is solid-on-solid: one integer column height per site, so there are no overhangs and
+no buried vacancies. Sites sit on a hexagonal lattice with six neighbours, stored in axial
+coordinates on a periodic square array ([`lattice.py`](src/mbe_rheed_sim/lattice.py)).
+
+Three things can happen to that surface:
+
+- **Deposition:** an atom lands on a uniformly random site, at total rate `F * N` for flux `F`
+  (ML/s) and `N` sites. It does not depend on the surface.
+- **Diffusion:** a top atom hops to one of its six neighbours, allowed only when the two columns
+  end up within one height of each other. That constraint is what keeps the surface single-valued.
+- **Desorption:** a top atom leaves the surface.
+
+Diffusion and desorption are thermally activated, so each site gets an Arrhenius rate
+`v * exp(-E / kT)` with the barrier built up from the local environment
+([`kmc.py`](src/mbe_rheed_sim/kmc.py)):
+
+| Event | Barrier |
+|---|---|
+| Diffusion | `E_diff + n_bonds * E_bond`, plus `E_step` when the hop goes down a step edge |
+| Desorption | `E_des + n_bonds * E_bond` |
+
+`n_bonds` is the number of same-height neighbours. An atom with many neighbours is harder to move
+or remove, which is what makes islands stable and edges grow. `E_step` is the extra cost of
+hopping down an edge (the Ehrlich-Schwoebel barrier); raising it traps atoms on top of islands and
+produces mounds instead of flat layers.
+
+### One KMC step
+
+Time is continuous, from the residence-time algorithm: sum all rates, draw the waiting time from
+that sum, then pick one event with probability proportional to its own rate.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as Notebook or CLI
+    participant K as KMC loop
+    participant C as Rate catalogue
+    participant L as Height field
+    participant O as Observables
+
+    U->>K: config: T, flux, barriers, size, seed, stopping criterion
+    K->>L: start from an empty surface
+    K->>C: build a rate for every possible event
+
+    loop until target coverage or physical time
+        C-->>K: total rate R
+        K->>K: waiting time -ln(u) / R, advance the clock
+        K->>C: draw one event with probability r / R
+        C-->>K: deposition, or a hop, or a desorption
+        K->>L: apply it: one or two columns change height
+        K->>C: refresh rates around the changed columns only
+        opt every sampling interval
+            L-->>O: current height field
+            O-->>K: coverage, roughness, island density, 1 - S_d
+        end
+    end
+
+    K-->>U: heights, traces and snapshots
+```
+
+Two choices keep this fast enough to stay interactive, and both matter because the paper works at
+256x256 while an honest comparison needs many seeds:
+
+- **Rates in a Fenwick tree.** Picking an event by cumulative rate is a tree descent rather than a
+  scan over every site, so selection costs `log N` instead of `N`.
+- **Local refresh.** An event changes at most two columns, so only their neighbourhoods get
+  recomputed instead of the whole lattice. The inner loop of that bookkeeping is compiled with
+  Numba ([`fastpath.py`](src/mbe_rheed_sim/fastpath.py)), which is what `MBE_KMC_BACKEND` selects
+  between.
+
+There is also an optional approximation: an isolated atom on open terrace may cross several sites
+in one selected event (`max_isolated_hop_distance`). It is off by default, and
+`make validate-acceleration` measures what it costs against exact nearest-neighbour runs.
+
+One trajectory is inherently sequential, since each event changes the surface the next event is
+drawn from. Only independent runs parallelise, which is why the batch workflows exist.
+
+### The RHEED proxy
+
+`S_d` is the fraction of neighbour bonds whose two sites have different heights, so it measures
+how much step edge the surface has ([`observables.py`](src/mbe_rheed_sim/observables.py)). The
+plotted signal is `1 - S_d`: high on a completed, flat layer, low when a layer is half filled and
+covered in island edges. One oscillation per monolayer follows from that, which is the same
+argument used for real specular RHEED intensity. It stays a morphology measure though: no
+electron scattering is computed anywhere in this project.
+
+The paper's Figure 3 puts its own simulated signal next to measured GaN oscillations (originally
+from Adelmann et al., 2002), which is the panel this project digitizes and compares against. What
+can be checked that way is period, phase and damping; absolute amplitude cannot, since the two
+signals are different quantities.
+
+### How the pieces connect
+
+```mermaid
+flowchart LR
+    C["SimulationConfig"] --> K["kmc.run"]
+    P["paper.py<br>Figure 3 parameters"] --> C
+    K --> R["SimulationResult<br>heights, traces, snapshots"]
+    R --> A["analysis.py<br>period, damping, amplitude"]
+    R --> W["workflows.py<br>runs seeds and parameter points in worker processes"]
+    A --> S
+    W --> S["scripts + Makefile"]
+    S --> O["outputs/<br>figures, JSON, NPZ"]
+    S --> D["data/processed<br>committed notebook inputs"]
+    D --> N["notebook"]
+    G["data/gallery<br>stored demo runs"] --> N
+    K --> N
+```
+
+`src/mbe_rheed_sim/` holds the physics and knows nothing about marimo or plotting;
+`src/mbe_rheed_notebook/` holds the widgets and figures. The notebook can either run the model
+live or read the committed artifacts, which is why it opens instantly when presenting.
+
 ## Setup
 
 Requires [Git](https://git-scm.com/), [uv](https://docs.astral.sh/uv/getting-started/installation/),
@@ -54,6 +211,7 @@ Every workflow name is a make target and a `scripts/run_workflow.py` argument:
 | `make validate-acceleration`, `-science`, `-sweep` | accelerated vs. exact ensembles and model trends |
 | `make benchmark-sizes` | sequential 64/128/256 runtime envelope |
 | `make gallery` | rebuild the notebook demos |
+| `make readme-figures` | rerun `figure3` + `sweep` and refresh the images above |
 | `make test`, `make check`, `make export` | pytest; Ruff + strict marimo check + notebook run; HTML export |
 
 Output goes to `outputs/`, which is Git-ignored and can always be rebuilt. Committed notebook
@@ -82,7 +240,7 @@ timing one short run measures cache loading, not throughput.
 `--workers`, then `MBE_WORKERS`, then `min(10, os.cpu_count() - 1)`. Convergence sizes run one
 after another while the seeds within a size run concurrently, to keep memory down. Baseline
 reproduction and the timing benchmark stay sequential, since running them in parallel would
-defeat the point. On the M4 Pro I develop on, throughput saturates around 8 workers.
+defeat the point.
 
 ```bash
 make figure3 WORKERS=4

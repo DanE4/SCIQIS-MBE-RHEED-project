@@ -202,7 +202,7 @@ def main(
         "lattice_size": lattice_size,
         "seeds": seeds,
         "effective_workers": min(workers, len(configurations)),
-        "classification": "qualitative finite-size smoke comparison; amplitude not converged",
+        "classification": "qualitative finite-size comparison; amplitude not converged",
     }
     artifact = {
         "description": "Figure 3 Ga/N comparison and Figure 4-inspired morphology sequence",
@@ -225,7 +225,7 @@ def main(
     }
     (run_dir / "figure3_comparison.json").write_text(json.dumps(artifact, indent=2) + "\n")
     (run_dir / "figure3_run_summaries.json").write_text(json.dumps(summaries, indent=2) + "\n")
-    (processed_dir / "figure3_simulated_smoke.json").write_text(
+    (processed_dir / "figure3_simulated_reduced.json").write_text(
         json.dumps(artifact, separators=(",", ":")) + "\n"
     )
     with (run_dir / "figure3_metric_comparison.csv").open("w", newline="") as output:
