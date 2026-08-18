@@ -504,8 +504,14 @@ def _(
         azimuth_deg=float(sample_azimuth.value),
     )
     if display_mode.value == "RHEED beam geometry":
+        # The same pattern the 2D screen below draws, so the two cannot disagree.
         surface_figure = figures.rheed_geometry(
-            _heights, _coverage, _zmax, grazing_angle_deg=beam_condition.value
+            _heights,
+            _coverage,
+            _zmax,
+            grazing_angle_deg=beam_condition.value,
+            azimuth_deg=float(sample_azimuth.value),
+            pattern=screen_pattern,
         )
     else:
         surface_figure = {
@@ -538,8 +544,14 @@ def _(
                 "topology is shown without implying a square metric. **Step edges** colours "
                 "each site by how many of its six neighbours sit at a different height, "
                 "which is the quantity $S_d$ averages. **RHEED beam geometry** places the "
-                "grazing ray and the detector plane on the same surface at the beam "
-                "condition selected above; what lands on that plane is the screen below. "
+                "grazing ray, the surface normal and the detector plane on the same surface "
+                "at the beam condition selected above, and paints the computed screen onto "
+                "that plane: its centre pixel is exactly where the specular ray lands, so it "
+                "is the same data as the 2D screen below. Changing the azimuth rotates the "
+                "**sample** in the lab frame while the beam and the plane stay put, so the "
+                "morphology is unchanged and the reachable rods move — the specular direction "
+                "itself does not, because turning a sample about its own normal cannot move "
+                "its mirror direction. Only the grazing angle moves that. "
                 "On the RHEED trace, "
                 "the **green diamond** is the initially flat maximum and the **purple x** "
                 "is the most stepped stored frame through the first monolayer."

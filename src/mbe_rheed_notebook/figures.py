@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 from matplotlib.figure import Figure
 from plotly.subplots import make_subplots
 
+from mbe_rheed_sim import rheed
 from mbe_rheed_sim.lattice import HEX_DIRECTIONS
 from mbe_rheed_sim.observables import step_density
 from mbe_rheed_sim.rheed import SCREEN_LOG_DECADES, ScreenPattern, screen_decades
@@ -25,7 +26,10 @@ SPECULAR_COLOR = "#0ea5e9"
 GRAZING_ANGLE_DEG = 2.0
 # Mandated wording for any beam/detector overlay (STATUS.md Stage 6J). Kept as a constant so the
 # figure and its test cannot drift apart from the requirement.
-BEAM_GEOMETRY_LABEL = "explanatory geometry only — diffraction is not simulated"
+# The geometry view paints the computed screen, so its label must not claim nothing was
+# calculated (the retired BEAM_GEOMETRY_LABEL said exactly that). What it must still say is that
+# the rays and the plane are drawn for explanation, at a disclosed distortion.
+GEOMETRY_LABEL = "geometry view only — rays and plane are explanatory, the painted screen is the computed one"
 # Shown wherever a computed pattern is displayed, so a kinematic image is never mistaken for
 # the dynamical scattering a real RHEED screen records.
 DIFFRACTION_LABEL = "kinematic single scattering only — not dynamical RHEED"
@@ -263,122 +267,226 @@ def rheed_geometry(
     zmax: int,
     *,
     grazing_angle_deg: float = GRAZING_ANGLE_DEG,
+    azimuth_deg: float = 0.0,
+    pattern: ScreenPattern | None = None,
 ) -> go.Figure:
-    """The simulated surface with the RHEED beam and screen placed on it.
+    """The surface, the beam, the detector plane, and the computed screen painted on it.
 
-    Geometry only: where the beam comes in, and where the specular ray leaves. What lands on
-    this screen is computed by `detector_screen` and drawn on its own angular axes underneath.
-    It is deliberately not painted onto this screen: the specular spot sits about a degree
-    above the shadow edge, so any pattern large enough to read at this scale would require the
-    drawn beam angle to be a lie, and these rays carry the true angle in data coordinates.
+    Geometry, not a diffraction calculation: nothing here is a rod this figure invented. The
+    only intensities drawn are `pattern`'s own, the same `ScreenPattern` the 2D detector figure
+    shows, mapped onto the plane through `rheed.detector_offsets` so its `(00)` pixel lands
+    exactly where the specular ray does.
 
-    The z axis is stretched exactly as in `height_surface` so a few monolayers stay visible
-    against a lattice hundreds of sites wide. The rendered beam therefore looks far steeper
-    than it is; the returned title states both the true angle and the stretch factor.
+    Lab frame and what the azimuth does: see `mbe_rheed_sim.rheed.BeamGeometry`. The beam and
+    the plane are fixed; the azimuth turns the **sample**, so the surface rotates under a
+    stationary beam and the reachable rods change while the specular ray does not move.
+
+    Two disclosed distortions, both stated in the returned title. The z axis is stretched as in
+    `height_surface`, so the drawn beam looks far steeper than `grazing_angle_deg`. The painted
+    screen keeps its true angular size vertically and its true aspect ratio, which means its
+    horizontal extent in lattice units carries that same stretch factor -- otherwise the axis
+    scaling alone would smear a square screen into a band.
     """
     if heights.ndim != 2 or min(heights.shape) < 2 or not 0 < grazing_angle_deg < 45:
         raise ValueError("beam geometry needs a 2D lattice and a grazing angle in (0, 45)")
+    geometry = rheed.beam_geometry(
+        grazing_angle_deg=grazing_angle_deg, azimuth_deg=azimuth_deg
+    )
     rows, columns = heights.shape
+
+    # Physical surface positions, not array indices: the diffraction code places the scatterer
+    # of column (r, c) at a(c + r/2, sqrt(3)/2 r), so the geometry view uses the same lattice.
+    row_index, column_index = np.indices(heights.shape)
+    surface_x = column_index + 0.5 * row_index
+    surface_y = np.sqrt(3.0) / 2.0 * row_index
+    centre_x, centre_y = 0.5 * surface_x.max(), 0.5 * surface_y.max()
+    # Rotate the sample about its own normal, through the centre. The morphology is untouched:
+    # only where each column sits in the lab frame changes.
+    offset = np.stack(((surface_x - centre_x).ravel(), (surface_y - centre_y).ravel()))
+    # Bounding radius of the unrotated sample, so it is rotation invariant. Every fixed part of
+    # the scene is sized from this: the beam, the plane and the axes must not move when only the
+    # sample turns, or the azimuth would appear to change the instrument.
+    radius = float(np.hypot(*offset).max())
+    rotated = geometry.sample_rotation @ offset
+    surface_x = rotated[0].reshape(heights.shape) + centre_x
+    surface_y = rotated[1].reshape(heights.shape) + centre_y
+
     slope = np.tan(np.radians(grazing_angle_deg)) * ML_PER_SITE_SPACING
-    # Impact at the lattice centre, on the real local height so the ray meets the drawn surface.
-    impact_x, impact_y = 0.5 * (columns - 1), 0.5 * (rows - 1)
     impact_z = float(heights[rows // 2, columns // 2])
-    # Half a lattice width of run-up each side: enough for the grazing rise to read, while
-    # keeping the drawn box near 2:1 so the wide scene still fits the default camera framing.
-    standoff = 0.5 * columns
-    entry_x, screen_x = -standoff, (columns - 1) + standoff
-    entry_z = impact_z + (impact_x - entry_x) * slope
-    spot_z = impact_z + (screen_x - impact_x) * slope
+    # One sample radius of run-up each side, so the grazing rise reads without the scene
+    # becoming mostly empty space.
+    standoff = radius
+    entry_x = centre_x - standoff
+    screen_x = centre_x + standoff
+    entry_z = impact_z + standoff * slope
+    spot_z = impact_z + standoff * slope
 
     figure = go.Figure(
         go.Surface(
+            x=surface_x,
+            y=surface_y,
             z=heights,
             colorscale="Viridis",
             cmin=0,
             cmax=zmax,
-            colorbar={"title": "height (ML)", "len": 0.7},
-            hovertemplate="x=%{x}<br>y=%{y}<br>height=%{z} ML<extra></extra>",
+            colorbar={"title": "height (ML)", "len": 0.55, "x": 1.02},
+            hovertemplate="lab x=%{x:.1f}<br>lab y=%{y:.1f}<br>height=%{z} ML<extra></extra>",
             name="surface",
         )
     )
-    for label, xs, zs in (
-        ("incident beam", (entry_x, impact_x), (entry_z, impact_z)),
-        ("specular direction", (impact_x, screen_x), (impact_z, spot_z)),
+
+    z_top = max(float(zmax), entry_z, spot_z) * 1.45
+    y_low, y_high = centre_y - radius, centre_y + radius
+    screen_half_width = radius
+    x_span = screen_x - entry_x
+    y_span = y_high - y_low
+    x_aspect, y_aspect, z_aspect = x_span / max(y_span, 1.0), 1.0, 0.55
+    # Drawn length per data unit on each axis. The screen patch needs these to stay square.
+    per_y = y_aspect / y_span
+    per_z = z_aspect / z_top
+    stretch = per_z / per_y
+
+    for label, xs, zs, colour in (
+        ("incident beam k_i", (entry_x, centre_x), (entry_z, impact_z), BEAM_COLOR),
+        ("specular k_f (00)", (centre_x, screen_x), (impact_z, spot_z), SPECULAR_COLOR),
     ):
         figure.add_trace(
             go.Scatter3d(
                 x=xs,
-                y=(impact_y, impact_y),
+                y=(centre_y, centre_y),
                 z=zs,
                 mode="lines",
-                line={"color": BEAM_COLOR, "width": 6},
+                line={"color": colour, "width": 7},
                 name=label,
                 hovertemplate=f"{label}<extra></extra>",
             )
         )
-    screen_top = max(float(zmax), spot_z * 1.6)
-    screen_half_width = 0.35 * rows
+        # Arrowhead at the downstream end, pointing the way the beam travels.
+        figure.add_trace(
+            go.Cone(
+                x=[xs[1]],
+                y=[centre_y],
+                z=[zs[1]],
+                u=[xs[1] - xs[0]],
+                v=[0.0],
+                w=[zs[1] - zs[0]],
+                sizemode="absolute",
+                sizeref=0.06 * x_span,
+                anchor="tip",
+                colorscale=[[0, colour], [1, colour]],
+                showscale=False,
+                hoverinfo="skip",
+                showlegend=False,
+            )
+        )
+
+    normal_top = impact_z + 0.75 * z_top
+    figure.add_trace(
+        go.Scatter3d(
+            x=[centre_x, centre_x],
+            y=[centre_y, centre_y],
+            z=[impact_z, normal_top],
+            mode="lines+text",
+            line={"color": "#16a34a", "width": 4, "dash": "dash"},
+            text=["", "n"],
+            textposition="top center",
+            textfont={"color": "#16a34a", "size": 13},
+            name="surface normal n",
+            hovertemplate="surface normal<extra></extra>",
+        )
+    )
+
     figure.add_trace(
         go.Mesh3d(
             x=[screen_x] * 4,
             y=[
-                impact_y - screen_half_width,
-                impact_y + screen_half_width,
-                impact_y + screen_half_width,
-                impact_y - screen_half_width,
+                centre_y - screen_half_width,
+                centre_y + screen_half_width,
+                centre_y + screen_half_width,
+                centre_y - screen_half_width,
             ],
-            z=[0.0, 0.0, screen_top, screen_top],
+            z=[0.0, 0.0, z_top, z_top],
             i=[0, 0],
             j=[1, 2],
             k=[2, 3],
             color="#94a3b8",
-            opacity=0.28,
-            name="detector screen",
-            hovertemplate="detector screen<extra></extra>",
+            opacity=0.18,
+            name="detector plane",
+            hovertemplate="detector plane<extra></extra>",
             showlegend=True,
         )
     )
+
+    if pattern is not None:
+        # The computed screen, on the plane. Vertical offsets are the true gnomonic projection
+        # at this standoff; horizontal offsets carry the z stretch so the patch stays square.
+        horizontal, vertical = rheed.detector_offsets(
+            pattern.exit_angle_deg[:, None],
+            pattern.deflection_deg[None, :],
+            standoff,
+        )
+        patch_y = centre_y + np.broadcast_to(horizontal, pattern.intensity.shape) * stretch
+        patch_z = impact_z + np.broadcast_to(vertical, pattern.intensity.shape)
+        figure.add_trace(
+            go.Surface(
+                x=np.full(pattern.intensity.shape, screen_x),
+                y=patch_y,
+                z=patch_z,
+                surfacecolor=rheed.screen_decades(pattern),
+                colorscale="Inferno",
+                cmin=-rheed.SCREEN_LOG_DECADES,
+                cmax=0.0,
+                showscale=False,
+                name="computed screen",
+                showlegend=True,
+                hovertemplate=(
+                    "exit=%{z:.2f}<br>log10 I=%{surfacecolor:.2f}<extra>computed screen</extra>"
+                ),
+            )
+        )
+
     figure.add_trace(
         go.Scatter3d(
             x=[screen_x],
-            y=[impact_y],
+            y=[centre_y],
             z=[spot_z],
             mode="markers",
-            marker={"color": BEAM_COLOR, "size": 6, "symbol": "circle"},
-            name="specular spot",
-            hovertemplate="specular spot (geometric, not diffracted)<extra></extra>",
+            marker={
+                "color": "rgba(0,0,0,0)",
+                "size": 9,
+                "line": {"color": SPECULAR_COLOR, "width": 3},
+            },
+            name="specular hit point",
+            hovertemplate="specular hit point — the (00) pixel of the screen<extra></extra>",
         )
     )
 
-    z_top = max(float(zmax), entry_z, screen_top)
-    x_span = screen_x - entry_x
-    # Both axes are in site units, so the disclosed stretch is the ratio of drawn units per
-    # data unit on z against x, using the aspect numbers set immediately below.
-    x_aspect = x_span / columns
-    stretch = (0.55 / z_top) / (x_aspect / x_span)
+    condition = f"{pattern.condition}, " if pattern is not None else ""
     figure.update_layout(
         uirevision="beam-geometry",
-        height=430,
-        margin={"l": 0, "r": 0, "t": 70, "b": 0},
+        height=560,
+        margin={"l": 0, "r": 0, "t": 78, "b": 0},
         legend={"orientation": "h", "y": -0.02},
         title=(
-            f"Beam geometry at {coverage:.2f} ML — {grazing_angle_deg:.2f}° grazing incidence, "
+            f"Beam geometry at {coverage:.2f} ML — {condition}{grazing_angle_deg:.2f}° grazing, "
+            f"{azimuth_deg:g}° sample azimuth"
             + (
-                f"z stretched {stretch:.0f}x for visibility"
+                f"<br><sub>{GEOMETRY_LABEL} · z stretched {stretch:.0f}x, and the painted "
+                f"screen's horizontal extent with it, so it stays square</sub>"
                 if stretch >= 1.5
-                else "drawn to scale"
+                else f"<br><sub>{GEOMETRY_LABEL} · drawn to scale</sub>"
             )
-            + f"<br><sub>{BEAM_GEOMETRY_LABEL}</sub>"
         ),
         scene={
             "uirevision": "beam-geometry",
-            "xaxis": {"title": "array x", "range": [entry_x, screen_x], "autorange": False},
-            "yaxis": {"title": "array y", "range": [-0.5, rows - 0.5], "autorange": False},
-            "zaxis": {"title": "height (ML)", "range": [0, z_top], "autorange": False},
+            "xaxis": {"title": "lab x (beam axis)", "range": [entry_x, screen_x], "autorange": False},
+            "yaxis": {"title": "lab y", "range": [y_low, y_high], "autorange": False},
+            "zaxis": {"title": "height / lab z (ML)", "range": [0, z_top], "autorange": False},
             "aspectmode": "manual",
-            "aspectratio": {"x": x_aspect, "y": 1, "z": 0.55},
-            # Near side-on, looking along the beam's plane, so grazing incidence reads as grazing.
-            "camera": {"eye": {"x": 0.15, "y": -2.9, "z": 0.5}},
+            "aspectratio": {"x": x_aspect, "y": y_aspect, "z": z_aspect},
+            # Near side-on along the plane of incidence, close in, so grazing reads as grazing
+            # and the painted screen is large enough to compare with the 2D figure below.
+            "camera": {"eye": {"x": 0.34, "y": -1.55, "z": 0.42}, "center": {"z": -0.12}},
         },
     )
     return figure

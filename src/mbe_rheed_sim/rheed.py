@@ -255,6 +255,78 @@ def incident_wavevector(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class BeamGeometry:
+    """Lab-frame directions for one beam condition and sample orientation.
+
+    The lab frame is the one the whole module already uses, stated once here because the 3D
+    geometry view and the detector screen have to agree on it:
+
+    * `+x` is downstream along the beam's in-plane projection, `+z` is the surface normal,
+      `+y` completes the right-handed set (a positive screen deflection).
+    * The **incident beam is fixed** in this frame: `k_i / k = (cos t, 0, -sin t)`.
+    * The **specular beam** is `k_i` mirrored in the surface: `(cos t, 0, +sin t)`. It moves
+      with the grazing angle and **not** with the azimuth, because rotating a sample about its
+      own normal cannot move the mirror direction.
+    * The **detector plane is fixed** in this frame too, perpendicular to `+x` downstream, and
+      the screen's angular coordinates are its gnomonic projection (`detector_offsets`).
+    * `sample_rotation` is what the azimuth does: it turns the **sample** about `+z`, carrying
+      its reciprocal lattice with it, which is why the reachable rods change while the beam,
+      the specular direction and the screen do not.
+    """
+
+    grazing_angle_deg: float
+    azimuth_deg: float
+    energy_kev: float
+    incident_direction: NDArray[np.float64]
+    specular_direction: NDArray[np.float64]
+    surface_normal: NDArray[np.float64]
+    sample_rotation: NDArray[np.float64]
+
+
+def beam_geometry(
+    *,
+    grazing_angle_deg: float,
+    azimuth_deg: float = 0.0,
+    energy_kev: float = DEFAULT_BEAM_ENERGY_KEV,
+) -> BeamGeometry:
+    """Unit directions and the sample rotation for one beam condition. See `BeamGeometry`."""
+    incident = incident_wavevector(grazing_angle_deg, energy_kev)
+    direction = incident / float(np.linalg.norm(incident))
+    return BeamGeometry(
+        grazing_angle_deg=grazing_angle_deg,
+        azimuth_deg=azimuth_deg,
+        energy_kev=energy_kev,
+        incident_direction=direction,
+        # Mirror in the surface plane: the z component flips and nothing else moves.
+        specular_direction=direction * np.array([1.0, 1.0, -1.0]),
+        surface_normal=np.array([0.0, 0.0, 1.0]),
+        sample_rotation=_rotation(azimuth_deg),
+    )
+
+
+def detector_offsets(
+    exit_angle_deg: NDArray[np.float64] | float,
+    deflection_deg: NDArray[np.float64] | float,
+    distance: float,
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Where a screen direction lands on a flat detector at `distance`, in the same units.
+
+    The gnomonic projection this module's angular coordinates already are: horizontal
+    `d tan(deflection)` across the plane, vertical `d tan(exit) / cos(deflection)` up it,
+    measured from where the beam axis pierces the plane. The plane is perpendicular to `+x`,
+    so horizontal is lab `+y` and vertical is lab `+z`.
+    """
+    if distance <= 0:
+        raise ValueError("detector distance must be positive")
+    exit_angle = np.radians(exit_angle_deg)
+    deflection = np.radians(deflection_deg)
+    return (
+        distance * np.tan(deflection),
+        distance * np.tan(exit_angle) / np.cos(deflection),
+    )
+
+
 def phase_order(
     grazing_angle_deg: float,
     *,
