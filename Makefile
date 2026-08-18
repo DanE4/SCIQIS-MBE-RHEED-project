@@ -1,6 +1,6 @@
 # Every workflow name accepted by scripts/run_workflow.py is a make target of the same name.
 WORKFLOWS := baseline figure3 sweep convergence figure3-convergence \
-	validate-acceleration validate-science validate-sweep benchmark-sizes
+	validate-acceleration validate-science validate-sweep validate-rheed benchmark-sizes
 
 .PHONY: setup notebook test check export figure3-parameters digitize-figure3 \
 	reproduce reproduce-figure3 convergence-figure3 gallery readme-figures $(WORKFLOWS)

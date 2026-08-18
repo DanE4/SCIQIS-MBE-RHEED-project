@@ -163,6 +163,7 @@ outputs/animations/*
 outputs/runs/*
 outputs/batches/*
 outputs/saved/*
+outputs/rheed_validation/*
 data/raw/*
 data/processed/*
 !outputs/figures/.gitkeep

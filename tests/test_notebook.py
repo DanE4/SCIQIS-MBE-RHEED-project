@@ -19,9 +19,7 @@ from mbe_rheed_sim.paper import FIGURE3_NOMINAL_GA_N_RATIOS
 
 
 def test_hand_tuned_parameters_map_to_a_valid_config() -> None:
-    config, estimate, growth_rate, name, detail = controls.build_run(
-        controls.DEFAULT_PARAMETERS
-    )
+    config, estimate, growth_rate, name, detail = controls.build_run(controls.DEFAULT_PARAMETERS)
     assert config.lattice_size == 16
     assert config.target_coverage_ml == 2.0
     assert config.target_time_s is None
@@ -71,24 +69,18 @@ def test_a_preset_reproduces_the_stored_run_it_names(name: str) -> None:
 
 def test_hop_distance_is_clamped_to_the_periodic_lattice() -> None:
     # 16 would exceed half of a 7x7 lattice; SimulationConfig would reject it.
-    config, *_ = controls.build_run(
-        controls.DEFAULT_PARAMETERS | {"size": 7, "hop_distance": 16}
-    )
+    config, *_ = controls.build_run(controls.DEFAULT_PARAMETERS | {"size": 7, "hop_distance": 16})
     assert config.max_isolated_hop_distance == 3
 
 
 def test_expensive_gate_trips_on_large_lattices() -> None:
     small, small_estimate, *_ = controls.build_run(controls.DEFAULT_PARAMETERS)
-    large, large_estimate, *_ = controls.build_run(
-        controls.DEFAULT_PARAMETERS | {"size": 128}
-    )
+    large, large_estimate, *_ = controls.build_run(controls.DEFAULT_PARAMETERS | {"size": 128})
     assert not controls.is_expensive(small, small_estimate)
     assert controls.is_expensive(large, large_estimate)
 
 
-@pytest.mark.parametrize(
-    "builder", [figures.height_surface, figures.hex_cells, figures.step_edges]
-)
+@pytest.mark.parametrize("builder", [figures.height_surface, figures.hex_cells, figures.step_edges])
 def test_surface_builders_produce_one_trace(builder) -> None:
     heights = np.array([[0, 1], [2, 1]], dtype=np.int64)
     figure = builder(heights, coverage=1.0, zmax=2)
@@ -109,20 +101,32 @@ def test_step_edge_view_counts_unequal_neighbours_and_reports_the_proxy() -> Non
     assert counts.sum() == 12
 
 
-def test_detector_screen_labels_the_rods_and_floors_the_log_scale() -> None:
-    angle = rheed.antiphase_grazing_angle_deg(3)
+def test_detector_screen_labels_only_the_orders_the_geometry_reaches() -> None:
+    angle = rheed.antiphase_grazing_angle_deg(5)
     pattern = rheed.diffraction_screen(np.zeros((8, 8), dtype=np.int64), grazing_angle_deg=angle)
     figure = figures.detector_screen(pattern, coverage=0.0)
     screen, orders, specular = figure.data
     assert screen.z.min() == pytest.approx(-figures.SCREEN_LOG_DECADES)
     assert screen.z.max() == pytest.approx(0.0)
     assert specular.x == (0.0,) and specular.y == (angle,)
-    # Every rod the screen can reach is named, and each label sits on its own rod.
-    assert "(00)" in orders.text
-    assert np.allclose(np.asarray(orders.x) % pattern.rod_spacing_deg, 0.0)
-    assert max(abs(np.asarray(orders.x))) <= pattern.deflection_deg[-1]
+    # The marks are the computed Ewald intersections, not positions chosen by the figure.
+    assert tuple(orders.text) == tuple(rod.label for rod in pattern.rods)
+    assert orders.x == tuple(rod.deflection_deg for rod in pattern.rods)
+    assert orders.y == tuple(rod.exit_angle_deg for rod in pattern.rods)
+    assert "(00)" in orders.text and "(01)" in orders.text
     assert figures.DIFFRACTION_LABEL in figure.layout.title.text
+    assert "Kinematic RHEED screen" in figure.layout.title.text
     assert "anti-phase" in figure.layout.title.text
+
+
+def test_detector_screen_draws_no_order_the_geometry_cannot_reach() -> None:
+    """At shallow grazing the first-order rods miss the Ewald sphere; nothing may be drawn."""
+    shallow = rheed.diffraction_screen(
+        np.zeros((8, 8), dtype=np.int64),
+        grazing_angle_deg=rheed.antiphase_grazing_angle_deg(3),
+    )
+    orders = figures.detector_screen(shallow, coverage=0.0).data[1]
+    assert tuple(orders.text) == ("(00)",)
 
 
 def test_rheed_trace_marks_the_current_frame() -> None:
@@ -175,3 +179,12 @@ def test_notebook_only_calls_figure_builders_that_exist() -> None:
     called = sorted(set(re.findall(r"figures\.(\w+)", source)))
     assert called, "the notebook draws its figures through `figures.`"
     assert [name for name in called if not hasattr(figures, name)] == []
+
+
+def test_slider_grids_are_clean_and_snap_off_grid_presets():
+    for key in controls._SLIDERS:
+        steps = controls._steps(key)
+        assert all(step == round(step, 4) for step in steps)
+        assert len(steps) % 4 == 1  # exactly five evenly spaced tick labels
+        assert controls._snap(steps[0] - 1e6, steps) == steps[0]
+        assert controls._snap(steps[3] + 1e-9, steps) == steps[3]

@@ -18,7 +18,7 @@ from mbe_rheed_sim.paper import figure3_config, figure3_parameters
 from mbe_rheed_sim.rates import arrhenius_rate
 
 HAND_TUNED = "Hand-tuned parameters"
-FROM_PAPER = "GaN parameters from the paper"
+FROM_PAPER = "GaN parameters from the paper (overrides T, flux, barriers below)"
 PRE_COMPUTED = "Pre-computed demo"
 SIMULATE_NOW = "Simulate now"
 SAVED_RUN = "Saved run"
@@ -181,6 +181,70 @@ _FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
     ),
 }
 
+# (start, stop, step) per slider. Ranges are chosen so the span is exactly four steps wide at
+# the tick spacing, which is what lets `_ticks` label min, max and three interior waypoints
+# without inventing values that are not selectable.
+_SLIDERS: dict[str, tuple[float, float, float]] = {
+    "temperature_k": (400, 1200, 10),
+    "flux_ml_s": (0.1, 1.5, 0.05),
+    "barrier_ev": (0.1, 2.5, 0.01),
+    "bond_energy_ev": (0.0, 0.6, 0.01),
+    "step_barrier_ev": (0.0, 0.4, 0.01),
+    "desorption_barrier_ev": (0.2, 3.0, 0.05),
+    "coverage_ml": (0.5, 10.5, 0.25),
+    "duration_s": (0.5, 40.5, 0.5),
+}
+
+
+# ponytail: reserves room for the number box `include_input` puts beside the track, so the
+# tick labels line up with the track ends. A fixed box also stops the layout reflowing (and
+# the thumb jittering) as the digits change while dragging, which `show_value` did.
+_VALUE_BOX_WIDTH = "4.6rem"
+
+
+def _steps(key: str) -> list[float]:
+    """Allowed values as exact 4-decimal numbers.
+
+    `mo.ui.slider(step=...)` accumulates the step in floating point, so `show_value` prints
+    0.15000000000000002 rather than 0.15. Handing marimo the rounded grid via `steps=` fixes the
+    display without touching the physics: the values are the same grid, minus the noise.
+    """
+    start, stop, step = _SLIDERS[key]
+    count = round((stop - start) / step)
+    integral = float(start).is_integer() and float(step).is_integer()
+    return [
+        int(start + index * step) if integral else round(start + index * step, 4)
+        for index in range(count + 1)
+    ]
+
+
+def _snap(value: float, steps: list[float]) -> float:
+    """Nearest allowed value; presets carry fitted numbers that miss the grid."""
+    return min(steps, key=lambda step: abs(step - float(value)))
+
+
+def _ticks(key: str) -> str:
+    """Five evenly spaced waypoint labels under a slider, min and max included."""
+    steps = _steps(key)
+    labels = "".join(f"<span>{value:g}</span>" for value in steps[:: len(steps) // 4])
+    return (
+        '<div style="display:flex;justify-content:space-between;font-size:.7rem;'
+        f'opacity:.55;padding:0 {_VALUE_BOX_WIDTH} 0 0">{labels}</div>'
+    )
+
+
+def _slider_cell(key: str) -> str:
+    """Slider above its tick row.
+
+    The cell is an explicit column: the table cell marimo drops the widget into lays its
+    children out in a row, so a bare sibling <div> ends up beside the track instead of under it.
+    """
+    return (
+        '<div style="display:flex;flex-direction:column;width:100%">'
+        f"<div>{{{key}}}</div>{_ticks(key)}</div>"
+    )
+
+
 _ADVANCED_SECTIONS = ("Energetics", "Numerical controls")
 
 
@@ -208,7 +272,7 @@ def _layout() -> str:
             # takes a second to appear and shows no affordance.
             f'<tr><td style="{_ROW_LABEL}">{label} '
             f'<span data-tooltip="{help_text}" style="cursor:help">&#9432;</span></td>'
-            f"<td>{{{key}}}</td></tr>"
+            f"<td>{_slider_cell(key) if key in _SLIDERS else f'{{{key}}}'}</td></tr>"
             for label, key, help_text in rows
         )
         blocks[section] = (
@@ -362,6 +426,16 @@ def preset_parameters(meta: dict) -> dict:
     }
 
 
+def _slider(key: str, value: float) -> mo.ui.slider:
+    steps = _steps(key)
+    return mo.ui.slider(
+        steps=steps,
+        value=_snap(value, steps),
+        include_input=True,
+        full_width=True,
+    )
+
+
 def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = None) -> mo.ui.form:
     """The live-run parameter form, laid out by `_LAYOUT`, opened on `values`."""
     values = DEFAULT_PARAMETERS if values is None else values
@@ -378,67 +452,23 @@ def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = N
                 ratio_options,
                 value=_label(ratio_options, values["figure3_ratio"]),
             ),
-            temperature_k=mo.ui.slider(
-                show_value=True,
-                start=500,
-                stop=1_200,
-                step=10,
-                value=values["temperature_k"],
-            ),
-            flux_ml_s=mo.ui.slider(
-                show_value=True,
-                start=0.05, stop=1.5, step=0.05, value=values["flux_ml_s"]
-            ),
+            temperature_k=_slider("temperature_k", values["temperature_k"]),
+            flux_ml_s=_slider("flux_ml_s", values["flux_ml_s"]),
             attempt_frequency_hz=mo.ui.dropdown(
                 ATTEMPT_FREQUENCIES,
                 value=_label(ATTEMPT_FREQUENCIES, values["attempt_frequency_hz"]),
             ),
-            barrier_ev=mo.ui.slider(
-                show_value=True,
-                start=0.05,
-                stop=2.5,
-                step=0.01,
-                value=values["barrier_ev"],
-            ),
-            bond_energy_ev=mo.ui.slider(
-                show_value=True,
-                start=0.0,
-                stop=0.6,
-                step=0.01,
-                value=values["bond_energy_ev"],
-            ),
-            step_barrier_ev=mo.ui.slider(
-                show_value=True,
-                start=0.0,
-                stop=0.3,
-                step=0.01,
-                value=values["step_barrier_ev"],
-            ),
-            desorption_barrier_ev=mo.ui.slider(
-                show_value=True,
-                start=0.2,
-                stop=3.0,
-                step=0.05,
-                value=values["desorption_barrier_ev"],
-            ),
-            size=mo.ui.dropdown(
-                LATTICE_SIZES, value=_label(LATTICE_SIZES, values["size"])
-            ),
+            barrier_ev=_slider("barrier_ev", values["barrier_ev"]),
+            bond_energy_ev=_slider("bond_energy_ev", values["bond_energy_ev"]),
+            step_barrier_ev=_slider("step_barrier_ev", values["step_barrier_ev"]),
+            desorption_barrier_ev=_slider("desorption_barrier_ev", values["desorption_barrier_ev"]),
+            size=mo.ui.dropdown(LATTICE_SIZES, value=_label(LATTICE_SIZES, values["size"])),
             stop_mode=mo.ui.radio(
                 options=["Coverage", "Physical time"],
                 value=values["stop_mode"],
             ),
-            coverage_ml=mo.ui.slider(
-                show_value=True,
-                start=0.25,
-                stop=10.0,
-                step=0.25,
-                value=values["coverage_ml"],
-            ),
-            duration_s=mo.ui.slider(
-                show_value=True,
-                start=0.1, stop=40.0, step=0.1, value=values["duration_s"]
-            ),
+            coverage_ml=_slider("coverage_ml", values["coverage_ml"]),
+            duration_s=_slider("duration_s", values["duration_s"]),
             hop_distance=mo.ui.dropdown(
                 HOP_DISTANCES,
                 value=_label(HOP_DISTANCES, values["hop_distance"]),

@@ -384,6 +384,16 @@ def _(mo, rheed):
 
 
 @app.cell
+def _(mo):
+    # Sample azimuth. The triangular surface repeats every 60°, and 0° and 30° are its two
+    # mirror directions, so this range covers every distinct pattern once.
+    sample_azimuth = mo.ui.slider(
+        start=0, stop=60, step=5, value=0, label="Sample azimuth (°)", show_value=True
+    )
+    return (sample_azimuth,)
+
+
+@app.cell
 def _(
     beam_condition,
     coverage_axis,
@@ -392,6 +402,7 @@ def _(
     mo,
     np,
     playback,
+    sample_azimuth,
     set_frame,
     simulation,
 ):
@@ -453,7 +464,14 @@ def _(
             disagreement is a result, not hidden by relabeling.
             """),
             mo.hstack(
-                [snapshot_slider, milestone_picker, playback, display_mode, beam_condition],
+                [
+                    snapshot_slider,
+                    milestone_picker,
+                    playback,
+                    display_mode,
+                    beam_condition,
+                    sample_azimuth,
+                ],
                 justify="start",
                 gap=2,
                 wrap=True,
@@ -473,6 +491,7 @@ def _(
     get_frame,
     mo,
     rheed,
+    sample_azimuth,
     simulation,
 ):
     _frame = min(get_frame(), len(simulation.snapshots) - 1)
@@ -480,7 +499,9 @@ def _(
     _zmax = max(1, int(simulation.snapshots.max()))
     _coverage = float(coverage_axis[_frame])
     screen_pattern = rheed.diffraction_screen(
-        _heights, grazing_angle_deg=beam_condition.value
+        _heights,
+        grazing_angle_deg=beam_condition.value,
+        azimuth_deg=float(sample_azimuth.value),
     )
     if display_mode.value == "RHEED beam geometry":
         surface_figure = figures.rheed_geometry(
@@ -535,26 +556,34 @@ def _(coverage_axis, figures, get_frame, mo, screen_pattern, simulation):
         [
             figures.detector_screen(screen_pattern, float(coverage_axis[_frame])),
             mo.md(
-                "This is the detector image the surface above would produce. A flat surface "
-                "diffracts only into the labelled **rods**, so the screen is black between "
-                "them; roughening moves intensity out of the rods and fills the gaps, and once "
-                "islands stack into 3D the streaks break into spots. Everything below 0° is in "
-                "the substrate's **shadow**. The horizontal dark bands are exit angles at the "
-                "*in-phase* condition, where adjacent terraces scatter together and height "
-                "disorder produces no diffuse intensity at all.\n\n"
-                "**How wide a streak is** is not a property of the simulation. The lattice is "
-                "periodic, so it is tiled or cropped to fill the beam's stated **transfer "
-                "width** — coherence length plus instrument response — and that width sets the "
-                "rod width. Several illuminated patches are then averaged in intensity, "
-                "because a real detector adds patches incoherently. Windowing the raw "
-                "simulation box instead would make a 7×7 run show degree-wide bands and a "
-                "64×64 run show narrow ones from identical physics.\n\n"
+                "This is the detector image the surface above would produce, built from the "
+                "exact Ewald construction: each `(h k)` reciprocal rod is intersected with "
+                "the sphere $|\\mathbf{k}_f| = |\\mathbf{k}_i|$, and the crosses mark where "
+                "that intersection lands. **Only orders the geometry actually reaches are "
+                "drawn.** A rod exists only when $|\\mathbf{G}_{hk}| \\le k\\sin\\theta_i$, "
+                "so at the shallowest beam conditions the specular $(00)$ beam is the only "
+                "order on the screen and the side orders appear — *below* the specular "
+                "beam, on the zeroth Laue circle — once the grazing angle is raised past "
+                "about 2.1° at 15 keV. Turning the **sample azimuth** rotates the whole "
+                "reciprocal lattice against the fixed beam, sweeping the Ewald sphere across "
+                "the rods: away from a mirror direction they climb the Laue circle and leave "
+                "this screen's ±3° acceptance, which is why the order count in the subtitle "
+                "changes. Everything below 0° is in the substrate's **shadow**.\n\n"
+                "**Three separate widths, not one.** The rod width in reciprocal space is set "
+                "by the **coherence length** of the illumination, a real-space Gaussian whose "
+                "transform is $4\\sqrt{2}\\ln 2 / L$ wide; beam **divergence** acts on the "
+                "incident direction and is integrated over there; a detector **point spread** "
+                "blurs the finished image. They are applied in three different domains "
+                "because they are three different pieces of physics. The simulation box is "
+                "tiled or cropped to fill the illuminated patch, so a 7×7 run and a 64×64 run "
+                "of the same physical surface give the same streaks.\n\n"
                 "**Two honest limits.** The model surface repeats every $N$ sites, so disorder "
-                "can only scatter into multiples of $1/N$ of the Brillouin zone: a small "
-                "lattice gives discrete diffuse satellites where a real surface gives a "
-                "continuum. And the calculation is kinematic — single scattering, no dynamical "
-                "diffraction, refraction, absorption, atomic form factors or inelastic "
-                "background — so every rod order comes out equally bright and absolute "
+                "can only scatter into multiples of $2\\pi/Na$; once the coherence length "
+                "approaches the box width that background breaks into discrete satellites, "
+                "and translating the illuminated patch cannot cure it because the satellite "
+                "positions are fixed by the box period, not by where the beam lands. And the "
+                "calculation is kinematic — single scattering, no dynamical diffraction, "
+                "refraction, absorption, Kikuchi lines or inelastic background — so absolute "
                 "brightness means nothing. The shape over a run is the result.\n\n"
                 "Switch the **beam condition** control between odd (anti-phase) and even "
                 "(in-phase) orders and watch the dashed specular curve on the right: at "

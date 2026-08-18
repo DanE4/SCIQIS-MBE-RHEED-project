@@ -76,6 +76,10 @@ WORKFLOWS = {
         "seeds": True,
         "preset": "24x24, 2 ML, three temperatures/two fluxes, seeds 0/1/2",
     },
+    "validate-rheed": {
+        "script": "validate_rheed.py",
+        "preset": "32x32 flat/stepped/rough screens, analytic and published-geometry checks",
+    },
     "benchmark-sizes": {
         "script": "benchmark_large_lattices.py",
         "sizes": True,

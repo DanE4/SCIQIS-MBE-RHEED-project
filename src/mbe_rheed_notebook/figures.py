@@ -163,7 +163,7 @@ def step_edges(heights: np.ndarray, coverage: float, zmax: int) -> go.Figure:
     return figure
 
 
-def _screen_decades(pattern: ScreenPattern) -> np.ndarray:
+def screen_decades(pattern: ScreenPattern) -> np.ndarray:
     """Screen intensity in decades below a flat surface, floored so log10 stays finite."""
     return np.log10(np.maximum(pattern.intensity, 10.0**-SCREEN_LOG_DECADES))
 
@@ -174,7 +174,7 @@ def detector_screen(pattern: ScreenPattern, coverage: float) -> go.Figure:
         go.Heatmap(
             x=pattern.deflection_deg,
             y=pattern.exit_angle_deg,
-            z=_screen_decades(pattern),
+            z=screen_decades(pattern),
             colorscale="Inferno",
             zmin=-SCREEN_LOG_DECADES,
             zmax=0.0,
@@ -196,23 +196,22 @@ def detector_screen(pattern: ScreenPattern, coverage: float) -> go.Figure:
         annotation={"text": "shadow edge", "font": {"color": "#94a3b8", "size": 10}},
         annotation_position="top left",
     )
-    # Name the rods the beam can actually reach, so the repeats read as diffraction orders
-    # rather than as a tiled texture.
-    orders = np.arange(
-        -int(pattern.deflection_deg[-1] // pattern.rod_spacing_deg),
-        int(pattern.deflection_deg[-1] // pattern.rod_spacing_deg) + 1,
-    )
+    # Only the orders whose rods actually cut the Ewald sphere inside this screen, at the
+    # angles the Ewald construction puts them. Nothing here is positioned by hand, and an
+    # order that the geometry does not reach is simply not drawn.
     figure.add_trace(
         go.Scatter(
-            x=orders * pattern.rod_spacing_deg,
-            y=np.full(orders.size, pattern.exit_angle_deg[-1]),
-            mode="text",
-            text=[f"({order:+d}0)" if order else "(00)" for order in orders],
-            textposition="bottom center",
+            x=[rod.deflection_deg for rod in pattern.rods],
+            y=[rod.exit_angle_deg for rod in pattern.rods],
+            mode="markers+text",
+            marker={"symbol": "cross-thin", "color": "#94a3b8", "size": 9, "line": {"width": 1}},
+            text=[rod.label for rod in pattern.rods],
+            textposition="top center",
             textfont={"color": "#94a3b8", "size": 11},
-            name="rod order",
-            hoverinfo="skip",
-            showlegend=False,
+            name="predicted (hk) rod",
+            hovertemplate=(
+                "%{text} rod<br>deflection=%{x:.3f}°<br>exit angle=%{y:.3f}°<extra></extra>"
+            ),
         )
     )
     figure.add_trace(
@@ -229,15 +228,20 @@ def detector_screen(pattern: ScreenPattern, coverage: float) -> go.Figure:
         )
     )
     figure.update_layout(
-        height=430,
-        margin={"l": 60, "r": 10, "t": 76, "b": 60},
+        height=460,
+        # Three title lines; anything tighter overlaps the y-axis label.
+        margin={"l": 60, "r": 10, "t": 112, "b": 60},
         legend={"orientation": "h", "y": -0.2},
         title=(
-            f"Simulated RHEED screen at {coverage:.2f} ML — specular "
+            f"<b>Kinematic RHEED screen</b> at {coverage:.2f} ML — specular "
             f"{pattern.specular_intensity:.4f} of flat"
-            f"<br><sub>{pattern.beam_energy_kev:g} keV, {pattern.grazing_angle_deg:.2f}° "
-            f"grazing, q_z d / pi = {pattern.phase_order:.2f} ({pattern.condition}), "
-            f"{pattern.transfer_width_nm:g} nm transfer width · {DIFFRACTION_LABEL}</sub>"
+            f"<br><sub>{pattern.beam_energy_kev:g} keV · "
+            f"{pattern.grazing_angle_deg:.2f}° grazing · "
+            f"{pattern.azimuth_deg:g}° azimuth · "
+            f"q_z d / π = {pattern.phase_order:.2f} ({pattern.condition}) · "
+            f"{pattern.coherence_length_nm:g} nm coherence · "
+            f"rods in view: {', '.join(rod.label for rod in pattern.rods)}"
+            f"<br>{DIFFRACTION_LABEL}</sub>"
         ),
         # Equal angular scales, and `constrain` shrinks the drawing area to the data rather
         # than padding the screen out with empty angles.
@@ -425,8 +429,8 @@ def rheed_trace(
             x=coverage_axis,
             y=proxy,
             mode="lines",
-            line={"color": PROXY_COLOR, "width": 3},
-            name="normalized step-density RHEED proxy",
+            line={"color": PROXY_COLOR, "width": 2, "dash": "dash"},
+            name="normalized step-density morphology proxy (1 - S_d)",
         )
     )
     figure.add_trace(
@@ -449,7 +453,7 @@ def rheed_trace(
                 x=coverage_axis,
                 y=specular,
                 mode="lines",
-                line={"color": SPECULAR_COLOR, "width": 2, "dash": "dash"},
+                line={"color": SPECULAR_COLOR, "width": 3},
                 name="kinematic specular (00) intensity",
                 hovertemplate=(
                     "coverage=%{x:.2f} ML<br>specular=%{y:.3f} of flat<extra></extra>"
@@ -480,9 +484,9 @@ def rheed_trace(
         height=430,
         margin={"l": 60, "r": 10, "t": 50, "b": 60},
         title=(
-            f"RHEED proxy at {coverage:.2f} ML"
+            f"Morphology proxy at {coverage:.2f} ML"
             if specular is None
-            else f"RHEED proxy and kinematic specular intensity at {coverage:.2f} ML"
+            else f"Kinematic specular intensity and morphology proxy at {coverage:.2f} ML"
         ),
         legend={"orientation": "h", "y": -0.2},
         xaxis_title=axis_label,
