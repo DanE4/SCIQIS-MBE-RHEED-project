@@ -67,7 +67,7 @@ _FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
             ),
         ),
         (
-            "Temperature",
+            "Temperature (K)",
             "temperature_k",
             (
                 "Substrate temperature T. Every thermally activated rate carries exp(-E/kBT), so a "
@@ -75,7 +75,7 @@ _FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
             ),
         ),
         (
-            "Deposition flux",
+            "Deposition flux (ML/s)",
             "flux_ml_s",
             (
                 "Beam flux F in monolayers per second. The total deposition rate is F times the "
@@ -109,7 +109,7 @@ _FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
             ),
         ),
         (
-            "Diffusion barrier",
+            "Diffusion barrier (eV)",
             "barrier_ev",
             (
                 "E_diff, the barrier an isolated top particle crosses to hop to a neighbouring "
@@ -117,7 +117,7 @@ _FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
             ),
         ),
         (
-            "Lateral bond energy",
+            "Lateral bond energy (eV)",
             "bond_energy_ev",
             (
                 "E_b, added to the diffusion and desorption barriers once per lateral neighbour, so "
@@ -125,7 +125,7 @@ _FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
             ),
         ),
         (
-            "Down-step barrier",
+            "Down-step barrier (eV)",
             "step_barrier_ev",
             (
                 "Ehrlich-Schwoebel barrier E_step, paid only when crossing one step downward. "
@@ -133,7 +133,7 @@ _FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
             ),
         ),
         (
-            "Desorption barrier",
+            "Desorption barrier (eV)",
             "desorption_barrier_ev",
             (
                 "E_des, the barrier to remove a top particle from the surface. Low values let the "
@@ -150,8 +150,8 @@ _FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
                 "you did not pick is ignored."
             ),
         ),
-        ("Target coverage", "coverage_ml", "Film thickness to grow, in monolayers."),
-        ("Target physical time", "duration_s", "Simulated physical time to grow for, in seconds."),
+        ("Target coverage (ML)", "coverage_ml", "Film thickness to grow, in monolayers."),
+        ("Target time (s)", "duration_s", "Simulated physical time to grow for, in seconds."),
         (
             "Isolated-adatom hop limit",
             "hop_distance",
@@ -162,7 +162,7 @@ _FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
             ),
         ),
         (
-            "Sampling interval",
+            "Sampling interval (ML)",
             "sample_every_ml",
             (
                 "How much coverage passes between recorded frames. Smaller values give a smoother "
@@ -184,6 +184,16 @@ _FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
 _ADVANCED_SECTIONS = ("Energetics", "Numerical controls")
 
 
+# Sections flow into as many columns as the notebook is wide, each column capped so a single
+# section does not stretch a slider across the whole page. Inline styles only: marimo's markdown
+# renderer is not guaranteed to keep a <style> block.
+_GRID = (
+    "display:grid;grid-template-columns:repeat(auto-fit,minmax(21rem,30rem));"
+    "gap:0 2.5rem;align-items:start"
+)
+_ROW_LABEL = "text-align:right;white-space:nowrap;padding:0 .6rem 0 0;vertical-align:middle"
+
+
 def _layout() -> str:
     """Render `_FIELDS` as the `mo.md(...).batch(...)` template, help text as row tooltips.
 
@@ -196,16 +206,20 @@ def _layout() -> str:
             # marimo's own tooltip: its RenderHTML wraps any element carrying data-tooltip and
             # styles it with a dotted underline. A plain title= is a bare browser tooltip that
             # takes a second to appear and shows no affordance.
-            f"<tr><td>{label} "
+            f'<tr><td style="{_ROW_LABEL}">{label} '
             f'<span data-tooltip="{help_text}" style="cursor:help">&#9432;</span></td>'
             f"<td>{{{key}}}</td></tr>"
             for label, key, help_text in rows
         )
-        blocks[section] = f"<h3>{section}</h3><table><tbody>{body}</tbody></table>"
+        blocks[section] = (
+            f'<div style="min-width:0"><h3>{section}</h3>'
+            f'<table style="width:100%"><tbody>{body}</tbody></table></div>'
+        )
     advanced = "".join(blocks.pop(section) for section in _ADVANCED_SECTIONS)
     return (
-        "".join(blocks.values())
-        + f"<details><summary><b>Advanced parameters</b></summary>{advanced}</details>"
+        f'<div style="{_GRID}">{"".join(blocks.values())}</div>'
+        + "<details><summary><b>Advanced parameters</b></summary>"
+        + f'<div style="{_GRID}">{advanced}</div></details>'
     )
 
 
@@ -359,12 +373,10 @@ def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = N
             experiment_mode=mo.ui.radio(
                 options=[HAND_TUNED, FROM_PAPER],
                 value=values["experiment_mode"],
-                label="Where do the parameters come from?",
             ),
             figure3_ratio=mo.ui.dropdown(
                 ratio_options,
                 value=_label(ratio_options, values["figure3_ratio"]),
-                label="Figure 3 nominal Ga/N ratio",
             ),
             temperature_k=mo.ui.slider(
                 show_value=True,
@@ -372,16 +384,14 @@ def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = N
                 stop=1_200,
                 step=10,
                 value=values["temperature_k"],
-                label="Temperature (K)",
             ),
             flux_ml_s=mo.ui.slider(
                 show_value=True,
-                start=0.05, stop=1.5, step=0.05, value=values["flux_ml_s"], label="Flux (ML/s)"
+                start=0.05, stop=1.5, step=0.05, value=values["flux_ml_s"]
             ),
             attempt_frequency_hz=mo.ui.dropdown(
                 ATTEMPT_FREQUENCIES,
                 value=_label(ATTEMPT_FREQUENCIES, values["attempt_frequency_hz"]),
-                label="Attempt frequency",
             ),
             barrier_ev=mo.ui.slider(
                 show_value=True,
@@ -389,7 +399,6 @@ def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = N
                 stop=2.5,
                 step=0.01,
                 value=values["barrier_ev"],
-                label="Diffusion barrier (eV)",
             ),
             bond_energy_ev=mo.ui.slider(
                 show_value=True,
@@ -397,7 +406,6 @@ def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = N
                 stop=0.6,
                 step=0.01,
                 value=values["bond_energy_ev"],
-                label="Lateral bond energy (eV)",
             ),
             step_barrier_ev=mo.ui.slider(
                 show_value=True,
@@ -405,7 +413,6 @@ def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = N
                 stop=0.3,
                 step=0.01,
                 value=values["step_barrier_ev"],
-                label="Down-step barrier (eV)",
             ),
             desorption_barrier_ev=mo.ui.slider(
                 show_value=True,
@@ -413,15 +420,13 @@ def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = N
                 stop=3.0,
                 step=0.05,
                 value=values["desorption_barrier_ev"],
-                label="Desorption barrier (eV)",
             ),
             size=mo.ui.dropdown(
-                LATTICE_SIZES, value=_label(LATTICE_SIZES, values["size"]), label="Lattice size"
+                LATTICE_SIZES, value=_label(LATTICE_SIZES, values["size"])
             ),
             stop_mode=mo.ui.radio(
                 options=["Coverage", "Physical time"],
                 value=values["stop_mode"],
-                label="Stopping criterion",
             ),
             coverage_ml=mo.ui.slider(
                 show_value=True,
@@ -429,28 +434,24 @@ def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = N
                 stop=10.0,
                 step=0.25,
                 value=values["coverage_ml"],
-                label="Target coverage (ML)",
             ),
             duration_s=mo.ui.slider(
                 show_value=True,
-                start=0.1, stop=40.0, step=0.1, value=values["duration_s"], label="Target time (s)"
+                start=0.1, stop=40.0, step=0.1, value=values["duration_s"]
             ),
             hop_distance=mo.ui.dropdown(
                 HOP_DISTANCES,
                 value=_label(HOP_DISTANCES, values["hop_distance"]),
-                label="Maximum isolated-adatom hop distance",
             ),
             sample_every_ml=mo.ui.dropdown(
                 sample_options,
                 value=_label(sample_options, values["sample_every_ml"]),
-                label="Sample every (ML)",
             ),
             max_events=mo.ui.dropdown(
                 EVENT_LIMITS,
                 value=_label(EVENT_LIMITS, values["max_events"]),
-                label="Event safety limit",
             ),
-            seed=mo.ui.number(start=0, stop=10_000, value=values["seed"], label="RNG seed"),
+            seed=mo.ui.number(start=0, stop=10_000, value=values["seed"]),
         )
         .form(submit_button_label="Run simulation", bordered=True, on_change=on_change)
     )
