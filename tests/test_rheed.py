@@ -84,18 +84,63 @@ def test_the_screen_specular_pixel_is_the_curve_it_is_plotted_against() -> None:
 
 
 def test_streaks_land_on_the_hexagonal_reciprocal_lattice() -> None:
-    """A flat surface diffracts only into rods; the first pair must sit where `a` puts them."""
+    """A flat surface diffracts only into rods; they must sit where `a` puts them."""
     angle = rheed.antiphase_grazing_angle_deg(3)
     pattern = rheed.diffraction_screen(
         np.zeros((16, 16), dtype=np.int64), grazing_angle_deg=angle
     )
     specular_row = pattern.intensity[len(pattern.exit_angle_deg) // 2]
-    bright = pattern.deflection_deg[specular_row > 0.2 * specular_row.max()]
-    # Rods repeat every 4*pi / (a*sqrt(3)) in q_y, which at this wavelength is this deflection.
-    spacing = 4.0 * np.pi / (rheed.GAN_IN_PLANE_SPACING_NM * np.sqrt(3.0))
-    expected = np.degrees(spacing / (2.0 * np.pi / rheed.electron_wavelength_nm(15.0)))
-    assert max(bright) == pytest.approx(expected, abs=0.15)
-    assert min(bright) == pytest.approx(-expected, abs=0.15)
+    bright = pattern.deflection_deg[specular_row > 0.5 * specular_row.max()]
+    assert max(bright) == pytest.approx(pattern.rod_spacing_deg, abs=0.1)
+    assert min(bright) == pytest.approx(-pattern.rod_spacing_deg, abs=0.1)
+    # Between the rods the screen must be dark, not a filled texture.
+    between = abs(pattern.deflection_deg % pattern.rod_spacing_deg - 0.5 * pattern.rod_spacing_deg)
+    assert specular_row[between < 0.3].max() < 1e-3
+
+
+@pytest.mark.parametrize("size", [7, 16, 33])
+def test_streak_width_follows_the_beam_not_the_simulation_box(size: int) -> None:
+    """The regression this guards: rod width must be an instrument property.
+
+    Windowing the raw lattice made a 7x7 run produce degree-wide bands and a 33x33 run
+    produce narrow ones from identical physics, which says nothing about the surface.
+    """
+    angle = rheed.antiphase_grazing_angle_deg(3)
+    pattern = rheed.diffraction_screen(
+        np.zeros((size, size), dtype=np.int64), grazing_angle_deg=angle, transfer_width_nm=4.0
+    )
+    specular_row = pattern.intensity[len(pattern.exit_angle_deg) // 2]
+    above_half = pattern.deflection_deg[specular_row > 0.5 * specular_row.max()]
+    central = above_half[abs(above_half) < 0.5 * pattern.rod_spacing_deg]
+    measured = central.max() - central.min()
+    step = pattern.deflection_deg[1] - pattern.deflection_deg[0]
+    assert measured == pytest.approx(pattern.streak_width_deg, abs=2 * step)
+
+    # Halving the transfer width must double the streak width; the lattice is untouched.
+    wider = rheed.diffraction_screen(
+        np.zeros((size, size), dtype=np.int64), grazing_angle_deg=angle, transfer_width_nm=2.0
+    )
+    assert wider.streak_width_deg == pytest.approx(2 * pattern.streak_width_deg)
+
+
+def _off_rod_background(pattern: rheed.ScreenPattern) -> float:
+    """Mean lit-screen intensity away from every diffraction rod."""
+    to_nearest_rod = abs(
+        (pattern.deflection_deg + 0.5 * pattern.rod_spacing_deg) % pattern.rod_spacing_deg
+        - 0.5 * pattern.rod_spacing_deg
+    )
+    lit = pattern.intensity[pattern.exit_angle_deg > 0.0]
+    return float(lit[:, to_nearest_rod > 0.3].mean())
+
+
+def test_roughening_fills_the_gaps_between_the_rods() -> None:
+    """The signature the screen exists to show: streaks on black, then diffuse everywhere."""
+    angle = rheed.antiphase_grazing_angle_deg(3)
+    flat = rheed.diffraction_screen(np.zeros((16, 16), dtype=np.int64), grazing_angle_deg=angle)
+    rough = rheed.diffraction_screen(_half_filled(), grazing_angle_deg=angle)
+    assert rough.specular_intensity < 0.05 * flat.specular_intensity
+    assert _off_rod_background(flat) < 1e-5
+    assert _off_rod_background(rough) > 100 * _off_rod_background(flat)
 
 
 def test_invalid_geometry_is_refused() -> None:

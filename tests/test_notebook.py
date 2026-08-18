@@ -6,6 +6,7 @@ live demo.
 """
 
 import json
+import re
 from dataclasses import asdict
 from pathlib import Path
 
@@ -108,14 +109,18 @@ def test_step_edge_view_counts_unequal_neighbours_and_reports_the_proxy() -> Non
     assert counts.sum() == 12
 
 
-def test_detector_screen_marks_the_specular_beam_and_floors_the_log_scale() -> None:
+def test_detector_screen_labels_the_rods_and_floors_the_log_scale() -> None:
     angle = rheed.antiphase_grazing_angle_deg(3)
     pattern = rheed.diffraction_screen(np.zeros((8, 8), dtype=np.int64), grazing_angle_deg=angle)
     figure = figures.detector_screen(pattern, coverage=0.0)
-    screen, specular = figure.data
+    screen, orders, specular = figure.data
     assert screen.z.min() == pytest.approx(-figures.SCREEN_LOG_DECADES)
     assert screen.z.max() == pytest.approx(0.0)
     assert specular.x == (0.0,) and specular.y == (angle,)
+    # Every rod the screen can reach is named, and each label sits on its own rod.
+    assert "(00)" in orders.text
+    assert np.allclose(np.asarray(orders.x) % pattern.rod_spacing_deg, 0.0)
+    assert max(abs(np.asarray(orders.x))) <= pattern.deflection_deg[-1]
     assert figures.DIFFRACTION_LABEL in figure.layout.title.text
     assert "anti-phase" in figure.layout.title.text
 
@@ -162,3 +167,11 @@ def test_save_result_round_trips_through_the_saved_directory(tmp_path: Path) -> 
     saved = tmp_path / "my_run_2.npz"
     assert saved.exists() and str(saved) in message
     assert SimulationResult.load_npz(saved).config == result.config
+
+
+def test_notebook_only_calls_figure_builders_that_exist() -> None:
+    """A figure deleted from `figures.py` blanks a notebook cell, and nothing else notices."""
+    source = (Path(__file__).resolve().parents[1] / "notebooks" / "mbe_rheed.py").read_text()
+    called = sorted(set(re.findall(r"figures\.(\w+)", source)))
+    assert called, "the notebook draws its figures through `figures.`"
+    assert [name for name in called if not hasattr(figures, name)] == []

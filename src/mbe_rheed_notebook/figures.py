@@ -29,9 +29,10 @@ BEAM_GEOMETRY_LABEL = "explanatory geometry only — diffraction is not simulate
 # Shown wherever a computed pattern is displayed, so a kinematic image is never mistaken for
 # the dynamical scattering a real RHEED screen records.
 DIFFRACTION_LABEL = "kinematic single scattering only — not dynamical RHEED"
-# Decades of intensity shown below the flat-surface specular value. Diffuse scattering from a
-# rough surface sits three to four decades down, so a linear screen would look empty.
-SCREEN_LOG_DECADES = 5.0
+# Decades of intensity shown below the flat-surface specular value. A real screen is viewed
+# well short of this range; three keeps the rods bright and the background near black while
+# still showing the diffuse scattering that roughening produces.
+SCREEN_LOG_DECADES = 3.0
 # One monolayer of height drawn as one in-plane site spacing. For GaN that is c/2 = 0.259 nm
 # against a = 0.319 nm, so the true vertical:lateral aspect is 0.81 of what the beam shows.
 ML_PER_SITE_SPACING = 1.0
@@ -195,6 +196,25 @@ def detector_screen(pattern: ScreenPattern, coverage: float) -> go.Figure:
         annotation={"text": "shadow edge", "font": {"color": "#94a3b8", "size": 10}},
         annotation_position="top left",
     )
+    # Name the rods the beam can actually reach, so the repeats read as diffraction orders
+    # rather than as a tiled texture.
+    orders = np.arange(
+        -int(pattern.deflection_deg[-1] // pattern.rod_spacing_deg),
+        int(pattern.deflection_deg[-1] // pattern.rod_spacing_deg) + 1,
+    )
+    figure.add_trace(
+        go.Scatter(
+            x=orders * pattern.rod_spacing_deg,
+            y=np.full(orders.size, pattern.exit_angle_deg[-1]),
+            mode="text",
+            text=[f"({order:+d}0)" if order else "(00)" for order in orders],
+            textposition="bottom center",
+            textfont={"color": "#94a3b8", "size": 11},
+            name="rod order",
+            hoverinfo="skip",
+            showlegend=False,
+        )
+    )
     figure.add_trace(
         go.Scatter(
             x=[0.0],
@@ -213,11 +233,11 @@ def detector_screen(pattern: ScreenPattern, coverage: float) -> go.Figure:
         margin={"l": 60, "r": 10, "t": 76, "b": 60},
         legend={"orientation": "h", "y": -0.2},
         title=(
-            f"Detector screen at {coverage:.2f} ML — specular "
+            f"Simulated RHEED screen at {coverage:.2f} ML — specular "
             f"{pattern.specular_intensity:.4f} of flat"
             f"<br><sub>{pattern.beam_energy_kev:g} keV, {pattern.grazing_angle_deg:.2f}° "
-            f"grazing, q_z d / pi = {pattern.phase_order:.2f} ({pattern.condition}) · "
-            f"{DIFFRACTION_LABEL}</sub>"
+            f"grazing, q_z d / pi = {pattern.phase_order:.2f} ({pattern.condition}), "
+            f"{pattern.transfer_width_nm:g} nm transfer width · {DIFFRACTION_LABEL}</sub>"
         ),
         # Equal angular scales, and `constrain` shrinks the drawing area to the data rather
         # than padding the screen out with empty angles.

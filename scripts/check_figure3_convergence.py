@@ -18,6 +18,7 @@ from mbe_rheed_sim.analysis import (
     successive_size_check,
 )
 from mbe_rheed_sim.paper import figure3_config, figure3_parameters
+from mbe_rheed_sim.rheed import antiphase_grazing_angle_deg, specular_intensity
 from mbe_rheed_sim.workflows import (
     artifact_root,
     parse_workflow_args,
@@ -31,6 +32,9 @@ DURATION_S = 4.0
 SIZES = (8, 16, 32)
 SEEDS = (0, 1, 2)
 RELATIVE_TOLERANCE = 0.10
+# The kinematic (00) intensity is recorded next to the proxy at the anti-phase condition,
+# where layer filling actually modulates it. Same surfaces, same seeds, second observable.
+GRAZING_ANGLE_DEG = antiphase_grazing_angle_deg()
 
 
 def main(
@@ -67,6 +71,10 @@ def main(
         for (result, elapsed), seed in zip(timed_results, seeds, strict=True):
             predicted_coverage = result.time_s * parameters.predicted_growth_rate_ml_s
             metrics = rheed_oscillation_metrics(predicted_coverage, result.rheed_proxy)
+            specular = specular_intensity(
+                result.snapshots, grazing_angle_deg=GRAZING_ANGLE_DEG
+            )
+            specular_metrics = rheed_oscillation_metrics(predicted_coverage, specular)
             results.append(result)
             runs.append(
                 run_summary(result, seed, elapsed)
@@ -75,8 +83,10 @@ def main(
                         "time_s": result.time_s.tolist(),
                         "predicted_coverage_ml": predicted_coverage.tolist(),
                         "rheed_proxy": result.rheed_proxy.tolist(),
+                        "kinematic_specular": specular.tolist(),
                     },
                     "oscillation_metrics": asdict(metrics),
+                    "kinematic_specular_metrics": asdict(specular_metrics),
                 }
             )
         traces = np.vstack(
@@ -86,6 +96,12 @@ def main(
         amplitudes = np.array([oscillation_amplitude(trace) for trace in traces])
         detrended = np.array(
             [run_summary["oscillation_metrics"]["detrended_amplitude"] for run_summary in runs]
+        )
+        specular_detrended = np.array(
+            [
+                run_summary["kinematic_specular_metrics"]["detrended_amplitude"]
+                for run_summary in runs
+            ]
         )
         mean = traces.mean(axis=0)
         std = traces.std(axis=0)
@@ -100,6 +116,8 @@ def main(
                 "proxy_amplitude_std": float(amplitudes.std()),
                 "detrended_amplitude_mean": float(detrended.mean()),
                 "detrended_amplitude_std": float(detrended.std(ddof=1)),
+                "specular_detrended_amplitude_mean": float(specular_detrended.mean()),
+                "specular_detrended_amplitude_std": float(specular_detrended.std(ddof=1)),
                 "runs": runs,
             }
         )
@@ -118,20 +136,23 @@ def main(
         f"(mean +/- SD, {len(seeds)} seeds)"
     )
 
-    successive_checks = []
-    for smaller, larger in pairwise(summaries):
-        successive_checks.append(
+    def successive_checks_for(key: str) -> list[dict[str, int | float | bool]]:
+        return [
             successive_size_check(
                 smaller["lattice_size"],
                 larger["lattice_size"],
-                smaller["detrended_amplitude_mean"],
-                larger["detrended_amplitude_mean"],
-                smaller["detrended_amplitude_std"],
-                larger["detrended_amplitude_std"],
+                smaller[f"{key}_mean"],
+                larger[f"{key}_mean"],
+                smaller[f"{key}_std"],
+                larger[f"{key}_std"],
                 len(seeds),
                 relative_tolerance=RELATIVE_TOLERANCE,
             )
-        )
+            for smaller, larger in pairwise(summaries)
+        ]
+
+    successive_checks = successive_checks_for("detrended_amplitude")
+    specular_successive_checks = successive_checks_for("specular_detrended_amplitude")
 
     output = {
         "nominal_ga_n_ratio": RATIO,
@@ -148,6 +169,16 @@ def main(
             ),
         },
         "successive_size_checks": successive_checks,
+        "kinematic_specular_successive_size_checks": specular_successive_checks,
+        "secondary_observable": {
+            "name": "specular_detrended_amplitude",
+            "grazing_angle_deg": GRAZING_ANGLE_DEG,
+            "definition": (
+                "detrended amplitude of the kinematic (00) intensity at the anti-phase "
+                "condition, computed from the same snapshots as the proxy; it is a "
+                "single-scattering calculation, not dynamical RHEED"
+            ),
+        },
         "coverage_window_ml": duration_s * parameters.predicted_growth_rate_ml_s,
         "note": (
             "pass --sizes/--duration to widen the study; the 4 s default spans under one "

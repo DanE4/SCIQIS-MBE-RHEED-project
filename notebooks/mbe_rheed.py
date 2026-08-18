@@ -53,9 +53,10 @@ def _(mo):
 
     **What this is.** Four events on a solid-on-solid lattice: deposition, diffusion, downward
     hops across a step edge, and desorption. The strained GaN/AlN quantum-dot physics of
-    Budagosky and Garcia-Cristobal (2022) is not included, and the RHEED curve is a morphology
-    proxy rather than an electron-diffraction calculation, so the comparisons below are
-    qualitative.
+    Budagosky and Garcia-Cristobal (2022) is not included. The headline RHEED curve is a
+    morphology proxy, $1-S_d$; a kinematic single-scattering detector screen and specular
+    intensity are computed from the same surfaces alongside it. Neither is dynamical RHEED, so
+    the comparisons below stay qualitative.
     """)
     return
 
@@ -515,8 +516,9 @@ def _(
                 "same periodic axial lattice to Cartesian centers so its six-neighbor "
                 "topology is shown without implying a square metric. **Step edges** colours "
                 "each site by how many of its six neighbours sit at a different height, "
-                "which is the quantity $S_d$ averages. **RHEED beam geometry** puts the "
-                "grazing ray, the surface and the lit detector screen in one scene. "
+                "which is the quantity $S_d$ averages. **RHEED beam geometry** places the "
+                "grazing ray and the detector plane on the same surface at the beam "
+                "condition selected above; what lands on that plane is the screen below. "
                 "On the RHEED trace, "
                 "the **green diamond** is the initially flat maximum and the **purple x** "
                 "is the most stepped stored frame through the first monolayer."
@@ -533,21 +535,32 @@ def _(coverage_axis, figures, get_frame, mo, screen_pattern, simulation):
         [
             figures.detector_screen(screen_pattern, float(coverage_axis[_frame])),
             mo.md(
-                "This is the detector image the surface above would produce, summed over the "
-                "same lattice: the vertical **streaks** are the in-plane rods, the bright ring "
-                "on the circled **(00) specular beam** is what a RHEED experiment records as "
-                "*the* intensity, and everything below 0° is in the substrate's **shadow**. "
-                "The horizontal dark bands are exit angles at the *in-phase* condition, where "
-                "adjacent terraces scatter together and roughness produces no diffuse "
-                "intensity at all.\n\n"
+                "This is the detector image the surface above would produce. A flat surface "
+                "diffracts only into the labelled **rods**, so the screen is black between "
+                "them; roughening moves intensity out of the rods and fills the gaps, and once "
+                "islands stack into 3D the streaks break into spots. Everything below 0° is in "
+                "the substrate's **shadow**. The horizontal dark bands are exit angles at the "
+                "*in-phase* condition, where adjacent terraces scatter together and height "
+                "disorder produces no diffuse intensity at all.\n\n"
+                "**How wide a streak is** is not a property of the simulation. The lattice is "
+                "periodic, so it is tiled or cropped to fill the beam's stated **transfer "
+                "width** — coherence length plus instrument response — and that width sets the "
+                "rod width. Several illuminated patches are then averaged in intensity, "
+                "because a real detector adds patches incoherently. Windowing the raw "
+                "simulation box instead would make a 7×7 run show degree-wide bands and a "
+                "64×64 run show narrow ones from identical physics.\n\n"
+                "**Two honest limits.** The model surface repeats every $N$ sites, so disorder "
+                "can only scatter into multiples of $1/N$ of the Brillouin zone: a small "
+                "lattice gives discrete diffuse satellites where a real surface gives a "
+                "continuum. And the calculation is kinematic — single scattering, no dynamical "
+                "diffraction, refraction, absorption, atomic form factors or inelastic "
+                "background — so every rod order comes out equally bright and absolute "
+                "brightness means nothing. The shape over a run is the result.\n\n"
                 "Switch the **beam condition** control between odd (anti-phase) and even "
                 "(in-phase) orders and watch the dashed specular curve on the right: at "
                 "anti-phase the layer cycle cancels and the intensity oscillates, at in-phase "
                 "it barely moves. That is the geometric reason RHEED oscillations exist, and "
-                "it is why the experimenter chooses the angle. The calculation is kinematic — "
-                "single scattering only, no dynamical diffraction, refraction or inelastic "
-                "background — so treat the shape over a run as the result, not the absolute "
-                "brightness."
+                "it is why the experimenter chooses the angle."
             ),
         ]
     )
