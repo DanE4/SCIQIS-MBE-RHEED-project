@@ -46,7 +46,7 @@ def controls(on_change) -> mo.ui.form:
             workflow=mo.ui.dropdown(
                 WORKFLOW_LABELS, value="GaN Ga/N comparison", label="Workflow"
             ),
-            workers=mo.ui.slider(1, 8, value=4, label="Worker processes"),
+            workers=mo.ui.slider(1, 8, value=4, label="Worker processes", show_value=True),
             seeds=mo.ui.text(
                 value="", placeholder="blank = canonical; e.g. 0,1,2", label="Comma-separated seeds"
             ),

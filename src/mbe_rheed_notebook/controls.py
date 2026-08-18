@@ -367,6 +367,7 @@ def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = N
                 label="Figure 3 nominal Ga/N ratio",
             ),
             temperature_k=mo.ui.slider(
+                show_value=True,
                 start=500,
                 stop=1_200,
                 step=10,
@@ -374,6 +375,7 @@ def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = N
                 label="Temperature (K)",
             ),
             flux_ml_s=mo.ui.slider(
+                show_value=True,
                 start=0.05, stop=1.5, step=0.05, value=values["flux_ml_s"], label="Flux (ML/s)"
             ),
             attempt_frequency_hz=mo.ui.dropdown(
@@ -382,6 +384,7 @@ def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = N
                 label="Attempt frequency",
             ),
             barrier_ev=mo.ui.slider(
+                show_value=True,
                 start=0.05,
                 stop=2.5,
                 step=0.01,
@@ -389,6 +392,7 @@ def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = N
                 label="Diffusion barrier (eV)",
             ),
             bond_energy_ev=mo.ui.slider(
+                show_value=True,
                 start=0.0,
                 stop=0.6,
                 step=0.01,
@@ -396,6 +400,7 @@ def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = N
                 label="Lateral bond energy (eV)",
             ),
             step_barrier_ev=mo.ui.slider(
+                show_value=True,
                 start=0.0,
                 stop=0.3,
                 step=0.01,
@@ -403,6 +408,7 @@ def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = N
                 label="Down-step barrier (eV)",
             ),
             desorption_barrier_ev=mo.ui.slider(
+                show_value=True,
                 start=0.2,
                 stop=3.0,
                 step=0.05,
@@ -418,6 +424,7 @@ def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = N
                 label="Stopping criterion",
             ),
             coverage_ml=mo.ui.slider(
+                show_value=True,
                 start=0.25,
                 stop=10.0,
                 step=0.25,
@@ -425,6 +432,7 @@ def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = N
                 label="Target coverage (ML)",
             ),
             duration_s=mo.ui.slider(
+                show_value=True,
                 start=0.1, stop=40.0, step=0.1, value=values["duration_s"], label="Target time (s)"
             ),
             hop_distance=mo.ui.dropdown(
