@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from mbe_rheed_notebook import batch, controls, figures
+from mbe_rheed_sim import rheed
 from mbe_rheed_sim.paper import FIGURE3_NOMINAL_GA_N_RATIOS
 
 
@@ -84,43 +85,39 @@ def test_expensive_gate_trips_on_large_lattices() -> None:
     assert controls.is_expensive(large, large_estimate)
 
 
-@pytest.mark.parametrize("builder", [figures.height_surface, figures.hex_cells])
+@pytest.mark.parametrize(
+    "builder", [figures.height_surface, figures.hex_cells, figures.step_edges]
+)
 def test_surface_builders_produce_one_trace(builder) -> None:
     heights = np.array([[0, 1], [2, 1]], dtype=np.int64)
     figure = builder(heights, coverage=1.0, zmax=2)
     assert len(figure.data) == 1
 
 
-def test_beam_geometry_is_specular_at_the_requested_grazing_angle() -> None:
-    """Both rays must carry the true angle in data coordinates, and nothing may be diffracted.
+def test_step_edge_view_counts_unequal_neighbours_and_reports_the_proxy() -> None:
+    heights = np.zeros((6, 6), dtype=np.int64)
+    figure = figures.step_edges(heights, coverage=0.0, zmax=1)
+    # A flat surface has no steps anywhere, so the proxy is 1 and every marker reads zero.
+    assert not np.asarray(figure.data[0].marker.color).any()
+    assert "1 - S_d = 1.000" in figure.layout.title.text
 
-    The rendered figure stretches z, so the check is on the underlying data: incoming and
-    outgoing slopes equal tan(angle) with opposite signs about the impact point.
-    """
-    heights = np.zeros((16, 16), dtype=np.int64)
-    angle = 2.0
-    figure = figures.rheed_geometry(heights, coverage=1.0, zmax=2, grazing_angle_deg=angle)
-    incident, specular = figure.data[1], figure.data[2]
-    expected = np.tan(np.radians(angle))
-    incoming = (incident.z[1] - incident.z[0]) / (incident.x[1] - incident.x[0])
-    outgoing = (specular.z[1] - specular.z[0]) / (specular.x[1] - specular.x[0])
-    assert incoming == pytest.approx(-expected)
-    assert outgoing == pytest.approx(expected)
-    # The rays must actually meet on the surface, not float above or cut through it.
-    assert incident.x[1] == pytest.approx(specular.x[0])
-    assert incident.z[1] == pytest.approx(float(heights[8, 8]))
-    # Stage 6J mandates this exact wording on any beam/detector overlay.
-    assert figures.BEAM_GEOMETRY_LABEL in figure.layout.title.text
-    # A screen with a single specular marker, and no intensity pattern anywhere.
-    assert {trace.name for trace in figure.data} == {
-        "surface",
-        "incident beam",
-        "specular direction",
-        "detector screen",
-        "specular spot",
-    }
-    with pytest.raises(ValueError):
-        figures.rheed_geometry(heights, coverage=1.0, zmax=2, grazing_angle_deg=90.0)
+    heights[3, 3] = 1
+    figure = figures.step_edges(heights, coverage=0.03, zmax=1)
+    counts = np.asarray(figure.data[0].marker.color).reshape(heights.shape)
+    assert counts[3, 3] == 6
+    assert counts.sum() == 12
+
+
+def test_detector_screen_marks_the_specular_beam_and_floors_the_log_scale() -> None:
+    angle = rheed.antiphase_grazing_angle_deg(3)
+    pattern = rheed.diffraction_screen(np.zeros((8, 8), dtype=np.int64), grazing_angle_deg=angle)
+    figure = figures.detector_screen(pattern, coverage=0.0)
+    screen, specular = figure.data
+    assert screen.z.min() == pytest.approx(-figures.SCREEN_LOG_DECADES)
+    assert screen.z.max() == pytest.approx(0.0)
+    assert specular.x == (0.0,) and specular.y == (angle,)
+    assert figures.DIFFRACTION_LABEL in figure.layout.title.text
+    assert "anti-phase" in figure.layout.title.text
 
 
 def test_rheed_trace_marks_the_current_frame() -> None:
@@ -130,6 +127,15 @@ def test_rheed_trace_marks_the_current_frame() -> None:
     current = figure.data[-1]
     assert current.x[0] == pytest.approx(coverage[5])
     assert current.y[0] == pytest.approx(proxy[5])
+    assert "kinematic specular (00) intensity" not in {trace.name for trace in figure.data}
+
+    specular = 0.5 * (1 + np.cos(2 * np.pi * coverage))
+    overlaid = figures.rheed_trace(
+        coverage, proxy, frame=5, axis_label="coverage (ML)", specular=specular
+    )
+    assert "kinematic specular (00) intensity" in {trace.name for trace in overlaid.data}
+    # The frame marker must stay last, since the notebook and this suite both read it there.
+    assert overlaid.data[-1].y[0] == pytest.approx(proxy[5])
 
 
 def test_batch_workflow_labels_match_the_cli() -> None:

@@ -10,10 +10,15 @@ import plotly.graph_objects as go
 from matplotlib.figure import Figure
 from plotly.subplots import make_subplots
 
+from mbe_rheed_sim.lattice import HEX_DIRECTIONS
+from mbe_rheed_sim.observables import step_density
+from mbe_rheed_sim.rheed import ScreenPattern
+
 HEX_SYMBOL = "hexagon"
 PROXY_COLOR = "#d62728"
 SIMULATION_COLOR = "#1f77b4"
 BEAM_COLOR = "#ff7f0e"
+SPECULAR_COLOR = "#0ea5e9"
 # Typical RHEED incidence is 1-3 degrees. This is a visualization
 # assumption for drawing the geometry, not a value taken from the primary paper, which reports
 # no beam angle. Nothing downstream of this figure consumes it.
@@ -21,6 +26,12 @@ GRAZING_ANGLE_DEG = 2.0
 # Mandated wording for any beam/detector overlay (STATUS.md Stage 6J). Kept as a constant so the
 # figure and its test cannot drift apart from the requirement.
 BEAM_GEOMETRY_LABEL = "explanatory geometry only — diffraction is not simulated"
+# Shown wherever a computed pattern is displayed, so a kinematic image is never mistaken for
+# the dynamical scattering a real RHEED screen records.
+DIFFRACTION_LABEL = "kinematic single scattering only — not dynamical RHEED"
+# Decades of intensity shown below the flat-surface specular value. Diffuse scattering from a
+# rough surface sits three to four decades down, so a linear screen would look empty.
+SCREEN_LOG_DECADES = 5.0
 # One monolayer of height drawn as one in-plane site spacing. For GaN that is c/2 = 0.259 nm
 # against a = 0.319 nm, so the true vertical:lateral aspect is 0.81 of what the beam shows.
 ML_PER_SITE_SPACING = 1.0
@@ -101,6 +112,133 @@ def hex_cells(heights: np.ndarray, coverage: float, zmax: int) -> go.Figure:
     return figure
 
 
+def step_edges(heights: np.ndarray, coverage: float, zmax: int) -> go.Figure:
+    """Where the steps are, drawn on the same hex geometry the proxy is measured on.
+
+    `zmax` is accepted for a common signature with the other surface views; the colour scale
+    here is the fixed 0–6 count of unequal neighbours, not height.
+    """
+    row, column = np.indices(heights.shape)
+    x, y = _axial_to_cartesian(heights)
+    unequal = sum(
+        heights != np.roll(heights, shift=(-dy, -dx), axis=(0, 1)) for dy, dx in HEX_DIRECTIONS
+    )
+    figure = go.Figure(
+        go.Scatter(
+            x=x,
+            y=y,
+            mode="markers",
+            marker={
+                "symbol": HEX_SYMBOL,
+                "size": max(9, min(24, 320 / len(heights))),
+                "color": unequal.ravel(),
+                "colorscale": "Inferno",
+                "cmin": 0,
+                "cmax": 6,
+                "colorbar": {"title": "stepped<br>neighbours", "len": 0.7},
+                "line": {"color": "rgba(255,255,255,0.35)", "width": 0.5},
+            },
+            customdata=np.column_stack(
+                (column.ravel(), row.ravel(), heights.ravel(), unequal.ravel())
+            ),
+            hovertemplate=(
+                "q=%{customdata[0]}<br>r=%{customdata[1]}<br>height=%{customdata[2]} ML"
+                "<br>stepped neighbours=%{customdata[3]} of 6<extra></extra>"
+            ),
+            name="step edges",
+        )
+    )
+    density = step_density(heights)
+    figure.update_layout(
+        height=430,
+        margin={"l": 20, "r": 20, "t": 70, "b": 30},
+        title=(
+            f"Step edges at {coverage:.2f} ML"
+            f"<br><sub>S_d = {density:.3f}, so the proxy 1 - S_d = {1 - density:.3f}</sub>"
+        ),
+        xaxis={"title": "axial q + r/2", "scaleanchor": "y", "scaleratio": 1},
+        yaxis={"title": "sqrt(3) r / 2"},
+    )
+    return figure
+
+
+def _screen_decades(pattern: ScreenPattern) -> np.ndarray:
+    """Screen intensity in decades below a flat surface, floored so log10 stays finite."""
+    return np.log10(np.maximum(pattern.intensity, 10.0**-SCREEN_LOG_DECADES))
+
+
+def detector_screen(pattern: ScreenPattern, coverage: float) -> go.Figure:
+    """The computed detector image, as the screen itself rather than as a single number."""
+    figure = go.Figure(
+        go.Heatmap(
+            x=pattern.deflection_deg,
+            y=pattern.exit_angle_deg,
+            z=_screen_decades(pattern),
+            colorscale="Inferno",
+            zmin=-SCREEN_LOG_DECADES,
+            zmax=0.0,
+            colorbar={
+                "title": "log<sub>10</sub> I<br>(flat = 0)",
+                "len": 0.7,
+                "tickvals": list(range(-int(SCREEN_LOG_DECADES), 1)),
+            },
+            hovertemplate=(
+                "deflection=%{x:.2f}°<br>exit angle=%{y:.2f}°"
+                "<br>log10 I=%{z:.2f}<extra></extra>"
+            ),
+            name="detector screen",
+        )
+    )
+    figure.add_hline(
+        y=0.0,
+        line={"color": "#94a3b8", "dash": "dot", "width": 1},
+        annotation={"text": "shadow edge", "font": {"color": "#94a3b8", "size": 10}},
+        annotation_position="top left",
+    )
+    figure.add_trace(
+        go.Scatter(
+            x=[0.0],
+            y=[pattern.grazing_angle_deg],
+            mode="markers",
+            marker={"symbol": "circle-open", "color": "#38bdf8", "size": 16, "line": {"width": 2}},
+            name="specular (00) beam",
+            hovertemplate=(
+                f"specular intensity {pattern.specular_intensity:.4f}"
+                " of a flat surface<extra></extra>"
+            ),
+        )
+    )
+    figure.update_layout(
+        height=430,
+        margin={"l": 60, "r": 10, "t": 76, "b": 60},
+        legend={"orientation": "h", "y": -0.2},
+        title=(
+            f"Detector screen at {coverage:.2f} ML — specular "
+            f"{pattern.specular_intensity:.4f} of flat"
+            f"<br><sub>{pattern.beam_energy_kev:g} keV, {pattern.grazing_angle_deg:.2f}° "
+            f"grazing, q_z d / pi = {pattern.phase_order:.2f} ({pattern.condition}) · "
+            f"{DIFFRACTION_LABEL}</sub>"
+        ),
+        # Equal angular scales, and `constrain` shrinks the drawing area to the data rather
+        # than padding the screen out with empty angles.
+        xaxis={
+            "title": "horizontal deflection (degrees)",
+            "scaleanchor": "y",
+            "scaleratio": 1,
+            "constrain": "domain",
+            "showgrid": False,
+            "zeroline": False,
+        },
+        yaxis={
+            "title": "exit angle above surface (degrees)",
+            "showgrid": False,
+            "zeroline": False,
+        },
+        plot_bgcolor="#000000",
+    )
+    return figure
+
+
 def rheed_geometry(
     heights: np.ndarray,
     coverage: float,
@@ -110,13 +248,15 @@ def rheed_geometry(
 ) -> go.Figure:
     """The simulated surface with the RHEED beam and screen placed on it.
 
-    Geometry only. The outgoing ray is the specular mirror direction about the surface plane;
-    no diffracted intensity is computed here or anywhere else in this project, so the screen
-    carries a single specular spot and no pattern. The rays are built in true data coordinates
-    at `grazing_angle_deg`, but the z axis is stretched exactly as in `height_surface` so a few
-    monolayers stay visible against a lattice hundreds of sites wide. The rendered beam
-    therefore looks far steeper than it is; the returned title states both the true angle and
-    the stretch factor.
+    Geometry only: where the beam comes in, and where the specular ray leaves. What lands on
+    this screen is computed by `detector_screen` and drawn on its own angular axes underneath.
+    It is deliberately not painted onto this screen: the specular spot sits about a degree
+    above the shadow edge, so any pattern large enough to read at this scale would require the
+    drawn beam angle to be a lie, and these rays carry the true angle in data coordinates.
+
+    The z axis is stretched exactly as in `height_surface` so a few monolayers stay visible
+    against a lattice hundreds of sites wide. The rendered beam therefore looks far steeper
+    than it is; the returned title states both the true angle and the stretch factor.
     """
     if heights.ndim != 2 or min(heights.shape) < 2 or not 0 < grazing_angle_deg < 45:
         raise ValueError("beam geometry needs a 2D lattice and a grazing angle in (0, 45)")
@@ -204,7 +344,7 @@ def rheed_geometry(
         margin={"l": 0, "r": 0, "t": 70, "b": 0},
         legend={"orientation": "h", "y": -0.02},
         title=(
-            f"Beam geometry at {coverage:.2f} ML — {grazing_angle_deg:g}° grazing incidence, "
+            f"Beam geometry at {coverage:.2f} ML — {grazing_angle_deg:.2f}° grazing incidence, "
             + (
                 f"z stretched {stretch:.0f}x for visibility"
                 if stretch >= 1.5
@@ -231,8 +371,15 @@ def rheed_trace(
     proxy: np.ndarray,
     frame: int,
     axis_label: str,
+    specular: np.ndarray | None = None,
 ) -> go.Figure:
-    """Full proxy trace annotated with the layer-cycle milestones and the current frame."""
+    """Full proxy trace annotated with the layer-cycle milestones and the current frame.
+
+    Pass `specular` to overlay the kinematic (00) intensity for the same snapshots. The two
+    curves are different quantities on a shared 0-1 scale: one counts step edges, the other
+    is a diffraction calculation. Plotting them together is the check that the cheap proxy
+    tracks the expensive observable.
+    """
     first_layer = np.flatnonzero(coverage_axis <= 1.0)
     most_stepped = int(first_layer[np.argmin(proxy[first_layer])])
     targets = np.arange(0.0, min(2.0, float(coverage_axis[-1])) + 0.01, 0.5)
@@ -276,6 +423,19 @@ def rheed_trace(
             ),
         )
     )
+    if specular is not None:
+        figure.add_trace(
+            go.Scatter(
+                x=coverage_axis,
+                y=specular,
+                mode="lines",
+                line={"color": SPECULAR_COLOR, "width": 2, "dash": "dash"},
+                name="kinematic specular (00) intensity",
+                hovertemplate=(
+                    "coverage=%{x:.2f} ML<br>specular=%{y:.3f} of flat<extra></extra>"
+                ),
+            )
+        )
     figure.add_trace(
         go.Scatter(
             x=[coverage, coverage],
@@ -299,10 +459,14 @@ def rheed_trace(
     figure.update_layout(
         height=430,
         margin={"l": 60, "r": 10, "t": 50, "b": 60},
-        title=f"RHEED proxy at {coverage:.2f} ML",
+        title=(
+            f"RHEED proxy at {coverage:.2f} ML"
+            if specular is None
+            else f"RHEED proxy and kinematic specular intensity at {coverage:.2f} ML"
+        ),
         legend={"orientation": "h", "y": -0.2},
         xaxis_title=axis_label,
-        yaxis_title="normalized proxy",
+        yaxis_title="normalized proxy" if specular is None else "normalized signal",
         yaxis_range=[0, 1.03],
     )
     return figure

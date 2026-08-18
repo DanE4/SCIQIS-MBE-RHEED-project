@@ -13,7 +13,7 @@ def _():
     import numpy as np
 
     from mbe_rheed_notebook import batch, controls, figures
-    from mbe_rheed_sim import SimulationConfig, run
+    from mbe_rheed_sim import SimulationConfig, rheed, run
     from mbe_rheed_sim.kmc import SimulationResult
     from mbe_rheed_sim.paper import FIGURE3_NOMINAL_GA_N_RATIOS
 
@@ -37,6 +37,7 @@ def _():
         json,
         mo,
         np,
+        rheed,
         run,
     )
 
@@ -346,7 +347,12 @@ def _(mo):
     # Its own cell: the frame-following widgets below are rebuilt on every playback tick, and
     # a rebuilt dropdown would snap back to its constructor value mid-animation.
     display_mode = mo.ui.dropdown(
-        options=["3D height surface", "Hexagonal cells", "RHEED beam geometry"],
+        options=[
+            "3D height surface",
+            "Hexagonal cells",
+            "Step edges",
+            "RHEED beam geometry",
+        ],
         value="3D height surface",
         label="Surface view",
     )
@@ -354,7 +360,28 @@ def _(mo):
 
 
 @app.cell
+def _(mo, rheed):
+    # Also its own cell, for the same reason as the view selector above. The labels carry the
+    # phase order because that, not the angle, is what decides whether layers cancel.
+    beam_condition = mo.ui.dropdown(
+        options={
+            f"anti-phase, order {order} ({rheed.antiphase_grazing_angle_deg(order):.2f}°)"
+            if order % 2
+            else f"in-phase, order {order} ({rheed.antiphase_grazing_angle_deg(order):.2f}°)": (
+                rheed.antiphase_grazing_angle_deg(order)
+            )
+            for order in (1, 2, 3, 4, 5)
+        },
+        value=f"anti-phase, order {rheed.DEFAULT_PHASE_ORDER} "
+        f"({rheed.antiphase_grazing_angle_deg(rheed.DEFAULT_PHASE_ORDER):.2f}°)",
+        label="Beam condition",
+    )
+    return (beam_condition,)
+
+
+@app.cell
 def _(
+    beam_condition,
     coverage_axis,
     display_mode,
     get_frame,
@@ -402,22 +429,27 @@ def _(
             mo.md(r"""
             ## 3. From surface morphology to a RHEED proxy
 
-            In place of the diffracted intensity, this model reports a morphology-based
-            stand-in,
+            The signal reported throughout this project is a morphology-based stand-in,
 
             $$I_{\mathrm{proxy}} = 1 - S_d,$$
 
             where $S_d$ is the fraction of unique nearest-neighbor bonds whose endpoint heights
-            differ. Smooth, nearly complete layers have fewer steps and a larger proxy. Real
-            RHEED phase and amplitude also depend on beam geometry, refraction, absorption,
-            surface reconstruction, and multiple scattering, none of which are modelled here.
+            differ. Smooth, nearly complete layers have fewer steps and a larger proxy.
+
+            Below it there is now also an actual diffraction calculation: the **kinematic**
+            detector image, $|\sum_j \exp(-i\,\mathbf{q}\cdot\mathbf{R}_j)|^2$ summed over
+            the column tops of the same surface. It is single scattering only — real RHEED
+            phase and amplitude also depend on refraction, absorption, surface reconstruction,
+            and strong multiple scattering, none of which are modelled — but it does produce
+            the screen, the streaks, and the specular oscillation from first principles rather
+            than by analogy.
 
             The annotated 0–2 ML milestones encode the **ideal layer-by-layer hypothesis**. The
             linked morphology and proxy show what this stochastic run actually produces;
             disagreement is a result, not hidden by relabeling.
             """),
             mo.hstack(
-                [snapshot_slider, milestone_picker, playback, display_mode],
+                [snapshot_slider, milestone_picker, playback, display_mode, beam_condition],
                 justify="start",
                 gap=2,
                 wrap=True,
@@ -429,25 +461,41 @@ def _(
 
 @app.cell
 def _(
+    beam_condition,
     coverage_axis,
     coverage_axis_label,
     display_mode,
     figures,
     get_frame,
     mo,
+    rheed,
     simulation,
 ):
     _frame = min(get_frame(), len(simulation.snapshots) - 1)
     _heights = simulation.snapshots[_frame]
     _zmax = max(1, int(simulation.snapshots.max()))
-    _builder = {
-        "3D height surface": figures.height_surface,
-        "Hexagonal cells": figures.hex_cells,
-        "RHEED beam geometry": figures.rheed_geometry,
-    }[display_mode.value]
-    surface_figure = _builder(_heights, float(coverage_axis[_frame]), _zmax)
+    _coverage = float(coverage_axis[_frame])
+    screen_pattern = rheed.diffraction_screen(
+        _heights, grazing_angle_deg=beam_condition.value
+    )
+    if display_mode.value == "RHEED beam geometry":
+        surface_figure = figures.rheed_geometry(
+            _heights, _coverage, _zmax, grazing_angle_deg=beam_condition.value
+        )
+    else:
+        surface_figure = {
+            "3D height surface": figures.height_surface,
+            "Hexagonal cells": figures.hex_cells,
+            "Step edges": figures.step_edges,
+        }[display_mode.value](_heights, _coverage, _zmax)
     rheed_figure = figures.rheed_trace(
-        coverage_axis, simulation.rheed_proxy, _frame, coverage_axis_label
+        coverage_axis,
+        simulation.rheed_proxy,
+        _frame,
+        coverage_axis_label,
+        specular=rheed.specular_intensity(
+            simulation.snapshots, grazing_angle_deg=beam_condition.value
+        ),
     )
     mo.vstack(
         [
@@ -462,13 +510,41 @@ def _(
             mo.md(
                 "The 3D height view uses array coordinates. **Hexagonal cells** maps the "
                 "same periodic axial lattice to Cartesian centers so its six-neighbor "
-                "topology is shown without implying a square metric. **RHEED beam geometry** "
-                "places a 2° grazing ray and a detector screen on the same surface to show "
-                "what the experiment looks at; the outgoing ray is the specular *direction* "
-                "only and the screen carries no pattern, because no diffraction is computed. "
+                "topology is shown without implying a square metric. **Step edges** colours "
+                "each site by how many of its six neighbours sit at a different height, "
+                "which is the quantity $S_d$ averages. **RHEED beam geometry** puts the "
+                "grazing ray, the surface and the lit detector screen in one scene. "
                 "On the RHEED trace, "
                 "the **green diamond** is the initially flat maximum and the **purple x** "
                 "is the most stepped stored frame through the first monolayer."
+            ),
+        ]
+    )
+    return (screen_pattern,)
+
+
+@app.cell
+def _(coverage_axis, figures, get_frame, mo, screen_pattern, simulation):
+    _frame = min(get_frame(), len(simulation.snapshots) - 1)
+    mo.vstack(
+        [
+            figures.detector_screen(screen_pattern, float(coverage_axis[_frame])),
+            mo.md(
+                "This is the detector image the surface above would produce, summed over the "
+                "same lattice: the vertical **streaks** are the in-plane rods, the bright ring "
+                "on the circled **(00) specular beam** is what a RHEED experiment records as "
+                "*the* intensity, and everything below 0° is in the substrate's **shadow**. "
+                "The horizontal dark bands are exit angles at the *in-phase* condition, where "
+                "adjacent terraces scatter together and roughness produces no diffuse "
+                "intensity at all.\n\n"
+                "Switch the **beam condition** control between odd (anti-phase) and even "
+                "(in-phase) orders and watch the dashed specular curve on the right: at "
+                "anti-phase the layer cycle cancels and the intensity oscillates, at in-phase "
+                "it barely moves. That is the geometric reason RHEED oscillations exist, and "
+                "it is why the experimenter chooses the angle. The calculation is kinematic — "
+                "single scattering only, no dynamical diffraction, refraction or inelastic "
+                "background — so treat the shape over a run as the result, not the absolute "
+                "brightness."
             ),
         ]
     )
