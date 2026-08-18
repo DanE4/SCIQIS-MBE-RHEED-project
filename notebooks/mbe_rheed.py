@@ -288,7 +288,10 @@ def _(
             controls.is_expensive(_config, _estimate) and not expensive_override.value,
             controls.expensive_warning(_estimate, expensive_override),
         )
-        simulation = controls.run_with_progress(_config, f"Running KMC: {experiment_name}")
+        try:
+            simulation = controls.run_with_progress(_config, f"Running KMC: {experiment_name}")
+        except RuntimeError as _error:
+            mo.stop(True, mo.callout(str(_error), kind="danger"))
         experiment_source = (
             f"live run, {_config.lattice_size}x{_config.lattice_size}, seed {_config.seed}"
         )

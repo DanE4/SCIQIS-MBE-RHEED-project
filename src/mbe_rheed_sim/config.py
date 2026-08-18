@@ -21,7 +21,7 @@ class SimulationConfig:
     max_isolated_hop_distance: int = 1
     sample_every_ml: float = 0.05
     seed: int = 0
-    max_events: int = 2_000_000
+    max_events: int | None = 2_000_000
 
     def __post_init__(self) -> None:
         if self.lattice_size < 2:
@@ -52,5 +52,5 @@ class SimulationConfig:
             raise ValueError("sample_every_ml must be positive")
         if not 1 <= self.max_isolated_hop_distance <= max(1, (self.lattice_size - 1) // 2):
             raise ValueError("max_isolated_hop_distance is too large for the periodic lattice")
-        if self.max_events < 1:
-            raise ValueError("max_events must be positive")
+        if self.max_events is not None and self.max_events < 1:
+            raise ValueError("max_events must be positive, or None for no limit")

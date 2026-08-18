@@ -1,3 +1,4 @@
+import itertools
 import json
 import math
 from collections.abc import Callable
@@ -559,13 +560,16 @@ def run(
     rheed_history: list[float] = []
     snapshots: list[HeightField] = []
 
-    def report_progress() -> None:
-        if on_progress is None:
-            return
+    def progress_fraction() -> float:
         if target_atoms:
-            on_progress(min(1.0, (deposited - desorbed) / target_atoms))
-        elif config.target_time_s:
-            on_progress(min(1.0, time / config.target_time_s))
+            return min(1.0, (deposited - desorbed) / target_atoms)
+        if config.target_time_s:
+            return min(1.0, time / config.target_time_s)
+        return 0.0
+
+    def report_progress() -> None:
+        if on_progress is not None:
+            on_progress(progress_fraction())
 
     def record() -> None:
         coverage_history.append(coverage_ml(heights))
@@ -578,7 +582,8 @@ def run(
 
     local_catalogue = _LocalLongHopCatalogue(heights, config)
     record()
-    for event_index in range(config.max_events):
+    events = itertools.count() if config.max_events is None else range(config.max_events)
+    for event_index in events:
         if target_atoms is not None and deposited - desorbed >= target_atoms:
             break
 
@@ -656,9 +661,13 @@ def run(
             # and ETA alive without storing a snapshot.
             report_progress()
     else:
+        done = progress_fraction()
+        needed = math.ceil(config.max_events / done) if done > 0 else None
         raise RuntimeError(
-            f"simulation target not reached within max_events={config.max_events}; "
-            "increase max_events or use isolated-adatom acceleration"
+            f"simulation target not reached within max_events={config.max_events:,}: "
+            f"only {done:.1%} of the target was reached. Raise the event safety limit to "
+            + (f"at least {needed:,} " if needed else "a larger value ")
+            + "or use isolated-adatom acceleration (hop distance > 1)."
         )
 
     if coverage_history[-1] != coverage_ml(heights):

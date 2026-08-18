@@ -40,7 +40,7 @@ DEFAULT_PARAMETERS = {
     "duration_s": 4.0,
     "hop_distance": 1,
     "sample_every_ml": 0.05,
-    "max_events": 2_000_000,
+    "max_events": None,
     "seed": 7,
 }
 
@@ -174,7 +174,8 @@ _FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
             "max_events",
             (
                 "Safety limit. The run raises rather than continuing forever if the target is not "
-                "reached within this many selected events."
+                "reached within this many selected events. `No limit` runs until the target is "
+                "reached; interrupt the cell to stop it."
             ),
         ),
     ),
@@ -246,7 +247,12 @@ ATTEMPT_FREQUENCIES = {
     "1e9 Hz": 1e9,
     "1e13 Hz (atomistic)": 1e13,
 }
-EVENT_LIMITS = {"2 million": 2_000_000, "10 million": 10_000_000, "50 million": 50_000_000}
+EVENT_LIMITS = {
+    "No limit": None,
+    "2 million": 2_000_000,
+    "10 million": 10_000_000,
+    "50 million": 50_000_000,
+}
 
 
 def source_selector(gallery: dict) -> tuple[mo.ui.radio, mo.ui.dropdown]:
@@ -466,6 +472,12 @@ def estimated_runtime_s(config: SimulationConfig, coverage_ml: float) -> float:
     return selected_events / SELECTED_EVENTS_PER_S
 
 
+def _event_limit(parameters: dict) -> int | None:
+    """`None` means the run has no event safety limit."""
+    limit = parameters["max_events"]
+    return None if limit is None else int(limit)
+
+
 def build_run(parameters: dict) -> tuple[SimulationConfig, float, float | None, str, str]:
     """Map one form submission to (config, runtime estimate, growth rate, name, detail)."""
     size = int(parameters["size"])
@@ -487,7 +499,7 @@ def build_run(parameters: dict) -> tuple[SimulationConfig, float, float | None, 
             ),
             max_isolated_hop_distance=hop_distance,
             sample_every_ml=float(parameters["sample_every_ml"]),
-            max_events=int(parameters["max_events"]),
+            max_events=_event_limit(parameters),
         )
         coverage = duration_s * paper.predicted_growth_rate_ml_s
         name = f"GaN paper parameters (Ga/N = {ratio:.2f})"
@@ -515,7 +527,7 @@ def build_run(parameters: dict) -> tuple[SimulationConfig, float, float | None, 
             max_isolated_hop_distance=hop_distance,
             sample_every_ml=float(parameters["sample_every_ml"]),
             seed=int(parameters["seed"]),
-            max_events=int(parameters["max_events"]),
+            max_events=_event_limit(parameters),
         )
         coverage = (
             target_coverage_ml
@@ -538,7 +550,8 @@ def build_run(parameters: dict) -> tuple[SimulationConfig, float, float | None, 
     estimate = estimated_runtime_s(config, coverage)
     detail = (
         f"{detail} Estimated {estimate:.1f} s; hop limit {hop_distance}; sampled every "
-        f"{config.sample_every_ml:g} ML; event limit {config.max_events:,}."
+        f"{config.sample_every_ml:g} ML; event limit "
+        f"{'none' if config.max_events is None else format(config.max_events, ',')}."
     )
     return config, estimate, growth_rate, name, detail
 

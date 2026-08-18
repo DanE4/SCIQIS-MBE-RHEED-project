@@ -204,3 +204,14 @@ def test_time_target_stops_at_requested_time() -> None:
     )
     assert result.time_s[-1] == 0.25
     assert result.coverage_ml[-1] == result.deposited_events / 9
+
+
+def test_no_event_limit_runs_past_the_default_cap() -> None:
+    config = SimulationConfig(lattice_size=6, target_coverage_ml=1.0, seed=3, max_events=None)
+    assert run(config).coverage_ml[-1] >= 1.0
+
+
+def test_event_limit_reports_progress_and_the_limit_that_would_suffice() -> None:
+    config = SimulationConfig(lattice_size=6, target_coverage_ml=1.0, seed=3, max_events=5)
+    with pytest.raises(RuntimeError, match=r"only .*% of the target .*at least [\d,]+"):
+        run(config)
