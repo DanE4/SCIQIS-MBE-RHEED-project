@@ -3,10 +3,11 @@ WORKFLOWS := baseline figure3 sweep convergence figure3-convergence \
 	validate-acceleration validate-science validate-sweep validate-rheed benchmark-sizes
 
 .PHONY: setup notebook test check export figure3-parameters digitize-figure3 \
-	reproduce reproduce-figure3 convergence-figure3 gallery readme-figures $(WORKFLOWS)
+	reproduce reproduce-figure3 convergence-figure3 gallery readme-figures preset-pdf rheed-visuals $(WORKFLOWS)
 
 NOTEBOOK := notebooks/mbe_rheed.py
 MARIMO_PORT ?= 2718
+PRESET_SIZE ?= 128
 WORKER_ARG = $(if $(WORKERS),--workers $(WORKERS),)
 SEED_ARG = $(if $(SEEDS),--seeds $(SEEDS),)
 SIZE_ARG = $(if $(SIZES),--sizes $(SIZES),)
@@ -36,6 +37,14 @@ convergence-figure3: figure3-convergence
 
 gallery:
 	uv run python scripts/build_gallery.py
+
+# One PDF page per preset on paper GaN physics; PRESET_SIZE=64 for a cheaper pass.
+preset-pdf:
+	uv run python scripts/export_preset_pdf.py --size $(PRESET_SIZE)
+
+# Visual companion to validate-rheed: synthetic surfaces, coverage montage, beam sweeps.
+rheed-visuals:
+	uv run python scripts/export_rheed_visuals.py --size $(PRESET_SIZE)
 
 figure3-parameters:
 	uv run python scripts/inspect_figure3_parameters.py
