@@ -1,11 +1,19 @@
 from dataclasses import dataclass
 
+from mbe_rheed_sim.lattice import INITIAL_SURFACES
+
 
 @dataclass(frozen=True, slots=True)
 class SimulationConfig:
     """Inputs for the baseline model.
 
     Energetic defaults are fast demonstration parameters, not GaN/AlN measurements.
+
+    `initial_surface` names the substrate the run starts from (see
+    `mbe_rheed_sim.lattice.INITIAL_SURFACES`). It is a name rather than an array so a config
+    stays JSON-serializable and keeps reproducing its own trajectory. Note what it does to the
+    coverage axis: `target_coverage_ml` counts monolayers *deposited*, while the recorded
+    `coverage_ml` is the absolute mean height, so the two coincide only on a flat start.
     """
 
     lattice_size: int = 12
@@ -22,6 +30,7 @@ class SimulationConfig:
     sample_every_ml: float = 0.05
     seed: int = 0
     max_events: int | None = 2_000_000
+    initial_surface: str = "flat"
 
     def __post_init__(self) -> None:
         if self.lattice_size < 2:
@@ -54,3 +63,7 @@ class SimulationConfig:
             raise ValueError("max_isolated_hop_distance is too large for the periodic lattice")
         if self.max_events is not None and self.max_events < 1:
             raise ValueError("max_events must be positive, or None for no limit")
+        if self.initial_surface not in INITIAL_SURFACES:
+            raise ValueError(
+                f"initial_surface must be one of {sorted(INITIAL_SURFACES)}"
+            )

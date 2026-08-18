@@ -12,7 +12,7 @@ from plotly.subplots import make_subplots
 
 from mbe_rheed_sim.lattice import HEX_DIRECTIONS
 from mbe_rheed_sim.observables import step_density
-from mbe_rheed_sim.rheed import ScreenPattern
+from mbe_rheed_sim.rheed import SCREEN_LOG_DECADES, ScreenPattern, screen_decades
 
 HEX_SYMBOL = "hexagon"
 PROXY_COLOR = "#d62728"
@@ -32,7 +32,6 @@ DIFFRACTION_LABEL = "kinematic single scattering only — not dynamical RHEED"
 # Decades of intensity shown below the flat-surface specular value. A real screen is viewed
 # well short of this range; three keeps the rods bright and the background near black while
 # still showing the diffuse scattering that roughening produces.
-SCREEN_LOG_DECADES = 3.0
 # One monolayer of height drawn as one in-plane site spacing. For GaN that is c/2 = 0.259 nm
 # against a = 0.319 nm, so the true vertical:lateral aspect is 0.81 of what the beam shows.
 ML_PER_SITE_SPACING = 1.0
@@ -161,11 +160,6 @@ def step_edges(heights: np.ndarray, coverage: float, zmax: int) -> go.Figure:
         yaxis={"title": "sqrt(3) r / 2"},
     )
     return figure
-
-
-def screen_decades(pattern: ScreenPattern) -> np.ndarray:
-    """Screen intensity in decades below a flat surface, floored so log10 stays finite."""
-    return np.log10(np.maximum(pattern.intensity, 10.0**-SCREEN_LOG_DECADES))
 
 
 def detector_screen(pattern: ScreenPattern, coverage: float) -> go.Figure:

@@ -15,9 +15,9 @@ from mbe_rheed_sim.lattice import (
     HEX_DIRECTIONS,
     HeightField,
     deposit,
-    empty_lattice,
     hex_disk_offsets,
     hex_ring_offsets,
+    initial_lattice,
 )
 from mbe_rheed_sim.observables import (
     coverage_ml,
@@ -530,13 +530,18 @@ class _LocalLongHopCatalogue:
 def run(
     config: SimulationConfig, on_progress: Callable[[float], None] | None = None
 ) -> SimulationResult:
-    """Run the baseline residence-time KMC from an empty surface.
+    """Run the baseline residence-time KMC from the configured starting surface.
 
     `on_progress` is called at every sampling point with the completed fraction of the
-    stopping criterion, in [0, 1].
+    stopping criterion, in [0, 1]. The default start is a bare substrate; `initial_surface`
+    begins instead from a stepped, islanded or rough surface, so the stopping coverage counts
+    monolayers deposited on top of it rather than absolute mean height.
     """
     rng = np.random.default_rng(config.seed)
-    heights = empty_lattice(config.lattice_size)
+    heights = initial_lattice(config.initial_surface, config.lattice_size)
+    # The substrate may already carry atoms, and `heights` is mutated in place, so the mass
+    # invariant below needs the starting count captured now.
+    initial_atoms = int(heights.sum())
     sites = heights.size
     target_atoms = (
         None
@@ -672,7 +677,7 @@ def run(
 
     if coverage_history[-1] != coverage_ml(heights):
         record()
-    if int(heights.sum()) != deposited - desorbed or np.any(heights < 0):
+    if int(heights.sum()) != initial_atoms + deposited - desorbed or np.any(heights < 0):
         raise RuntimeError("KMC mass/non-negativity invariant failed")
 
     return SimulationResult(

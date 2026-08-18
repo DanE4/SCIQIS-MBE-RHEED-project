@@ -189,11 +189,6 @@ def _direct_sum_error(lattice: np.ndarray, samples: int = 64) -> float:
     return worst
 
 
-def _fwhm(axis: np.ndarray, values: np.ndarray) -> float:
-    above = axis[values > 0.5 * values.max()]
-    return float(above.max() - above.min())
-
-
 def _analytic_versus_numeric(surfaces: dict[str, np.ndarray]) -> dict[str, object]:
     flat = surfaces["flat"]
     reference = rheed.diffraction_screen(
@@ -242,7 +237,7 @@ def _analytic_versus_numeric(surfaces: dict[str, np.ndarray]) -> dict[str, objec
         line = pattern.intensity[pattern.intensity.shape[0] // 2]
         sizes[str(size)] = {
             "specular_intensity": pattern.specular_intensity,
-            "measured_rod_fwhm_deg": _fwhm(pattern.deflection_deg, line),
+            "measured_rod_fwhm_deg": rheed.half_max_width(pattern.deflection_deg, line),
         }
 
     resolutions = {}
@@ -273,7 +268,7 @@ def _analytic_versus_numeric(surfaces: dict[str, np.ndarray]) -> dict[str, objec
         )
         line = pattern.intensity[pattern.intensity.shape[0] // 2]
         broadening[name] = {
-            "measured_fwhm_deg": _fwhm(pattern.deflection_deg, line),
+            "measured_fwhm_deg": rheed.half_max_width(pattern.deflection_deg, line),
             "analytic_coherence_fwhm_deg": pattern.streak_width_deg,
             "peak_intensity": float(line.max()),
         }
@@ -294,7 +289,7 @@ def _analytic_versus_numeric(surfaces: dict[str, np.ndarray]) -> dict[str, objec
         "elastic_relative_error": _elastic_error(reference),
         "direct_sum_max_absolute_error": _direct_sum_error(surfaces["stepped"]),
         "flat_specular_intensity": reference.specular_intensity,
-        "measured_rod_fwhm_deg": _fwhm(reference.deflection_deg, row),
+        "measured_rod_fwhm_deg": rheed.half_max_width(reference.deflection_deg, row),
         "analytic_rod_fwhm_deg": reference.streak_width_deg,
         "rod_position_errors": rod_errors,
         "uniform_lift_max_intensity_change": float(

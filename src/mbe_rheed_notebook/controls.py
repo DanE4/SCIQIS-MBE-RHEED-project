@@ -14,6 +14,7 @@ import marimo as mo
 
 from mbe_rheed_sim import SimulationConfig, run
 from mbe_rheed_sim.kmc import SimulationResult
+from mbe_rheed_sim.lattice import INITIAL_SURFACES
 from mbe_rheed_sim.paper import figure3_config, figure3_parameters
 from mbe_rheed_sim.rates import arrhenius_rate
 
@@ -35,6 +36,7 @@ DEFAULT_PARAMETERS = {
     "step_barrier_ev": 0.05,
     "desorption_barrier_ev": 0.65,
     "size": 16,
+    "initial_surface": "flat",
     "stop_mode": "Coverage",
     "coverage_ml": 2.0,
     "duration_s": 4.0,
@@ -88,6 +90,15 @@ _FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
             (
                 "Edge length of the periodic lattice. Sites, and so the cost of one monolayer, "
                 "scale as the square of this number."
+            ),
+        ),
+        (
+            "Starting surface",
+            "initial_surface",
+            (
+                "The substrate the run begins from. A bare substrate grows islands from nothing; "
+                "starting on steps, an island or a rough film lets you watch step-flow growth and "
+                "regrowth instead. Stopping coverage then counts monolayers deposited on top."
             ),
         ),
         (
@@ -318,6 +329,17 @@ HOP_DISTANCES = {
     "8 (accelerated)": 8,
     "16 (accelerated)": 16,
 }
+INITIAL_SURFACE_LABELS = {
+    "Bare substrate (flat)": "flat",
+    "Half layer, two levels — anti-phase extreme": "half-layer",
+    "Straight step — step-flow growth": "straight-step",
+    "Single island — growth around one nucleus": "island",
+    "Mound array — regrowth on rough": "mounds",
+    "Random rough — fully disordered start": "rough",
+}
+assert set(INITIAL_SURFACE_LABELS.values()) == set(INITIAL_SURFACES), (
+    "every starting surface the model offers needs a label, and vice versa"
+)
 ATTEMPT_FREQUENCIES = {
     "0 Hz (diffusion frozen)": 0.0,
     "1e3 Hz (teaching)": 1_000.0,
@@ -416,6 +438,7 @@ def preset_parameters(meta: dict) -> dict:
         "step_barrier_ev": config["step_barrier_ev"],
         "desorption_barrier_ev": config["desorption_barrier_ev"],
         "size": config["lattice_size"],
+        "initial_surface": config.get("initial_surface", "flat"),
         "stop_mode": "Physical time" if stop_by_time else "Coverage",
         "coverage_ml": config["target_coverage_ml"] or DEFAULT_PARAMETERS["coverage_ml"],
         "duration_s": config["target_time_s"] or DEFAULT_PARAMETERS["duration_s"],
@@ -463,6 +486,10 @@ def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = N
             step_barrier_ev=_slider("step_barrier_ev", values["step_barrier_ev"]),
             desorption_barrier_ev=_slider("desorption_barrier_ev", values["desorption_barrier_ev"]),
             size=mo.ui.dropdown(LATTICE_SIZES, value=_label(LATTICE_SIZES, values["size"])),
+            initial_surface=mo.ui.dropdown(
+                INITIAL_SURFACE_LABELS,
+                value=_label(INITIAL_SURFACE_LABELS, values["initial_surface"]),
+            ),
             stop_mode=mo.ui.radio(
                 options=["Coverage", "Physical time"],
                 value=values["stop_mode"],
@@ -539,6 +566,7 @@ def build_run(parameters: dict) -> tuple[SimulationConfig, float, float | None, 
             max_isolated_hop_distance=hop_distance,
             sample_every_ml=float(parameters["sample_every_ml"]),
             max_events=_event_limit(parameters),
+            initial_surface=parameters["initial_surface"],
         )
         coverage = duration_s * paper.predicted_growth_rate_ml_s
         name = f"GaN paper parameters (Ga/N = {ratio:.2f})"
@@ -567,6 +595,7 @@ def build_run(parameters: dict) -> tuple[SimulationConfig, float, float | None, 
             sample_every_ml=float(parameters["sample_every_ml"]),
             seed=int(parameters["seed"]),
             max_events=_event_limit(parameters),
+            initial_surface=parameters["initial_surface"],
         )
         coverage = (
             target_coverage_ml

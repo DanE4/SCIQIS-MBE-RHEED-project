@@ -14,10 +14,10 @@ import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
 
-from mbe_rheed_notebook.figures import SCREEN_LOG_DECADES, screen_decades
 from mbe_rheed_sim import rheed, run
 from mbe_rheed_sim.analysis import rheed_oscillation_metrics
 from mbe_rheed_sim.paper import figure3_config, figure3_parameters
+from mbe_rheed_sim.rheed import SCREEN_LOG_DECADES, screen_decades
 from mbe_rheed_sim.workflows import log_progress, setup_logging
 
 ROOT = Path(__file__).resolve().parents[1]

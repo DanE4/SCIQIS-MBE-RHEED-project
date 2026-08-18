@@ -22,9 +22,10 @@ from export_preset_pdf import RATIO, preset_config
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
 
-from mbe_rheed_notebook.figures import SCREEN_LOG_DECADES, screen_decades
 from mbe_rheed_sim import rheed, run
+from mbe_rheed_sim.lattice import initial_lattice
 from mbe_rheed_sim.observables import rms_roughness_ml, step_density
+from mbe_rheed_sim.rheed import SCREEN_LOG_DECADES, screen_decades
 from mbe_rheed_sim.workflows import log_progress, setup_logging
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,41 +41,21 @@ COHERENCE_NM = (1.0, 2.0, 4.0, 8.0, 16.0)
 
 
 def synthetic_surfaces(size: int = SYNTHETIC_SIZE) -> dict[str, np.ndarray]:
-    """Six surfaces whose diffraction is predictable by hand.
+    """The model's own starting surfaces, captioned for this page.
 
-    Everything is periodic, because the calculation tiles the box: a lone straight step is
-    impossible on a torus, so C carries the two steps that a single terrace boundary implies.
+    These are exactly what `initial_surface` offers a growth run, so a screen here is the
+    screen of frame 0 of the matching run rather than a separate set of test arrays.
     """
-    generator = np.random.default_rng(20260818)
-    row, column = np.indices((size, size))
-
-    flat = np.zeros((size, size), dtype=np.int64)
-
-    half = flat.copy()
-    half.ravel()[generator.permutation(size * size)[: size * size // 2]] = 1
-
-    step = flat.copy()
-    step[size // 2 :] = 1
-
-    island = flat.copy()
-    radius = size // 8
-    centre = size // 2
-    island[(row - centre) ** 2 + (column - centre) ** 2 <= radius**2] = 1
-
-    # Triangular ramps up and back down, so the array wraps without a cliff at the seam.
-    period = size // 4
-    ramp = np.abs((row % period) - period // 2)
-    mounds = (ramp.max() - ramp).astype(np.int64)
-
-    rough = generator.integers(0, 6, (size, size)).astype(np.int64)
-
     return {
-        "A  perfectly flat": flat,
-        "B  half layer, two levels": half,
-        "C  straight step (x2, periodic)": step,
-        "D  isolated island": island,
-        "E  periodic mound array": mounds,
-        "F  random rough": rough,
+        f"{letter}  {caption}": initial_lattice(name, size)
+        for letter, name, caption in (
+            ("A", "flat", "perfectly flat"),
+            ("B", "half-layer", "half layer, two levels"),
+            ("C", "straight-step", "straight step (x2, periodic)"),
+            ("D", "island", "isolated island"),
+            ("E", "mounds", "periodic pyramid array"),
+            ("F", "rough", "random rough"),
+        )
     }
 
 
@@ -107,8 +88,17 @@ def _draw_screen(axes, pattern, *, title: str, mark_rods: bool = False) -> objec
             edgecolors="#38bdf8",
             linewidths=1.0,
         )
-    axes.axhline(0.0, color="#94a3b8", linestyle=":", linewidth=0.8)
-    axes.set(title=title, xlabel="deflection (deg)", ylabel="exit angle (deg)")
+    # Only draw the horizon when this screen actually reaches it. An unconditional axhline
+    # stretches the axes below the data, and that empty strip renders as white — which reads
+    # as high intensity next to the black below-horizon shadow.
+    if pattern.exit_angle_deg[0] < 0.0 < pattern.exit_angle_deg[-1]:
+        axes.axhline(0.0, color="#94a3b8", linestyle=":", linewidth=0.8)
+    axes.set(
+        title=title,
+        xlabel="deflection (deg)",
+        ylabel="exit angle (deg)",
+        ylim=(pattern.exit_angle_deg[0], pattern.exit_angle_deg[-1]),
+    )
     return image
 
 
@@ -191,8 +181,9 @@ def page_montage(result, angle: float) -> Figure:
     figure.suptitle(
         f"Coverage montage, 0 to 2 ML — Ga/N = {RATIO} paper preset, "
         f"{result.config.lattice_size}x{result.config.lattice_size}, {angle:.3f}° grazing.\n"
-        "Flat -> islands -> flat -> islands: the screen and the specular marker do one full\n"
-        "cycle per monolayer, which is the oscillation the whole model is about.",
+        "Roughens near half coverage, partially smooths near integer ML: one cycle per\n"
+        "monolayer, but not a return to flat — at 1 ML $\\sigma_h$ is still 0.246 and the "
+        "specular recovers only to 0.781. The incomplete recovery is the damping.",
         fontsize=12,
     )
     return figure
@@ -214,19 +205,28 @@ def page_phase_orders(heights: np.ndarray) -> Figure:
         )
         if column == len(PHASE_ORDERS) - 1:
             figure.colorbar(image, ax=axes[0, column], label="log10 I (flat surface = 0)")
-        # Horizontal cut through the specular row: turns "the streak looks wider" into a number.
-        row = int(np.argmin(np.abs(pattern.exit_angle_deg - pattern.grazing_angle_deg)))
+        # Horizontal cut along the specular row. Two different quantities live on this line and
+        # they must not be conflated: the specular pixel at zero deflection, which is what
+        # `specular_intensity` reports, and the largest value anywhere on the row, which at an
+        # anti-phase order is a diffuse feature well away from the beam.
+        row = rheed.specular_row(pattern)
         axes[1, column].semilogy(
             pattern.deflection_deg,
-            np.maximum(pattern.intensity[row], 10.0**-SCREEN_LOG_DECADES),
+            np.maximum(row, 10.0**-SCREEN_LOG_DECADES),
             color="tab:cyan",
         )
+        axes[1, column].axvline(0.0, color="#111827", linestyle=":", linewidth=0.8)
         axes[1, column].set(
             xlabel="deflection (deg)",
             ylabel="I (flat = 1)" if column == 0 else "",
             ylim=(10.0**-SCREEN_LOG_DECADES, 1.5),
-            title=f"cut through (00), peak {pattern.intensity[row].max():.4f}",
+            title=(
+                f"specular pixel {pattern.specular_intensity:.4f}\n"
+                f"row max {row.max():.4f} at "
+                f"{pattern.deflection_deg[int(np.argmax(row))]:+.2f}°"
+            ),
         )
+        axes[1, column].title.set_fontsize(9)
     figure.suptitle(
         "Phase-order sweep on one frozen half-covered two-level surface "
         f"({np.mean(heights):.2f} ML).\n"
@@ -256,7 +256,10 @@ def page_azimuths(heights: np.ndarray) -> Figure:
             pattern,
             title=(
                 f"azimuth {azimuth:g}° — {len(rods)} reachable rods\n"
-                + ", ".join(rod.label for rod in rods[:6])
+                + "\n".join(
+                    ", ".join(rod.label for rod in rods[start : start + 4])
+                    for start in range(0, len(rods), 4)
+                )
             ),
             mark_rods=True,
         )
@@ -341,19 +344,46 @@ def page_coherence(surfaces: dict[str, np.ndarray], angle: float) -> Figure:
     )
     specular_axes.legend(fontsize=8)
 
+    # Measured against predicted, not the prediction on its own. The rod is a fraction of a
+    # degree wide, so it needs a finely resolved screen or the measurement returns its own
+    # pixel pitch; a flat surface isolates the instrument width from any surface disorder.
+    measured = []
+    for coherence in COHERENCE_NM:
+        fine = rheed.diffraction_screen(
+            surfaces["A  perfectly flat"],
+            grazing_angle_deg=angle,
+            coherence_length_nm=coherence,
+            span_deg=1.0,
+            shape=(41, 801),
+        )
+        measured.append(rheed.measured_rod_fwhm_deg(fine))
+
     width_axes = figure.add_subplot(grid[1, 2:])
     width_axes.loglog(
         COHERENCE_NM,
         [pattern.streak_width_deg for pattern in patterns],
-        marker="o",
         color="tab:cyan",
+        label=r"analytic $4\sqrt{2}\ln 2 / (L_c k \cos\theta)$",
+    )
+    width_axes.loglog(
+        COHERENCE_NM,
+        measured,
+        marker="o",
+        linestyle="none",
+        color="#111827",
+        label="measured off the screen (FWHM of the specular row)",
     )
     width_axes.set(
         xlabel="coherence length $L_c$ (nm)",
-        ylabel="analytic rod FWHM (deg)",
-        title=r"Rod width $\propto 1/L_c$ — `make validate-rheed` checks this against"
-        "\nthe measured width",
+        ylabel="rod FWHM (deg)",
+        title=(
+            "Measured rod width follows the analytic $1/L_c$ prediction\n"
+            f"(largest deviation {max(abs(m - p.streak_width_deg) for m, p in zip(measured, patterns, strict=True)):.4f}°"
+            " — `make validate-rheed` asserts this)"
+        ),
     )
+    width_axes.legend(fontsize=8)
+    width_axes.title.set_fontsize(9)
     figure.suptitle(
         "Coherence sweep on one frozen stepped surface (0.50 ML, two levels) — "
         f"{angle:.3f}° grazing.\n"

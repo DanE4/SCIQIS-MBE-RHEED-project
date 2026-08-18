@@ -525,6 +525,44 @@ def specular_intensity(
     return intensities[0] if stack.ndim == 2 else intensities
 
 
+SCREEN_LOG_DECADES = 3.0
+
+
+def half_max_width(axis: NDArray[np.float64], values: NDArray[np.float64]) -> float:
+    """Full width at half maximum, as the extent of the samples above half the peak."""
+    above = axis[values > 0.5 * values.max()]
+    return float(above.max() - above.min())
+
+
+def specular_row(pattern: "ScreenPattern") -> NDArray[np.float64]:
+    """The screen row through the specular beam. Row counts are odd, so this is the centre."""
+    return pattern.intensity[pattern.intensity.shape[0] // 2]
+
+
+def measured_rod_fwhm_deg(pattern: "ScreenPattern") -> float:
+    """Rod width measured off the screen, to compare against the analytic `streak_width_deg`.
+
+    Resolve the screen finely enough before trusting this: a rod a few pixels wide measures its
+    own pixel grid. `scripts/validate_rheed.py` is what asserts the two agree.
+    """
+    return half_max_width(pattern.deflection_deg, specular_row(pattern))
+
+
+def screen_decades(
+    pattern: "ScreenPattern", decades: float = SCREEN_LOG_DECADES
+) -> NDArray[np.float64]:
+    """Screen intensity in decades relative to a flat surface, floored so log10 stays finite.
+
+    `intensity` is normalized to 1.0 for a flat surface at the same beam condition and never
+    exceeds it, so this runs from `-decades` up to 0. Displaying it on that fixed range is what
+    keeps two screens comparable: a run whose specular has collapsed stays dark instead of being
+    renormalized back to full brightness.
+    """
+    if decades <= 0:
+        raise ValueError("decades must be positive")
+    return np.log10(np.maximum(pattern.intensity, 10.0**-decades))
+
+
 def satellite_artifact_ratio(
     lattice_size: int,
     *,

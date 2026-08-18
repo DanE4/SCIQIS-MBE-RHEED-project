@@ -34,6 +34,74 @@ def empty_lattice(size: int) -> HeightField:
     return np.zeros((size, size), dtype=np.int64)
 
 
+def _half_layer(size: int) -> HeightField:
+    """Exactly half the sites raised one level, scattered. The anti-phase extreme."""
+    heights = empty_lattice(size)
+    # Fixed seed: the surface has to be a pure function of its name, or a config stops
+    # reproducing its own trajectory.
+    chosen = np.random.default_rng(20260818).permutation(size * size)[: size * size // 2]
+    heights.ravel()[chosen] = 1
+    return heights
+
+
+def _straight_step(size: int) -> HeightField:
+    """One terrace boundary, which on a torus necessarily means two straight steps."""
+    heights = empty_lattice(size)
+    heights[size // 2 :] = 1
+    return heights
+
+
+def _island(size: int) -> HeightField:
+    """A single compact island, one level high, on the true hex geometry."""
+    heights = empty_lattice(size)
+    centre = size // 2
+    for dy, dx in hex_disk_offsets(max(1, size // 8)):
+        heights[(centre + dy) % size, (centre + dx) % size] = 1
+    return heights
+
+
+def _mounds(size: int) -> HeightField:
+    """A periodic array of pyramids: triangular ramps in *both* directions.
+
+    Ramping only along rows gives a 1D grating, which diffracts quite differently from a mound
+    array, so both axes carry the ramp and the peaks are genuinely localized. Triangular rather
+    than sawtooth so the array wraps without a cliff at the seam.
+    """
+    period = max(2, size // 4)
+    row, column = np.indices((size, size))
+    ridge_y = np.abs((row % period) - period // 2)
+    ridge_x = np.abs((column % period) - period // 2)
+    # Minimum, not sum: that is a pyramid, and it keeps the peak height at period/2 instead
+    # of doubling it into a spike taller than the mound spacing.
+    return np.minimum(ridge_y.max() - ridge_y, ridge_x.max() - ridge_x).astype(np.int64)
+
+
+def _rough(size: int) -> HeightField:
+    """Uncorrelated heights: the fully disordered limit."""
+    return np.random.default_rng(20260819).integers(0, 6, (size, size)).astype(np.int64)
+
+
+# Named starting surfaces. A growth run may begin from any of these instead of a bare
+# substrate, which is what makes step-flow and regrowth-on-rough reachable at all. Names are
+# stored in SimulationConfig, so each one must stay a deterministic function of the size.
+INITIAL_SURFACES = {
+    "flat": empty_lattice,
+    "half-layer": _half_layer,
+    "straight-step": _straight_step,
+    "island": _island,
+    "mounds": _mounds,
+    "rough": _rough,
+}
+
+
+def initial_lattice(name: str, size: int) -> HeightField:
+    if name not in INITIAL_SURFACES:
+        raise ValueError(
+            f"unknown initial surface {name!r}; expected one of {sorted(INITIAL_SURFACES)}"
+        )
+    return INITIAL_SURFACES[name](size)
+
+
 def neighbors(y: int, x: int, size: int) -> Iterator[tuple[int, int]]:
     for dy, dx in HEX_DIRECTIONS:
         yield (y + dy) % size, (x + dx) % size
