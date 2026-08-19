@@ -132,6 +132,13 @@ def hex_cells(heights: np.ndarray, coverage: float, zmax: int) -> go.Figure:
     return figure
 
 
+def _stepped_neighbours(heights: np.ndarray) -> np.ndarray:
+    """Count of the six neighbours at a different height, per site."""
+    return sum(
+        heights != np.roll(heights, shift=(-dy, -dx), axis=(0, 1)) for dy, dx in HEX_DIRECTIONS
+    )
+
+
 def step_edges(heights: np.ndarray, coverage: float, zmax: int) -> go.Figure:
     """Where the steps are, drawn on the same hex geometry the proxy is measured on.
 
@@ -140,9 +147,7 @@ def step_edges(heights: np.ndarray, coverage: float, zmax: int) -> go.Figure:
     """
     row, column = np.indices(heights.shape)
     x, y = _axial_to_cartesian(heights)
-    unequal = sum(
-        heights != np.roll(heights, shift=(-dy, -dx), axis=(0, 1)) for dy, dx in HEX_DIRECTIONS
-    )
+    unequal = _stepped_neighbours(heights)
     figure = go.Figure(
         go.Scatter(
             x=x,
@@ -1027,54 +1032,3 @@ def figure3_comparison(figure3_data: dict) -> tuple[go.Figure, str]:
     )
     return figure, "\n".join(rows)
 
-
-def morphology_sequence(morphology: dict) -> go.Figure:
-    """The stored layer-cycle snapshots drawn side by side on the hex lattice."""
-    frames = morphology["frames"]
-    figure = make_subplots(
-        rows=1,
-        cols=len(frames),
-        subplot_titles=[
-            f"target {frame['target_predicted_coverage_ml']:.1f} ML<br>"
-            f"actual {frame['predicted_coverage_ml']:.2f} ML"
-            for frame in frames
-        ],
-        horizontal_spacing=0.03,
-    )
-    maximum_height = max(np.max(frame["height_ml"]) for frame in frames)
-    for column, frame in enumerate(frames, start=1):
-        heights = np.asarray(frame["height_ml"])
-        x, y = _axial_to_cartesian(heights)
-        figure.add_trace(
-            go.Scatter(
-                x=x,
-                y=y,
-                mode="markers",
-                marker={
-                    "symbol": HEX_SYMBOL,
-                    "size": 16,
-                    "color": heights.ravel(),
-                    "coloraxis": "coloraxis",
-                    "line": {"color": "white", "width": 0.5},
-                },
-                customdata=heights.ravel(),
-                hovertemplate="height=%{customdata} ML<extra></extra>",
-                showlegend=False,
-            ),
-            row=1,
-            col=column,
-        )
-        figure.update_xaxes(visible=False, row=1, col=column)
-        figure.update_yaxes(visible=False, row=1, col=column)
-    figure.update_layout(
-        height=320,
-        margin={"l": 10, "r": 50, "t": 90, "b": 20},
-        title="Figure 4-inspired layer-cycle morphology - no strain or SK claim",
-        coloraxis={
-            "colorscale": "Viridis",
-            "cmin": 0,
-            "cmax": max(1, maximum_height),
-            "colorbar": {"title": "height (ML)"},
-        },
-    )
-    return figure

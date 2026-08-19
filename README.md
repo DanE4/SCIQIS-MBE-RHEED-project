@@ -29,6 +29,20 @@ the next nucleates, which is what makes the proxy oscillate (`make figure3`).
 
 ![Surface height maps from 0 to 2 ML](assets/figure4_inspired_morphology.png)
 
+The same surfaces seen across all three Ga/N conditions at the two points that define the
+oscillation: a half-filled layer and a closed one. Rows are coverage, columns are Ga/N, and
+every panel comes from the ensemble the comparison above already ran, so the figure costs no
+extra simulation (`make figure3`).
+
+![Top-down morphology at 0.5 and 1.0 ML for three Ga/N ratios](assets/figure3_morphology_montage.png)
+
+At 0.50 ML the surface is islanded and `S_d` peaks; at 1.00 ML the layer has closed and `S_d`
+drops by roughly half, which is the whole of why the proxy oscillates. Across the columns the
+trend is monotonic in both rows: raising Ga/N from 0.68 to 0.89 lowers `S_d` from 0.113 to 0.079
+at half coverage and from 0.056 to 0.030 at layer completion, so the richer Ga conditions sit
+closer to ideal layer-by-layer filling. This is homoepitaxial GaN throughout - no strain, no
+Stranski-Krastanov transition and no quantum dots are modelled or claimed.
+
 Proxy amplitude against temperature and flux, 128x128, six seeds per point. Higher flux raises
 the plotted raw amplitude at every temperature, while the temperature trend is weaker and not
 monotonic at the lowest flux. The detrended amplitude, which is the principal observable in the
@@ -307,6 +321,12 @@ Section **5** asks where results come from:
   across cores, so a large lattice on a slow machine takes what it takes: if you are waiting
   too long, go back to the pre-computed demos, which cover the same physics at 128x128.
 
+Section **4** carries the Figure 3 comparison and, below it, the two morphology figures shown
+above. Both are the committed PNGs rather than interactive plots: a 128x128 surface is 16k sites,
+and drawing six of them as live markers costs tens of thousands of SVG nodes and a page that
+stops responding. The interactive surface, hex-cell and step-edge views work on the smaller
+lattices section **2** runs, where they are responsive and worth having.
+
 One trajectory cannot use more than one core, since each event mutates the surface the next event
 is sampled from. Cores only help across independent runs, which is what section **11. Batch
 workflows** is for; it drives the same CLI as `make` and reloads promoted data in place.
@@ -363,7 +383,7 @@ has. The non-workflow targets are listed with their commands at the bottom of th
 | `make rheed-visuals` | `uv run python scripts/export_rheed_visuals.py --size 128`; writes `outputs/rheed_visuals.pdf` |
 | `make preset-pdf` | `uv run python scripts/export_preset_pdf.py --size 128`; one page per preset, `outputs/preset_gallery.pdf` |
 | `make gallery` | rebuild the six stored notebook demos at 128x128; `SIZES=<one size>` to change |
-| `make readme-figures` | rerun `figure3` + `sweep`, then copy the three PNGs from `outputs/figures/` into `assets/`; about 35 min at the 128x128 defaults |
+| `make readme-figures` | rerun `figure3` + `sweep`, then copy the four PNGs from `outputs/figures/` into `assets/` |
 | `make test` | `uv run pytest` |
 | `make check` | `uv run ruff check .`, `uv run marimo check --strict notebooks/mbe_rheed.py`, `uv run python notebooks/mbe_rheed.py` |
 | `make export` | `uv run marimo export html notebooks/mbe_rheed.py -o outputs/mbe_rheed.html -f` |

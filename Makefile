@@ -51,6 +51,7 @@ digitize-figure3:
 
 readme-figures: figure3 sweep
 	cp outputs/figures/figure3_comparison.png outputs/figures/figure4_inspired_morphology.png \
+		outputs/figures/figure3_morphology_montage.png \
 		outputs/figures/parameter_sweep.png assets/
 
 export:

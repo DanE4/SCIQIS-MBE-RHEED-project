@@ -7,7 +7,12 @@ from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
-from figure3_plots import morphology_sequence, plot_comparison, plot_metrics
+from figure3_plots import (
+    morphology_montage,
+    morphology_sequence,
+    plot_comparison,
+    plot_metrics,
+)
 
 from mbe_rheed_sim import run
 from mbe_rheed_sim.analysis import rheed_oscillation_metrics
@@ -76,6 +81,8 @@ def main(
     traces = []
     morphology_result = None
     morphology_growth_rate = None
+    # One representative seed per ratio, reused by the top-down montage below.
+    montage_runs: list[dict[str, object]] = []
 
     configurations = [
         figure3_config(ratio, lattice_size=lattice_size, seed=seed)
@@ -157,6 +164,13 @@ def main(
                 ],
             }
         )
+        montage_runs.append(
+            {
+                "nominal_ga_n_ratio": ratio,
+                "result": results[0],
+                "predicted_growth_rate_ml_s": parameters.predicted_growth_rate_ml_s,
+            }
+        )
         if ratio == MORPHOLOGY_RATIO:
             morphology_result = results[0]
             morphology_growth_rate = parameters.predicted_growth_rate_ml_s
@@ -195,6 +209,7 @@ def main(
     morphology = morphology_sequence(
         morphology_result, morphology_growth_rate, figure_dir, seeds[0], MORPHOLOGY_RATIO
     )
+    montage = morphology_montage(montage_runs, figure_dir)
     plot_comparison(traces, figure_dir)
     plot_metrics(comparisons, figure_dir)
 
@@ -221,10 +236,12 @@ def main(
         "traces": traces,
         "comparisons": comparisons,
         "morphology_sequence": morphology,
+        "morphology_montage": montage,
         "figures": [
             "outputs/figures/figure3_comparison.png",
             "outputs/figures/figure3_metric_comparison.png",
             "outputs/figures/figure4_inspired_morphology.png",
+            "outputs/figures/figure3_morphology_montage.png",
         ],
     }
     (run_dir / "figure3_comparison.json").write_text(json.dumps(artifact, indent=2) + "\n")

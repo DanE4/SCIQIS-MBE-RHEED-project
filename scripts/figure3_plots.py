@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 MORPHOLOGY_TARGETS_ML = (0.0, 0.5, 1.0, 1.5, 2.0)
+# Rows of the 2x3 montage: a half-filled layer beside a completed one.
+MONTAGE_COVERAGES_ML = (0.5, 1.0)
 # The two figures copied into assets/ by `make readme-figures` are fetched on every GitHub
 # README load, where the column is under 900 px wide, so print resolution only costs bytes.
 README_DPI = 120
@@ -149,4 +151,104 @@ def morphology_sequence(
         "seed": morphology_seed,
         "coordinate": "paper-predicted coverage = predicted growth rate times time",
         "frames": frames,
+    }
+
+
+def morphology_montage(runs: list[dict[str, object]], figure_dir: Path) -> dict[str, object]:
+    """Top-down 2x3 montage: rows are coverage, columns are the paper's Ga/N ratios.
+
+    `runs` carries one representative single-seed result per ratio, already produced by the
+    Figure 3 ensemble, so this costs no extra simulation. Panels are picked on the same
+    paper-predicted coverage axis `morphology_sequence` uses.
+    """
+    ordered = sorted(runs, key=lambda entry: entry["nominal_ga_n_ratio"])
+    panels = []
+    for entry in ordered:
+        result = entry["result"]
+        predicted = result.time_s * entry["predicted_growth_rate_ml_s"]
+        for target in MONTAGE_COVERAGES_ML:
+            index = int(np.argmin(np.abs(predicted - target)))
+            proxy = float(result.rheed_proxy[index])
+            panels.append(
+                {
+                    "nominal_ga_n_ratio": entry["nominal_ga_n_ratio"],
+                    "target_predicted_coverage_ml": target,
+                    "predicted_coverage_ml": float(predicted[index]),
+                    "net_simulated_coverage_ml": float(result.coverage_ml[index]),
+                    "time_s": float(result.time_s[index]),
+                    "roughness_ml": float(result.roughness_ml[index]),
+                    "island_density_per_site": float(result.island_density_per_site[index]),
+                    # The stored trace is the proxy itself, so S_d is its complement.
+                    "step_density": 1.0 - proxy,
+                    "rheed_proxy": proxy,
+                    "height_ml": result.snapshots[index].tolist(),
+                }
+            )
+
+    ratios = [entry["nominal_ga_n_ratio"] for entry in ordered]
+    figure, axes = plt.subplots(
+        len(MONTAGE_COVERAGES_ML),
+        len(ratios),
+        figsize=(11, 7.4),
+        constrained_layout=True,
+    )
+    maximum_height = max(max(max(row) for row in panel["height_ml"]) for panel in panels)
+    for panel in panels:
+        row = MONTAGE_COVERAGES_ML.index(panel["target_predicted_coverage_ml"])
+        column = ratios.index(panel["nominal_ga_n_ratio"])
+        axis = axes[row, column]
+        heights = np.asarray(panel["height_ml"])
+        y, x = np.indices(heights.shape)
+        image = axis.scatter(
+            x + 0.5 * y,
+            np.sqrt(3.0) / 2.0 * y,
+            c=heights,
+            marker="h",
+            # One marker per site, deliberately overfilled so the map reads as a continuous
+            # surface at any lattice size. Same convention as `morphology_sequence`, rescaled
+            # from its (128 sites, s=190, 2.4 in) panel to this figure's wider ones.
+            s=5.9e6 / len(heights) ** 2,
+            cmap="viridis",
+            vmin=0,
+            vmax=max(1, maximum_height),
+        )
+        axis.set_title(
+            f"Ga/N = {panel['nominal_ga_n_ratio']:.2f}, "
+            f"{panel['predicted_coverage_ml']:.2f} ML",
+            fontsize=10,
+        )
+        axis.set_xlabel(
+            f"roughness {panel['roughness_ml']:.3f} ML\n"
+            f"$S_d$ = {panel['step_density']:.3f}, "
+            f"$1-S_d$ = {panel['rheed_proxy']:.3f}\n"
+            f"island density {panel['island_density_per_site']:.4f} / site",
+            fontsize=8,
+        )
+        axis.set_xticks([])
+        axis.set_yticks([])
+        axis.set_aspect("equal")
+    for row, target in enumerate(MONTAGE_COVERAGES_ML):
+        axes[row, 0].set_ylabel(f"target {target:.2f} ML", fontsize=11)
+    figure.colorbar(image, ax=axes, shrink=0.6, label="column height (ML)")
+    figure.suptitle(
+        "Top-down homoepitaxial morphology across the Figure 3 Ga/N conditions\n"
+        "Partial layers are stepped and rough; completed layers smooth out. "
+        "No strain, no SK transition, no quantum dots."
+    )
+    figure.savefig(figure_dir / "figure3_morphology_montage.png", dpi=README_DPI)
+    plt.close(figure)
+    return {
+        "classification": (
+            "homoepitaxial coverage/flux morphology comparison; "
+            "not a strain, Stranski-Krastanov or quantum-dot reproduction"
+        ),
+        "coordinate": "paper-predicted coverage = predicted growth rate times time",
+        "nominal_ga_n_ratios": ratios,
+        "target_coverages_ml": list(MONTAGE_COVERAGES_ML),
+        # The picture is the PNG above, so the artifact keeps the per-panel numbers and drops
+        # the six height fields behind them - 200 kB of committed JSON nothing reads back.
+        "panels": [
+            {key: value for key, value in panel.items() if key != "height_ml"}
+            for panel in panels
+        ],
     }

@@ -188,3 +188,4 @@ def test_slider_grids_are_clean_and_snap_off_grid_presets():
         assert len(steps) % 4 == 1  # exactly five evenly spaced tick labels
         assert controls._snap(steps[0] - 1e6, steps) == steps[0]
         assert controls._snap(steps[3] + 1e-9, steps) == steps[3]
+
