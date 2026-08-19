@@ -228,7 +228,7 @@ def page(index: int, name: str, title: str, result, base, elapsed: float) -> Fig
         if not modified
         else f"derived from the Ga/N = {RATIO} paper preset; modified: {modified}"
     )
-    figure.suptitle(f"Run {index} of {len(PRESETS)} — {title}\n{provenance}", fontsize=13)
+    figure.suptitle(f"Run {index} of {len(PRESETS)} - {title}\n{provenance}", fontsize=13)
     return figure
 
 

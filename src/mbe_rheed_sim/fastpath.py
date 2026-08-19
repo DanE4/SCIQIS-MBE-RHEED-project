@@ -1,8 +1,8 @@
 """Optional compiled kernels for the accelerated-catalogue hot path.
 
 The KMC event loop, the RNG stream, and every rate value stay in `kmc.py`. This module
-only re-expresses three per-event operations — local rate refresh, Fenwick update, and
-Fenwick sampling — as scalar loops that Numba can compile, because at a few hundred
+only re-expresses three per-event operations - local rate refresh, Fenwick update, and
+Fenwick sampling - as scalar loops that Numba can compile, because at a few hundred
 affected sites per event the NumPy versions are dominated by call overhead rather than
 arithmetic.
 

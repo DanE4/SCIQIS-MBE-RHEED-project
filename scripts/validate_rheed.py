@@ -403,7 +403,7 @@ def main() -> None:
         pattern = rheed.diffraction_screen(lattice, grazing_angle_deg=GRAZING_DEG)
         _draw(
             pattern,
-            f"{name} surface — {pattern.beam_energy_kev:g} keV, "
+            f"{name} surface - {pattern.beam_energy_kev:g} keV, "
             f"{pattern.grazing_angle_deg:.2f}° grazing, specular "
             f"{pattern.specular_intensity:.4f} of flat",
             directory / f"{name}_surface.png",
