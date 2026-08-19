@@ -19,8 +19,8 @@ from mbe_rheed_sim.lattice import INITIAL_SURFACES
 from mbe_rheed_sim.paper import figure3_config, figure3_parameters
 from mbe_rheed_sim.rates import arrhenius_rate
 
-HAND_TUNED = "Hand-tuned parameters"
-FROM_PAPER = "GaN parameters from the paper (overrides T, flux, barriers below)"
+HAND_TUNED = "Hand-tuned"
+FROM_PAPER = "From the paper"
 PRE_COMPUTED = "Pre-computed demo"
 SIMULATE_NOW = "Simulate now"
 SAVED_RUN = "Saved run"
@@ -58,7 +58,8 @@ _FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
             "experiment_mode",
             (
                 "Edit every growth condition by hand, or regenerate temperature, effective Ga flux "
-                "and all four barriers from the paper's fit for one Ga/N ratio."
+                "and all four barriers from the paper's fit for one Ga/N ratio. From the "
+                "paper overrides the temperature, flux and barrier controls below."
             ),
         ),
         (
@@ -208,10 +209,11 @@ _SLIDERS: dict[str, tuple[float, float, float]] = {
 }
 
 
-# ponytail: reserves room for the number box `include_input` puts beside the track, so the
-# tick labels line up with the track ends. A fixed box also stops the layout reflowing (and
-# the thumb jittering) as the digits change while dragging, which `show_value` did.
-_VALUE_BOX_WIDTH = "4.6rem"
+# The width the tick row has to skip so its labels line up with the track ends: marimo lays
+# the slider out as `flex gap-2` with a `w-24` number input beside the track, so that is
+# 6rem of box plus 0.5rem of gap. A fixed box also stops the layout reflowing (and the thumb
+# jittering) as the digits change while dragging, which `show_value` did.
+_VALUE_BOX_WIDTH = "6.5rem"
 
 
 def _steps(key: str) -> list[float]:
@@ -264,11 +266,15 @@ def info(help_text: str) -> str:
     broken link on a bare glyph. Inline styles are the fix that survives: they beat that rule,
     and a `<style>` block is not guaranteed to make it through the markdown renderer.
     """
+    escaped = html.escape(help_text, quote=True)
+    # title= as well as data-tooltip: the styled marimo tooltip is undocumented and only fires
+    # where its React renderer touches the element, the browser's own tooltip always fires.
     return (
-        f'<span data-tooltip="{html.escape(help_text, quote=True)}" '
+        f'<span data-tooltip="{escaped}" title="{escaped}" '
         'style="text-decoration:none;cursor:help;color:var(--blue-11);opacity:.85;'
         'font-size:.9em;vertical-align:.08em;padding:0 .1em">&#9432;</span>'
     )
+
 
 _ADVANCED_SECTIONS = ("Energetics", "Numerical controls")
 
@@ -280,7 +286,11 @@ _GRID = (
     "display:grid;grid-template-columns:repeat(auto-fit,minmax(21rem,30rem));"
     "gap:0 2.5rem;align-items:start"
 )
-_ROW_LABEL = "text-align:right;white-space:nowrap;padding:0 .6rem 0 0;vertical-align:middle"
+_ROW_LABEL = (
+    "text-align:right;white-space:nowrap;padding:0 .6rem 0 0;vertical-align:middle;width:1%"
+)
+# Widgets start at a common left edge instead of drifting to the right of the cell.
+_ROW_VALUE = "text-align:left;width:99%"
 
 
 def _layout() -> str:
@@ -293,7 +303,8 @@ def _layout() -> str:
     for section, rows in _FIELDS.items():
         body = "".join(
             f'<tr><td style="{_ROW_LABEL}">{label}{info(help_text)}</td>'
-            f"<td>{_slider_cell(key) if key in _SLIDERS else f'{{{key}}}'}</td></tr>"
+            f'<td style="{_ROW_VALUE}">'
+            f"{_slider_cell(key) if key in _SLIDERS else f'{{{key}}}'}</td></tr>"
             for label, key, help_text in rows
         )
         blocks[section] = (
@@ -320,17 +331,17 @@ def _label(options: dict, value) -> str:
 
 
 LATTICE_SIZES = {
-    "7 x 7 — paper reduced": 7,
-    "8 x 8 — baseline": 8,
-    "12 x 12 — tiny": 12,
-    "16 x 16 — fast interactive": 16,
-    "24 x 24 — detailed interactive": 24,
-    "32 x 32 — science check": 32,
-    "48 x 48 — extended": 48,
-    "64 x 64 — large": 64,
-    "96 x 96 — expensive": 96,
-    "128 x 128 — benchmark": 128,
-    "256 x 256 — paper reference": 256,
+    "7 x 7 - paper reduced": 7,
+    "8 x 8 - baseline": 8,
+    "12 x 12 - tiny": 12,
+    "16 x 16 - fast interactive": 16,
+    "24 x 24 - detailed interactive": 24,
+    "32 x 32 - science check": 32,
+    "48 x 48 - extended": 48,
+    "64 x 64 - large": 64,
+    "96 x 96 - expensive": 96,
+    "128 x 128 - benchmark": 128,
+    "256 x 256 - paper reference": 256,
 }
 HOP_DISTANCES = {
     "1 (exact nearest-neighbor KMC)": 1,
@@ -341,11 +352,11 @@ HOP_DISTANCES = {
 }
 INITIAL_SURFACE_LABELS = {
     "Bare substrate (flat)": "flat",
-    "Half layer, two levels — anti-phase extreme": "half-layer",
-    "Straight step — step-flow growth": "straight-step",
-    "Single island — growth around one nucleus": "island",
-    "Mound array — regrowth on rough": "mounds",
-    "Random rough — fully disordered start": "rough",
+    "Half layer, two levels - anti-phase extreme": "half-layer",
+    "Straight step - step-flow growth": "straight-step",
+    "Single island - growth around one nucleus": "island",
+    "Mound array - regrowth on rough": "mounds",
+    "Random rough - fully disordered start": "rough",
 }
 assert set(INITIAL_SURFACE_LABELS.values()) == set(INITIAL_SURFACES), (
     "every starting surface the model offers needs a label, and vice versa"
@@ -424,6 +435,7 @@ def preset_selector(gallery: dict) -> mo.ui.dropdown:
         {DEFAULT_PRESET: "", **{meta["title"]: name for name, meta in gallery.items()}},
         value=DEFAULT_PRESET,
         label="Start from",
+        full_width=True,
     )
 
 
@@ -479,29 +491,38 @@ def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = N
         .batch(
             experiment_mode=mo.ui.radio(
                 options=[HAND_TUNED, FROM_PAPER],
+                inline=True,
                 value=values["experiment_mode"],
             ),
             figure3_ratio=mo.ui.dropdown(
                 ratio_options,
                 value=_label(ratio_options, values["figure3_ratio"]),
+                full_width=True,
             ),
             temperature_k=_slider("temperature_k", values["temperature_k"]),
             flux_ml_s=_slider("flux_ml_s", values["flux_ml_s"]),
             attempt_frequency_hz=mo.ui.dropdown(
                 ATTEMPT_FREQUENCIES,
                 value=_label(ATTEMPT_FREQUENCIES, values["attempt_frequency_hz"]),
+                full_width=True,
             ),
             barrier_ev=_slider("barrier_ev", values["barrier_ev"]),
             bond_energy_ev=_slider("bond_energy_ev", values["bond_energy_ev"]),
             step_barrier_ev=_slider("step_barrier_ev", values["step_barrier_ev"]),
             desorption_barrier_ev=_slider("desorption_barrier_ev", values["desorption_barrier_ev"]),
-            size=mo.ui.dropdown(LATTICE_SIZES, value=_label(LATTICE_SIZES, values["size"])),
+            size=mo.ui.dropdown(
+                LATTICE_SIZES,
+                value=_label(LATTICE_SIZES, values["size"]),
+                full_width=True,
+            ),
             initial_surface=mo.ui.dropdown(
                 INITIAL_SURFACE_LABELS,
                 value=_label(INITIAL_SURFACE_LABELS, values["initial_surface"]),
+                full_width=True,
             ),
             stop_mode=mo.ui.radio(
                 options=["Coverage", "Physical time"],
+                inline=True,
                 value=values["stop_mode"],
             ),
             coverage_ml=_slider("coverage_ml", values["coverage_ml"]),
@@ -509,16 +530,19 @@ def parameter_form(ratios: tuple[float, ...], on_change, values: dict | None = N
             hop_distance=mo.ui.dropdown(
                 HOP_DISTANCES,
                 value=_label(HOP_DISTANCES, values["hop_distance"]),
+                full_width=True,
             ),
             sample_every_ml=mo.ui.dropdown(
                 sample_options,
                 value=_label(sample_options, values["sample_every_ml"]),
+                full_width=True,
             ),
             max_events=mo.ui.dropdown(
                 EVENT_LIMITS,
                 value=_label(EVENT_LIMITS, values["max_events"]),
+                full_width=True,
             ),
-            seed=mo.ui.number(start=0, stop=10_000, value=values["seed"]),
+            seed=mo.ui.number(start=0, stop=10_000, value=values["seed"], full_width=True),
         )
         .form(submit_button_label="Run simulation", bordered=True, on_change=on_change)
     )
@@ -644,7 +668,9 @@ def expensive_warning(estimate_s: float, override_button) -> mo.Html:
             mo.callout(
                 f"This run is estimated at roughly **{estimate_s:.0f} s** and is "
                 "single-threaded. The estimate is order-of-magnitude only; the true cost "
-                "depends strongly on the rate constants.",
+                "depends strongly on the rate constants. If it is too slow here, switch the "
+                "data source back to **Pre-computed demo**: those are the same model at "
+                "128x128, already run and stored.",
                 kind="warn",
             ),
             override_button,
@@ -666,7 +692,7 @@ def run_with_progress(config: SimulationConfig, title: str) -> SimulationResult:
             done = min(steps, int(fraction * steps))
             bar.update(
                 increment=done - state["shown"],
-                subtitle=f"{fraction:.0%} — {elapsed:.0f} s elapsed, ~{remaining:.0f} s left",
+                subtitle=f"{fraction:.0%} - {elapsed:.0f} s elapsed, ~{remaining:.0f} s left",
             )
             state["shown"] = done
 
