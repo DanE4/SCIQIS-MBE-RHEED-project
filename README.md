@@ -291,6 +291,39 @@ One trajectory cannot use more than one core, since each event mutates the surfa
 is sampled from. Cores only help across independent runs, which is what section **11. Batch
 workflows** is for; it drives the same CLI as `make` and reloads promoted data in place.
 
+### If you have not used marimo before
+
+[marimo](https://docs.marimo.io/) is a notebook that is a plain Python file. There is no JSON, no
+hidden state and no cell execution order to remember: it reads the variables each cell defines and
+uses, and reruns whatever depends on what you just changed. That is why editing a slider updates
+the figure below it without a "Run all". The consequences you notice while reading
+`notebooks/mbe_rheed.py`:
+
+- **Cells are `@app.cell` functions**, listed in reading order but executed in dependency order.
+- **A variable can only be defined by one cell.** Locals prefixed with `_` are private to their
+  cell, which is why the file is full of `_values`, `_error` and friends.
+- **`uv run python notebooks/mbe_rheed.py` runs it as a script**, which is what `make check` uses.
+
+What this notebook actually uses, all from `import marimo as mo`:
+
+| Piece | Why it is here |
+|---|---|
+| [`mo.md`](https://docs.marimo.io/api/markdown/) | every text cell; f-strings interpolate live values into the prose |
+| [`mo.ui.slider`, `dropdown`, `radio`, `checkbox`, `number`, `text`](https://docs.marimo.io/api/inputs/) | the parameter controls; read the current value with `.value` |
+| [`mo.ui.form`](https://docs.marimo.io/api/inputs/form/) | wraps a group of controls so nothing downstream reruns until **Submit** |
+| [`mo.ui.run_button`](https://docs.marimo.io/api/inputs/button/) | **Run simulation**; keeps a long run from starting on every keystroke |
+| [`mo.stop`](https://docs.marimo.io/api/control_flow/) | early-exit a cell with a message instead of running the expensive part |
+| [`mo.state`](https://docs.marimo.io/api/state/) | the few things a widget cannot hold: current playback frame, the running batch process |
+| [`mo.ui.refresh`](https://docs.marimo.io/api/inputs/refresh/) | a timer cell; drives frame playback and batch progress polling |
+| [`mo.vstack`, `mo.hstack`, `mo.accordion`, `mo.callout`](https://docs.marimo.io/api/layouts/) | layout and the warning/error boxes |
+| [`mo.status.progress_bar`](https://docs.marimo.io/api/status/) | progress during a live run |
+
+The pattern used throughout is: a cell assigns a `mo.ui` element to a **global** (it is not
+interactive otherwise), a later cell reads `element.value`, and marimo reruns that later cell on
+its own. `mo.state` only appears where that one-way flow is not enough - a value that has to
+survive being written by two different cells, such as the frame slider and the playback timer both
+setting the current frame.
+
 ## Commands
 
 Every workflow name is both a make target and a `scripts/run_workflow.py` argument, so
