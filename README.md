@@ -237,6 +237,36 @@ uv run python scripts/run_workflow.py baseline     # make reproduce
 The baseline is an 8x8, 1 ML run that verifies event counts and a final-height SHA-256, so it
 finishes in seconds and tells you the physics matches the committed reference on your machine.
 
+### If the setup will not cooperate: Docker
+
+A fallback for a machine that fights the install - a locked-down laptop, a broken toolchain, a
+Python that cannot be replaced. Docker is the only thing needed, and the same two commands work
+on Windows, macOS and Linux (on Windows use Docker Desktop with the WSL 2 backend):
+
+```bash
+docker build -t mbe-rheed .
+docker run --rm -p 2718:2718 mbe-rheed
+```
+
+Then open <http://localhost:2718>. The image is about 880 MB and builds in well under a minute
+once Docker has pulled its base image. It carries the committed gallery, so the pre-computed
+demos work the moment it starts, and live runs work too, at whatever speed the container gets.
+It is built from `uv.lock`, so the environment is the one `uv sync` would give you.
+
+Anything else runs the same way, with the command in place of the default:
+
+```bash
+docker run --rm mbe-rheed uv run pytest
+docker run --rm mbe-rheed uv run python scripts/run_workflow.py baseline
+```
+
+There is no `make` in the image, so use the `uv run` form from the [Commands](#commands) table.
+`.git` is copied in and `git` is installed, so artifacts built here carry the same commit and
+dirty-tree provenance as they would on the host.
+The container is disposable: `--rm` throws it away on exit, and anything it wrote goes with it.
+To keep figures and saved runs, mount the output directory over it - `-v "$PWD/outputs:/project/outputs"`,
+or `-v "${PWD}/outputs:/project/outputs"` in PowerShell.
+
 ## Notebook
 
 ```bash
@@ -333,6 +363,7 @@ src/mbe_rheed_notebook/      notebook widgets and figures (marimo + Plotly)
 scripts/                     baseline, Figure 3, validation, sweep entry points
 tests/                       scientific and software invariants
 data/                        gallery demos, committed inputs, reference curves
+Dockerfile                   the setup fallback; see the Docker section above
 ```
 
 A marimo notebook is one file and cannot be split, so everything except narrative and wiring is
@@ -353,3 +384,5 @@ may not reassign a variable another cell defines (hence the `_`-prefixed locals)
 - **Import errors**: run commands from the repository root after `uv sync`.
 - **Baseline hash changed**: don't just update it. Find out which model or dependency change moved
   it first.
+- **Setup still broken after all that**: build the [Docker image](#if-the-setup-will-not-cooperate-docker)
+  and work from the container instead.

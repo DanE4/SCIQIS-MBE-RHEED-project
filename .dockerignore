@@ -1,0 +1,12 @@
+# .venv holds binaries built for the host OS, and the rest is rebuildable output. .git stays:
+# the workflows read the commit out of it for artifact provenance.
+.venv
+.github
+dist
+outputs
+data/raw
+.pytest_cache
+.ruff_cache
+__pycache__
+*.pyc
+.DS_Store
