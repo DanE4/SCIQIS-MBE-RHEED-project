@@ -298,11 +298,49 @@ def beam_geometry(
         azimuth_deg=azimuth_deg,
         energy_kev=energy_kev,
         incident_direction=direction,
-        # Mirror in the surface plane: the z component flips and nothing else moves.
-        specular_direction=direction * np.array([1.0, 1.0, -1.0]),
+        # The mirror direction is the zero-deflection outgoing direction at the same angle, so
+        # it comes from the same helper the rods do rather than from a second convention here.
+        specular_direction=outgoing_direction(grazing_angle_deg, 0.0),
         surface_normal=np.array([0.0, 0.0, 1.0]),
         sample_rotation=_rotation(azimuth_deg),
     )
+
+
+def outgoing_direction(
+    exit_angle_deg: float, deflection_deg: float
+) -> NDArray[np.float64]:
+    """Unit `k_f` for one screen direction, in the lab frame of `BeamGeometry`.
+
+    The same parameterization `diffraction_screen` sweeps over its pixels, so every direction
+    it returns is elastic by construction: `|k_f| = |k_i|` holds because only the direction is
+    built here, never the magnitude.
+    """
+    exit_angle, deflection = math.radians(exit_angle_deg), math.radians(deflection_deg)
+    return np.array(
+        [
+            math.cos(exit_angle) * math.cos(deflection),
+            math.cos(exit_angle) * math.sin(deflection),
+            math.sin(exit_angle),
+        ]
+    )
+
+
+def detector_intersection(
+    direction: NDArray[np.float64], distance: float
+) -> tuple[float, float]:
+    """Where a ray along `direction` from the sample crosses the detector plane.
+
+    The plane sits perpendicular to `+x` at `distance` downstream, so the ray reaches it after
+    `distance / direction_x` and lands at `(horizontal, vertical)` in the plane's own axes.
+    Equivalent to `detector_offsets` on the same direction's angles -- a test pins that -- so a
+    drawn ray and a painted screen pixel cannot disagree about where an order lands.
+    """
+    if distance <= 0:
+        raise ValueError("detector distance must be positive")
+    if direction[0] <= 0:
+        raise ValueError("only downstream rays reach the detector plane")
+    reach = distance / float(direction[0])
+    return float(direction[1]) * reach, float(direction[2]) * reach
 
 
 def detector_offsets(

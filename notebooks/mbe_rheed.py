@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.16"
+__generated_with = "0.24.0"
 app = marimo.App(width="full")
 
 
@@ -201,15 +201,19 @@ def _(GALLERY, SAVED_DIR, controls, mo):
             mo.md(
                 "## 2. A layer-by-layer growth experiment\n"
                 "Grow a film and watch the surface. Hover any &#9432; for what a control does.\n\n"
-                '**Result source** <span data-tooltip="Pre-computed demo loads a stored '
-                'trajectory instantly — use this when presenting. Simulate now runs the model '
-                'live with the parameters below, single-threaded. Saved run reloads a '
-                'trajectory you stored yourself, from the Reproducibility panel at the end." '
-                'style="cursor:help">&#9432;</span> picks where the trajectory comes from; '
-                '**Start from** <span data-tooltip="Loads the parameters behind a stored demo '
-                'into the form, so you can reproduce that scenario and then change one thing '
-                'at a time." style="cursor:help">&#9432;</span> loads a stored scenario into '
-                "the form."
+                "**Result source**"
+                + controls.info(
+                    "Pre-computed demo loads a stored trajectory instantly — use this when "
+                    "presenting. Simulate now runs the model live with the parameters below, "
+                    "single-threaded. Saved run reloads a trajectory you stored yourself, "
+                    "from the Reproducibility panel at the end."
+                )
+                + " picks where the trajectory comes from; **Start from**"
+                + controls.info(
+                    "Loads the parameters behind a stored demo into the form, so you can "
+                    "reproduce that scenario and then change one thing at a time."
+                )
+                + " loads a stored scenario into the form."
             ),
             mo.hstack(
                 [data_source, gallery_choice, preset_choice],
@@ -356,6 +360,7 @@ def _(mo):
             "Hexagonal cells",
             "Step edges",
             "RHEED beam geometry",
+            "Reachable diffraction orders",
         ],
         value="3D height surface",
         label="Surface view",
@@ -503,7 +508,7 @@ def _(
         grazing_angle_deg=beam_condition.value,
         azimuth_deg=float(sample_azimuth.value),
     )
-    if display_mode.value == "RHEED beam geometry":
+    if display_mode.value in ("RHEED beam geometry", "Reachable diffraction orders"):
         # The same pattern the 2D screen below draws, so the two cannot disagree.
         surface_figure = figures.rheed_geometry(
             _heights,
@@ -512,6 +517,7 @@ def _(
             grazing_angle_deg=beam_condition.value,
             azimuth_deg=float(sample_azimuth.value),
             pattern=screen_pattern,
+            show_orders=display_mode.value == "Reachable diffraction orders",
         )
     else:
         surface_figure = {
@@ -552,6 +558,12 @@ def _(
                 "morphology is unchanged and the reachable rods move — the specular direction "
                 "itself does not, because turning a sample about its own normal cannot move "
                 "its mirror direction. Only the grazing angle moves that. "
+                "**Reachable diffraction orders** adds one ray per order that `rod_orders()` "
+                "finds inside the drawn detector's acceptance, each stopping at its own Ewald "
+                "intersection with the plane and labelled with its real $(h,k)$ — so the "
+                "azimuth changes which orders exist while $k_i$, $n$ and $k_f^{(00)}$ hold "
+                "still. That mode is drawn to scale on all three axes, so the surface reads as "
+                "the thin sheet a grazing beam actually sees. "
                 "On the RHEED trace, "
                 "the **green diamond** is the initially flat maximum and the **purple x** "
                 "is the most stepped stored frame through the first monolayer."

@@ -30,6 +30,12 @@ GRAZING_ANGLE_DEG = 2.0
 # calculated (the retired BEAM_GEOMETRY_LABEL said exactly that). What it must still say is that
 # the rays and the plane are drawn for explanation, at a disclosed distortion.
 GEOMETRY_LABEL = "geometry view only — rays and plane are explanatory, the painted screen is the computed one"
+
+# Angular acceptance of the drawn detector in the reachable-orders mode, matching the span the
+# azimuth sweep and validate_rheed.py already use. rod_orders still decides what is reachable
+# inside it: every order is reachable somewhere -- 40 of them, out past 40 deg exit at 15 keV --
+# and drawing those would picture the max_order loop rather than a RHEED screen.
+ORDERS_ACCEPTANCE_DEG = 9.0
 # Shown wherever a computed pattern is displayed, so a kinematic image is never mistaken for
 # the dynamical scattering a real RHEED screen records.
 DIFFRACTION_LABEL = "kinematic single scattering only — not dynamical RHEED"
@@ -269,23 +275,29 @@ def rheed_geometry(
     grazing_angle_deg: float = GRAZING_ANGLE_DEG,
     azimuth_deg: float = 0.0,
     pattern: ScreenPattern | None = None,
+    show_orders: bool = False,
 ) -> go.Figure:
     """The surface, the beam, the detector plane, and the computed screen painted on it.
 
-    Geometry, not a diffraction calculation: nothing here is a rod this figure invented. The
-    only intensities drawn are `pattern`'s own, the same `ScreenPattern` the 2D detector figure
-    shows, mapped onto the plane through `rheed.detector_offsets` so its `(00)` pixel lands
-    exactly where the specular ray does.
+    Geometry, not a diffraction calculation: nothing here is a rod this figure invented. Every
+    direction comes from `mbe_rheed_sim.rheed` -- `beam_geometry` for the lab frame,
+    `rod_orders` for which `(h, k)` are reachable, `outgoing_direction` for each one's `k_f`,
+    `detector_intersection` for where that ray crosses the plane -- and the only intensities
+    drawn are `pattern`'s own, the same `ScreenPattern` the 2D detector figure shows. No ray or
+    spot is positioned by hand.
 
-    Lab frame and what the azimuth does: see `mbe_rheed_sim.rheed.BeamGeometry`. The beam and
-    the plane are fixed; the azimuth turns the **sample**, so the surface rotates under a
-    stationary beam and the reachable rods change while the specular ray does not move.
+    With `show_orders`, every reachable order gets a ray to its own intersection, `(00)` kept
+    distinct as the nominal specular. Azimuth turns the sample about its normal, so `k_i`, `n`
+    and `k_f(00)` are fixed while the non-specular orders move: that is the whole point of the
+    mode. Rays stop at the plane rather than continuing, because a streak is an intensity
+    distribution and not one electron trajectory -- the painted screen is where its shape lives.
 
-    Two disclosed distortions, both stated in the returned title. The z axis is stretched as in
-    `height_surface`, so the drawn beam looks far steeper than `grazing_angle_deg`. The painted
-    screen keeps its true angular size vertically and its true aspect ratio, which means its
-    horizontal extent in lattice units carries that same stretch factor -- otherwise the axis
-    scaling alone would smear a square screen into a band.
+    Two disclosed distortions, both stated in the title, with a true-aspect side view inset for
+    the honest angle. The z axis is stretched as in `height_surface`, so drawn ray angles are
+    not to scale. The painted screen keeps its true angular size vertically and its true aspect
+    ratio, so its horizontal extent in lattice units carries that same stretch -- and the order
+    rays are mapped through the identical transform, so a ray lands exactly on its own feature
+    in the painted screen instead of beside it.
     """
     if heights.ndim != 2 or min(heights.shape) < 2 or not 0 < grazing_angle_deg < 45:
         raise ValueError("beam geometry needs a 2D lattice and a grazing angle in (0, 45)")
@@ -300,26 +312,77 @@ def rheed_geometry(
     surface_x = column_index + 0.5 * row_index
     surface_y = np.sqrt(3.0) / 2.0 * row_index
     centre_x, centre_y = 0.5 * surface_x.max(), 0.5 * surface_y.max()
-    # Rotate the sample about its own normal, through the centre. The morphology is untouched:
-    # only where each column sits in the lab frame changes.
     offset = np.stack(((surface_x - centre_x).ravel(), (surface_y - centre_y).ravel()))
     # Bounding radius of the unrotated sample, so it is rotation invariant. Every fixed part of
     # the scene is sized from this: the beam, the plane and the axes must not move when only the
     # sample turns, or the azimuth would appear to change the instrument.
     radius = float(np.hypot(*offset).max())
+    # Rotate the sample about its own normal, through the centre. The morphology is untouched:
+    # only where each column sits in the lab frame changes.
     rotated = geometry.sample_rotation @ offset
     surface_x = rotated[0].reshape(heights.shape) + centre_x
     surface_y = rotated[1].reshape(heights.shape) + centre_y
 
-    slope = np.tan(np.radians(grazing_angle_deg)) * ML_PER_SITE_SPACING
     impact_z = float(heights[rows // 2, columns // 2])
     # One sample radius of run-up each side, so the grazing rise reads without the scene
     # becoming mostly empty space.
     standoff = radius
-    entry_x = centre_x - standoff
-    screen_x = centre_x + standoff
-    entry_z = impact_z + standoff * slope
-    spot_z = impact_z + standoff * slope
+    entry_x, screen_x = centre_x - standoff, centre_x + standoff
+    # Follow k_i backwards from the impact point rather than restating tan(grazing) here.
+    entry_z = impact_z - float(
+        geometry.incident_direction[2] * standoff / geometry.incident_direction[0]
+    )
+
+    coherence_nm = (
+        pattern.coherence_length_nm if pattern is not None else rheed.DEFAULT_COHERENCE_LENGTH_NM
+    )
+
+    # rod_orders is the only authority for what is reachable: it solves the Ewald intersection
+    # and returns nothing for an order the sphere never touches. Intersect each one's own k_f
+    # with the plane; these are true plane offsets, independent of how the scene is drawn.
+    rods = (
+        rheed.rod_orders(
+            grazing_angle_deg=grazing_angle_deg,
+            azimuth_deg=azimuth_deg,
+            span_deg=ORDERS_ACCEPTANCE_DEG,
+        )
+        if show_orders
+        else ()
+    )
+    hits = {
+        (rod.h, rod.k): rheed.detector_intersection(
+            rheed.outgoing_direction(rod.exit_angle_deg, rod.deflection_deg), standoff
+        )
+        for rod in rods
+    }
+    specular_offset = rheed.detector_intersection(geometry.specular_direction, standoff)
+
+    y_low, y_high = centre_y - radius, centre_y + radius
+    x_span, y_span = screen_x - entry_x, y_high - y_low
+    reach = max(
+        [float(zmax), entry_z, impact_z + specular_offset[1]]
+        + [impact_z + vertical for _, vertical in hits.values()]
+    )
+    if show_orders:
+        # True aspect on all three axes, so the drawn ray angles in this mode *are* the real
+        # ones and the exit angles can be read off the plane. The surface is a thin sheet at
+        # this scale, which is what a grazing-incidence geometry actually looks like.
+        z_top = reach * 1.12
+        x_aspect = x_span / max(y_span, 1.0)
+        y_aspect, z_aspect = 1.0, z_top / max(y_span, 1.0)
+        stretch = 1.0
+    else:
+        z_top = reach * 1.45
+        x_aspect, y_aspect, z_aspect = x_span / max(y_span, 1.0), 1.0, 0.55
+        # Drawn length per data unit on each axis. The screen patch and the order rays share
+        # this, so a square screen stays square and a ray still meets its own feature on it.
+        stretch = (z_aspect / z_top) / (y_aspect / y_span)
+
+    def plane_point(horizontal: float, vertical: float) -> tuple[float, float]:
+        """One detector-plane offset in scene coordinates, through the disclosed stretch."""
+        return centre_y + horizontal * stretch, impact_z + vertical
+
+    specular_y, specular_z = plane_point(*specular_offset)
 
     figure = go.Figure(
         go.Surface(
@@ -335,25 +398,16 @@ def rheed_geometry(
         )
     )
 
-    z_top = max(float(zmax), entry_z, spot_z) * 1.45
-    y_low, y_high = centre_y - radius, centre_y + radius
-    screen_half_width = radius
-    x_span = screen_x - entry_x
-    y_span = y_high - y_low
-    x_aspect, y_aspect, z_aspect = x_span / max(y_span, 1.0), 1.0, 0.55
-    # Drawn length per data unit on each axis. The screen patch needs these to stay square.
-    per_y = y_aspect / y_span
-    per_z = z_aspect / z_top
-    stretch = per_z / per_y
-
-    for label, xs, zs, colour in (
-        ("incident beam k_i", (entry_x, centre_x), (entry_z, impact_z), BEAM_COLOR),
-        ("specular k_f (00)", (centre_x, screen_x), (impact_z, spot_z), SPECULAR_COLOR),
+    for label, xs, ys, zs, colour in (
+        ("incident beam k_i", (entry_x, centre_x), (centre_y, centre_y), (entry_z, impact_z),
+         BEAM_COLOR),
+        ("nominal specular k_f (00)", (centre_x, screen_x), (centre_y, specular_y),
+         (impact_z, specular_z), SPECULAR_COLOR),
     ):
         figure.add_trace(
             go.Scatter3d(
                 x=xs,
-                y=(centre_y, centre_y),
+                y=ys,
                 z=zs,
                 mode="lines",
                 line={"color": colour, "width": 7},
@@ -361,14 +415,13 @@ def rheed_geometry(
                 hovertemplate=f"{label}<extra></extra>",
             )
         )
-        # Arrowhead at the downstream end, pointing the way the beam travels.
         figure.add_trace(
             go.Cone(
                 x=[xs[1]],
-                y=[centre_y],
+                y=[ys[1]],
                 z=[zs[1]],
                 u=[xs[1] - xs[0]],
-                v=[0.0],
+                v=[ys[1] - ys[0]],
                 w=[zs[1] - zs[0]],
                 sizemode="absolute",
                 sizeref=0.06 * x_span,
@@ -396,15 +449,26 @@ def rheed_geometry(
         )
     )
 
+    # The beam samples a coherence-sized patch, not a point: rays leave this footprint, so the
+    # figure never implies that diffraction happens at one geometric bounce.
+    footprint_sites = coherence_nm / rheed.GAN_IN_PLANE_SPACING_NM
+    turn = np.linspace(0.0, 2.0 * np.pi, 61)
+    figure.add_trace(
+        go.Scatter3d(
+            x=centre_x + footprint_sites * np.cos(turn),
+            y=centre_y + footprint_sites * np.sin(turn),
+            z=np.full(turn.size, impact_z + 0.02 * z_top),
+            mode="lines",
+            line={"color": "#f8fafc", "width": 3},
+            name=f"illuminated footprint ({coherence_nm:.1f} nm coherence)",
+            hovertemplate="illuminated footprint<extra></extra>",
+        )
+    )
+
     figure.add_trace(
         go.Mesh3d(
             x=[screen_x] * 4,
-            y=[
-                centre_y - screen_half_width,
-                centre_y + screen_half_width,
-                centre_y + screen_half_width,
-                centre_y - screen_half_width,
-            ],
+            y=[centre_y - radius, centre_y + radius, centre_y + radius, centre_y - radius],
             z=[0.0, 0.0, z_top, z_top],
             i=[0, 0],
             j=[1, 2],
@@ -418,20 +482,14 @@ def rheed_geometry(
     )
 
     if pattern is not None:
-        # The computed screen, on the plane. Vertical offsets are the true gnomonic projection
-        # at this standoff; horizontal offsets carry the z stretch so the patch stays square.
         horizontal, vertical = rheed.detector_offsets(
-            pattern.exit_angle_deg[:, None],
-            pattern.deflection_deg[None, :],
-            standoff,
+            pattern.exit_angle_deg[:, None], pattern.deflection_deg[None, :], standoff
         )
-        patch_y = centre_y + np.broadcast_to(horizontal, pattern.intensity.shape) * stretch
-        patch_z = impact_z + np.broadcast_to(vertical, pattern.intensity.shape)
         figure.add_trace(
             go.Surface(
                 x=np.full(pattern.intensity.shape, screen_x),
-                y=patch_y,
-                z=patch_z,
+                y=centre_y + np.broadcast_to(horizontal, pattern.intensity.shape) * stretch,
+                z=impact_z + np.broadcast_to(vertical, pattern.intensity.shape),
                 surfacecolor=rheed.screen_decades(pattern),
                 colorscale="Inferno",
                 cmin=-rheed.SCREEN_LOG_DECADES,
@@ -445,11 +503,54 @@ def rheed_geometry(
             )
         )
 
+    if show_orders:
+        rays_x: list[float | None] = []
+        rays_y: list[float | None] = []
+        rays_z: list[float | None] = []
+        label_x, label_y, label_z, labels = [], [], [], []
+        for rod in rods:
+            if (rod.h, rod.k) == (0, 0):
+                continue
+            hit_y, hit_z = plane_point(*hits[(rod.h, rod.k)])
+            rays_x += [centre_x, screen_x, None]
+            rays_y += [centre_y, hit_y, None]
+            rays_z += [impact_z, hit_z, None]
+            label_x.append(screen_x)
+            label_y.append(hit_y)
+            label_z.append(hit_z)
+            labels.append(rod.label)
+        if labels:
+            figure.add_trace(
+                go.Scatter3d(
+                    x=rays_x,
+                    y=rays_y,
+                    z=rays_z,
+                    mode="lines",
+                    line={"color": "#a78bfa", "width": 3},
+                    name=f"reachable orders ({len(labels)} beside (00))",
+                    hoverinfo="skip",
+                )
+            )
+            figure.add_trace(
+                go.Scatter3d(
+                    x=label_x,
+                    y=label_y,
+                    z=label_z,
+                    mode="markers+text",
+                    marker={"color": "#a78bfa", "size": 4},
+                    text=labels,
+                    textposition="middle right",
+                    textfont={"color": "#c4b5fd", "size": 11},
+                    name="(hk) from rod_orders()",
+                    hovertemplate="%{text}<extra>reachable order</extra>",
+                )
+            )
+
     figure.add_trace(
         go.Scatter3d(
             x=[screen_x],
-            y=[centre_y],
-            z=[spot_z],
+            y=[specular_y],
+            z=[specular_z],
             mode="markers",
             marker={
                 "color": "rgba(0,0,0,0)",
@@ -461,25 +562,87 @@ def rheed_geometry(
         )
     )
 
+    # True-aspect side view, 1:1, because the main scene cannot show what 2.75 degrees looks
+    # like and a stretched picture of a grazing beam is the one thing readers misread.
+    tangent = float(
+        geometry.specular_direction[2] / geometry.specular_direction[0]
+    )
+    for xs, ys, colour in (
+        ((-1.0, 0.0), (tangent, 0.0), BEAM_COLOR),
+        ((0.0, 1.0), (0.0, tangent), SPECULAR_COLOR),
+    ):
+        figure.add_trace(
+            go.Scatter(
+                x=xs,
+                y=ys,
+                mode="lines",
+                line={"color": colour, "width": 2},
+                xaxis="x2",
+                yaxis="y2",
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        )
+    figure.add_trace(
+        go.Scatter(
+            x=[-1.0, 1.0],
+            y=[0.0, 0.0],
+            mode="lines",
+            line={"color": "#475569", "width": 2},
+            xaxis="x2",
+            yaxis="y2",
+            showlegend=False,
+            hovertemplate="surface<extra></extra>",
+        )
+    )
+
     condition = f"{pattern.condition}, " if pattern is not None else ""
+    orders_note = (
+        f" · {len(rods)} reachable orders inside ±{ORDERS_ACCEPTANCE_DEG:g}°"
+        if show_orders
+        else ""
+    )
+    scale_note = (
+        "all three axes to scale; displayed ray angles are the real ones"
+        if show_orders
+        else f"z exaggerated {stretch:.0f}x; displayed ray angles not to scale"
+    )
     figure.update_layout(
         uirevision="beam-geometry",
         height=560,
-        margin={"l": 0, "r": 0, "t": 78, "b": 0},
+        margin={"l": 0, "r": 0, "t": 92, "b": 0},
         legend={"orientation": "h", "y": -0.02},
         title=(
             f"Beam geometry at {coverage:.2f} ML — {condition}{grazing_angle_deg:.2f}° grazing, "
-            f"{azimuth_deg:g}° sample azimuth"
-            + (
-                f"<br><sub>{GEOMETRY_LABEL} · z stretched {stretch:.0f}x, and the painted "
-                f"screen's horizontal extent with it, so it stays square</sub>"
-                if stretch >= 1.5
-                else f"<br><sub>{GEOMETRY_LABEL} · drawn to scale</sub>"
-            )
+            f"{azimuth_deg:g}° sample azimuth{orders_note}"
+            f"<br><sub>{GEOMETRY_LABEL}</sub>"
+            f"<br><sub><b>{scale_note}</b> — the inset is the same beam at 1:1</sub>"
         ),
+        xaxis2={
+            "domain": [0.015, 0.30],
+            "anchor": "y2",
+            "title": {"text": f"true {grazing_angle_deg:.2f}° grazing (1:1)", "font": {"size": 10}},
+            "showticklabels": False,
+            "zeroline": False,
+            "showgrid": False,
+        },
+        yaxis2={
+            "domain": [0.80, 0.97],
+            "anchor": "x2",
+            "scaleanchor": "x2",
+            "scaleratio": 1.0,
+            "showticklabels": False,
+            "zeroline": False,
+            "showgrid": False,
+        },
         scene={
+            "domain": {"x": [0.0, 1.0], "y": [0.0, 1.0]},
             "uirevision": "beam-geometry",
-            "xaxis": {"title": "lab x (beam axis)", "range": [entry_x, screen_x], "autorange": False},
+            "xaxis": {
+                "title": "lab x (beam axis)",
+                "range": [entry_x, screen_x],
+                "autorange": False,
+            },
             "yaxis": {"title": "lab y", "range": [y_low, y_high], "autorange": False},
             "zaxis": {"title": "height / lab z (ML)", "range": [0, z_top], "autorange": False},
             "aspectmode": "manual",

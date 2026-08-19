@@ -5,6 +5,7 @@ assigns the result to a global name, which is what marimo requires for interacti
 https://docs.marimo.io/guides/interactivity/
 """
 
+import html
 import re
 from dataclasses import replace
 from pathlib import Path
@@ -256,6 +257,19 @@ def _slider_cell(key: str) -> str:
     )
 
 
+def info(help_text: str) -> str:
+    """An inline help marker: marimo's `data-tooltip`, minus its dotted underline.
+
+    `.markdown [data-tooltip]` in marimo's stylesheet underlines the marker, which reads as a
+    broken link on a bare glyph. Inline styles are the fix that survives: they beat that rule,
+    and a `<style>` block is not guaranteed to make it through the markdown renderer.
+    """
+    return (
+        f'<span data-tooltip="{html.escape(help_text, quote=True)}" '
+        'style="text-decoration:none;cursor:help;color:var(--blue-11);opacity:.85;'
+        'font-size:.9em;vertical-align:.08em;padding:0 .1em">&#9432;</span>'
+    )
+
 _ADVANCED_SECTIONS = ("Energetics", "Numerical controls")
 
 
@@ -278,11 +292,7 @@ def _layout() -> str:
     blocks = {}
     for section, rows in _FIELDS.items():
         body = "".join(
-            # marimo's own tooltip: its RenderHTML wraps any element carrying data-tooltip and
-            # styles it with a dotted underline. A plain title= is a bare browser tooltip that
-            # takes a second to appear and shows no affordance.
-            f'<tr><td style="{_ROW_LABEL}">{label} '
-            f'<span data-tooltip="{help_text}" style="cursor:help">&#9432;</span></td>'
+            f'<tr><td style="{_ROW_LABEL}">{label}{info(help_text)}</td>'
             f"<td>{_slider_cell(key) if key in _SLIDERS else f'{{{key}}}'}</td></tr>"
             for label, key, help_text in rows
         )
