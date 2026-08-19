@@ -612,12 +612,18 @@ def _(
 
 
 @app.cell
-def _(current_frame, display_coverage_axis, figures, mo, screen_pattern):
+def _(current_frame, display_coverage_axis, figures, screen_pattern):
+    # Only the figure lives in this frame-following cell. The prose below is static, and a
+    # marimo cell dims while it reruns - three paragraphs greying out on every playback tick
+    # reads as a stall, so they sit in their own cell that playback never touches.
+    figures.detector_screen(screen_pattern, float(display_coverage_axis[current_frame]))
+    return
+
+
+@app.cell
+def _(mo):
     mo.vstack(
         [
-            figures.detector_screen(
-                screen_pattern, float(display_coverage_axis[current_frame])
-            ),
             mo.md(
                 "**The surface views.** The 3D height view uses array coordinates. "
                 "**Hexagonal cells** maps the same periodic axial lattice to Cartesian "
@@ -712,12 +718,16 @@ def _(
         if reconstruction_toggle.value
         else mo.md(""),
     )
+    # Stop at the transition. Past it the coverage is deliberately frozen while the ordering
+    # keeps moving, so plotting the rest against coverage draws every later frame on top of the
+    # same few tenths of a monolayer: a scribble, not a curve.
+    _emergence = reconstruction_order.transition_frame + 1
     mo.vstack(
         [
             figures.reconstruction_order_parameter(
-                display_coverage_axis,
-                reconstruction_order.r_sk,
-                current_frame,
+                display_coverage_axis[:_emergence],
+                reconstruction_order.r_sk[:_emergence],
+                min(current_frame, _emergence - 1),
                 reconstruction_order.theta_ml,
                 reconstruction.CRITICAL_ORDER_PARAMETER,
                 coverage_axis_label,
