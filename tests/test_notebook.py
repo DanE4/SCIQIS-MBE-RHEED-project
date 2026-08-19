@@ -42,7 +42,7 @@ def test_paper_mode_overrides_growth_conditions_but_keeps_numerical_choices() ->
     assert config.target_coverage_ml is None
     assert config.seed == 3
     assert growth_rate is not None and growth_rate > 0
-    # Paper barriers, not the form's teaching defaults.
+    # Paper barriers, not the form's default settings.
     assert config.diffusion_barrier_ev != controls.DEFAULT_PARAMETERS["barrier_ev"]
     assert "0.82" in name
 

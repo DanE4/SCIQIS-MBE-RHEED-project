@@ -24,7 +24,7 @@ FROM_PAPER = "From the paper"
 PRE_COMPUTED = "Pre-computed demo"
 SIMULATE_NOW = "Simulate now"
 SAVED_RUN = "Saved run"
-DEFAULT_PRESET = "Teaching defaults"
+DEFAULT_PRESET = "Default settings"
 
 DEFAULT_PARAMETERS = {
     "experiment_mode": HAND_TUNED,
@@ -363,7 +363,7 @@ assert set(INITIAL_SURFACE_LABELS.values()) == set(INITIAL_SURFACES), (
 )
 ATTEMPT_FREQUENCIES = {
     "0 Hz (diffusion frozen)": 0.0,
-    "1e3 Hz (teaching)": 1_000.0,
+    "1e3 Hz (fast interactive)": 1_000.0,
     "1e6 Hz": 1e6,
     "1e9 Hz": 1e9,
     "1e13 Hz (atomistic)": 1e13,

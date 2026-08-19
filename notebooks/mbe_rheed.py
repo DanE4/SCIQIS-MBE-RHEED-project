@@ -369,9 +369,12 @@ def _(mo, simulation):
 
 @app.cell
 def _(display_simulation, mo, reconstruction, reconstruction_order, set_frame):
+    # marimo renders this as a step button plus an interval dropdown, and the label is plain
+    # text beside them. No play triangle here: a glyph in the label is not clickable, and one
+    # that looks like a button is worse than a name that reads like a verb.
     playback = mo.ui.refresh(
         options=[0.25, 0.5, 1.0],
-        label="Playback interval",
+        label="**Play the growth**",
         on_change=lambda _value: set_frame(
             lambda frame: reconstruction.next_frame(
                 reconstruction_order, frame, len(display_simulation.snapshots)
@@ -509,16 +512,21 @@ def _(
             linked morphology and proxy show what this stochastic run actually produces;
             disagreement is a result, not hidden by relabeling.
             """),
+            # Two rows: which frame is showing, then how it is drawn. Seven widgets in one row
+            # left the play control third among equals, where nobody found it.
             mo.hstack(
-                [
-                    snapshot_slider,
-                    milestone_picker,
-                    playback,
-                    display_mode,
-                    beam_condition,
-                    sample_azimuth,
-                    reconstruction_toggle,
-                ],
+                [snapshot_slider, milestone_picker, playback],
+                justify="start",
+                gap=2,
+                wrap=True,
+            ),
+            mo.md(
+                "*Drag **Recorded growth frame** to scrub the run by hand, or set **Play the "
+                "growth** from `off` to a number of seconds per frame to animate it and back to "
+                "`off` to pause. The circular arrows beside that menu step one frame.*"
+            ),
+            mo.hstack(
+                [display_mode, beam_condition, sample_azimuth, reconstruction_toggle],
                 justify="start",
                 gap=2,
                 wrap=True,

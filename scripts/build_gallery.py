@@ -63,7 +63,7 @@ ENTRIES = {
     "island-growth": {
         "title": "Island growth (oscillation lost to island nucleation)",
         "story": (
-            "The teaching parameters give a diffusion length of a few sites, far shorter than "
+            "The default parameters give a diffusion length of a few sites, far shorter than "
             "this lattice, so islands nucleate independently all over the surface and every "
             "new layer starts long before the one below closes. Averaged over that many "
             "uncorrelated patches the proxy stops oscillating altogether. The same parameters "

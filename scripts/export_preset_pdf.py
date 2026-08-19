@@ -1,7 +1,7 @@
 """One PDF page per gallery preset: final 3D surface, RHEED signals and the numbers used.
 
 Every preset runs on the paper's fitted GaN physics (`figure3_config`, Ga/N = 0.82) rather
-than the notebook's teaching energetics, with one knob moved per preset. Run with
+than the notebook's default energetics, with one knob moved per preset. Run with
 `make preset-pdf` (add `SIZES=64` for a cheaper pass).
 """
 
@@ -35,7 +35,7 @@ MODIFIED_FIELD_LABELS = {
 
 # Each preset is the paper parameterization with one physical knob moved. Keys match
 # data/gallery/index.json; the titles deliberately do not, because they state what these runs
-# measured rather than what the teaching-parameter gallery claims. Removing the down-step
+# measured rather than what the default-parameter gallery claims. Removing the down-step
 # barrier comes out *smoother* than the paper preset, not more islanded, and 3x flux roughens
 # only slightly and still oscillates, so neither "island growth" nor "flux too high" survives.
 PRESETS = {

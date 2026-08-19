@@ -190,8 +190,8 @@ _BASE = {
 _CONFIGURATIONS = [
     # (label, overrides)
     ("frozen-no-diffusion", {"attempt_frequency_hz": 0.0, "lattice_size": 6}),
-    ("teaching-default", {"lattice_size": 4}),
-    ("teaching-6", {"lattice_size": 6, "target_coverage_ml": 0.25}),
+    ("baseline-default", {"lattice_size": 4}),
+    ("baseline-6", {"lattice_size": 6, "target_coverage_ml": 0.25}),
     ("tiny-3", {"lattice_size": 3}),
     ("tiny-4", {"lattice_size": 4, "target_coverage_ml": 0.25}),
     ("odd-5", {"lattice_size": 5, "target_coverage_ml": 0.25}),
@@ -216,7 +216,7 @@ _CONFIGURATIONS = [
     ("fast-prefactor", {"attempt_frequency_hz": 1e6, "diffusion_barrier_ev": 0.5, "lattice_size": 3,
                             "target_coverage_ml": 0.25}),
     # The paper's corner: atomistic prefactor with barriers scaled to match it. Both barriers
-    # must move together -- a 1e13 prefactor against the teaching desorption barrier gives
+    # must move together -- a 1e13 prefactor against the default desorption barrier gives
     # r_des ~ 5e9 Hz, which strips the surface faster than it can grow.
     ("atomistic-prefactor", {"attempt_frequency_hz": 1e13, "diffusion_barrier_ev": 2.1,
                                  "desorption_barrier_ev": 2.6, "temperature_k": 1003.15,

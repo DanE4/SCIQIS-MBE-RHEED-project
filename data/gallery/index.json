@@ -29,7 +29,7 @@
   },
   "island-growth": {
     "title": "Island growth (oscillation lost to island nucleation)",
-    "story": "The teaching parameters give a diffusion length of a few sites, far shorter than this lattice, so islands nucleate independently all over the surface and every new layer starts long before the one below closes. Averaged over that many uncorrelated patches the proxy stops oscillating altogether. The same parameters on a 24x24 lattice do oscillate, with a 0.8 ML period, and at 48x48 with 0.54 ML: neither is the ~1 ML layer-by-layer period, so that signal was the small surface completing layers in step, not real layer-by-layer growth. This is what a finite-size artifact looks like when you grow the lattice out of it.",
+    "story": "The default parameters give a diffusion length of a few sites, far shorter than this lattice, so islands nucleate independently all over the surface and every new layer starts long before the one below closes. Averaged over that many uncorrelated patches the proxy stops oscillating altogether. The same parameters on a 24x24 lattice do oscillate, with a 0.8 ML period, and at 48x48 with 0.54 ML: neither is the ~1 ML layer-by-layer period, so that signal was the small surface completing layers in step, not real layer-by-layer growth. This is what a finite-size artifact looks like when you grow the lattice out of it.",
     "config": {
       "lattice_size": 128,
       "target_coverage_ml": 3.0,
