@@ -435,7 +435,6 @@ def preset_selector(gallery: dict) -> mo.ui.dropdown:
         {DEFAULT_PRESET: "", **{meta["title"]: name for name, meta in gallery.items()}},
         value=DEFAULT_PRESET,
         label="Start from",
-        full_width=True,
     )
 
 

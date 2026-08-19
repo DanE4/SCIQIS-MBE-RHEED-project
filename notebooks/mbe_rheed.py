@@ -216,7 +216,7 @@ def _(GALLERY, SAVED_DIR, controls, mo):
                 + " loads a stored scenario into the form."
             ),
             mo.hstack(
-                [data_source, gallery_choice, preset_choice],
+                [data_source, mo.vstack([gallery_choice, preset_choice], gap=1)],
                 justify="start",
                 gap=2,
                 wrap=True,
