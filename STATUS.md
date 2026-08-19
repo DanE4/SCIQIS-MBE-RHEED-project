@@ -42,9 +42,10 @@ experiment.
   question. Bounded process workers add about 5.6x on top at eight workers.
   What now dominates is Python-level per-event overhead: the event loop, RNG draws and the
   per-call boundary into the kernels, at roughly 6.5 microseconds per event.
-- **Size policy:** 16x16 is for responsive teaching, 64x64 is the current publication candidate,
-  and 128x128/256x256 are benchmarks if runtime permits. Matching 256x256 exactly is not the
-  objective; demonstrated convergence of reported observables is.
+- **Size policy:** 16x16 is for responsive teaching, 128x128 is what the committed figures,
+  sweep and notebook gallery are now generated at, and 256x256 remains a benchmark only.
+  Matching 256x256 exactly is not the objective; demonstrated convergence of reported
+  observables is.
 
 ## What is already scientifically strong
 
@@ -98,9 +99,11 @@ lattice, duration, and seed.
 
 Do not begin Stage 7 while these items remain unresolved:
 
-1. Reduce the remaining local-rate refresh cost before attempting a 128x128, 4 s ensemble.
+1. Grow the seed ensemble at 64x64 and 128x128 until the successive-size check passes on its
+   uncertainty term; the 64 -> 128 size trend is already inside tolerance with five seeds.
 2. Finalize ensemble/statistical reporting at the accepted lattice size.
-3. Replace the Stage 5 reduced-scale traces without changing its comparison/provenance protocol.
+3. Done: the Stage 5 traces, the sweep and the notebook gallery are regenerated at 128x128
+   through the same comparison and provenance protocol.
 4. Only then reconsider Three.js.
 5. Only after homoepitaxial validation consider strain-driven GaN/AlN physics.
 
@@ -147,18 +150,26 @@ preset wiring may be developed independently.
 **Why:** finite-size dependence currently prevents quantitative amplitude and morphology
 claims.
 
-**Current evidence:** 7x7 reproduces periodicity. Mean detrended amplitude over 4 s is 0.09309,
-0.04111, 0.02765, and 0.03231 at 8x8, 16x16, 32x32, and 64x64. No successive-size pair passes
-the documented criterion. After the rate-tree and cached-rate optimizations, the 0.1 s runtime
-envelope is 1.5, 6.1, and 24.8 wall seconds at 64x64, 128x128, and 256x256, respectively.
+**Current evidence:** 7x7 reproduces periodicity. Mean detrended amplitude over the 4 s window
+is 0.09309, 0.04111, 0.02765, and 0.03231 at 8x8, 16x16, 32x32, and 64x64, and no successive-size
+pair passes there. The documented 40 s, five-seed study now runs (`make figure3-convergence
+SIZES=32,64,128 DURATION=40 SEEDS=0,1,2,3,4`, 8 min): 0.02624, 0.01975, and 0.01848 at 32x32,
+64x64, and 128x128. 32x32 -> 64x64 still fails on the size trend itself, 0.00648 against a
+0.00198 tolerance. 64x64 -> 128x128 has a mean difference of 0.00127, inside its 0.00185
+tolerance, and fails only on the uncertainty term: difference plus 1.96 pooled standard errors
+is 0.00374. The kinematic specular observable behaves the same way, 0.00709 inside a 0.02662
+tolerance but 0.04026 with the uncertainty term. What remains is ensemble size, not lattice size.
+After the rate-tree and cached-rate optimizations, the 0.1 s runtime envelope is 1.5, 6.1, and
+24.8 wall seconds at 64x64, 128x128, and 256x256, respectively.
 
 **Implementation:** `scripts/check_figure3_convergence.py` now records full per-seed traces,
 event counts, result-array footprint, oscillation metrics, final roughness/step density, and
 morphology summaries through an opt-in 64x64 run. An updateable rate tree removes whole-lattice
 cumulative scans at 128x128 and above; batched updates and cached discrete Arrhenius tables
-remove additional bookkeeping. Further local-rate-refresh work is required before a 128x128
-ensemble. Independent seeds now run in bounded spawn workers while lattice sizes remain
-sequential, reducing wall time without pretending to improve per-run scaling.
+remove additional bookkeeping. Independent seeds now run in bounded spawn workers while lattice
+sizes remain sequential, reducing wall time without pretending to improve per-run scaling. A
+128x128, 40 s, five-seed ensemble takes about 4 minutes, so the ensemble is no longer
+runtime-limited.
 
 **Validation:** successive sufficiently large lattices agree within a justified, documented
 tolerance for the principal observable and morphology statistics, with ensemble uncertainty.
@@ -170,9 +181,11 @@ tolerance for the principal observable and morphology statistics, with ensemble 
 **Why:** visible periodicity is only qualitative until simulation, uncertainty, reference data,
 normalization, and provenance are compared without conflating physical quantities.
 
-**Current evidence:** all three paper parameter sets produce committed three-seed 7x7 proxy
-bands. The CC BY PDF supplies vector paths for a figure-derived experimental visual reference;
-raw experimental values and the paper's arbitrary-unit normalization remain unavailable.
+**Current evidence:** all three paper parameter sets produce committed five-seed 128x128 proxy
+bands, replacing the earlier three-seed 7x7 ones through the same comparison and provenance
+protocol; the model period is 0.94 to 0.96 ML at every ratio. The CC BY PDF supplies vector
+paths for a figure-derived experimental visual reference; raw experimental values and the
+paper's arbitrary-unit normalization remain unavailable.
 
 **Implementation:** notebook Section 09 and `make figure3` now provide separate reference
 and simulation panels, uncertainty bands, period/phase/damping/relative-amplitude diagnostics,
@@ -181,7 +194,7 @@ a Figure 4-inspired no-strain morphology sequence, and provenance-rich JSON/CSV/
 **Validation:** every Ga/N condition reports phase, period, damping, and relative amplitude;
 all curves have provenance and unambiguous labels; reference data use a documented legal and
 technical acquisition/normalization method. The comparison is still qualitative because the
-7x7 proxy amplitude is not finite-size converged.
+proxy amplitude is not finite-size converged.
 
 **Dependencies:** the workflow and reference protocol are complete; accepted-size convergence
 remains the sole scientific gate.

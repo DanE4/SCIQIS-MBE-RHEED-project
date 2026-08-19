@@ -23,6 +23,12 @@ ROOT = Path(__file__).resolve().parents[1]
 BATCH_ROOT = ROOT / "outputs" / "batches"
 # workers/seeds/sizes/duration flag whether the underlying script accepts that override.
 WORKFLOWS = {
+    "gallery": {
+        "script": "build_gallery.py",
+        "workers": True,
+        "sizes": True,
+        "preset": "128x128, six committed notebook demos, seed 7; --sizes takes one size",
+    },
     "baseline": {
         "script": "reproduce_baseline.py",
         "preset": "8x8, 1 ML, seed 2026",
@@ -32,13 +38,14 @@ WORKFLOWS = {
         "workers": True,
         "seeds": True,
         "sizes": True,
-        "preset": "7x7, 40 s, Ga/N 0.89/0.82/0.68, seeds 2026/2027/2028",
+        "preset": "128x128, 40 s, Ga/N 0.89/0.82/0.68, seeds 2026-2030",
     },
     "sweep": {
         "script": "run_parameter_sweep.py",
         "workers": True,
         "seeds": True,
-        "preset": "16x16, 2 ML, T=700/850/1000 K, flux=0.25/0.5/0.75 ML/s, seeds 0/1/2",
+        "sizes": True,
+        "preset": "128x128, 2 ML, T=700/850/1000 K, flux=0.25/0.5/0.75 ML/s, seeds 0-5",
     },
     "convergence": {
         "script": "check_lattice_convergence.py",

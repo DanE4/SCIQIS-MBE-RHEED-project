@@ -22,8 +22,12 @@ from mbe_rheed_sim.workflows import (
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE_PATH = ROOT / "data" / "reference" / "figure3_experimental_digitized.json"
 SOURCE_PDF = ROOT / "nanomaterials-12-03052.pdf"
-LATTICE_SIZE = 7
-SEEDS = (2026, 2027, 2028)
+# The committed artifact under data/processed is generated from these defaults, and
+# tests/test_publication_artifact.py checks it against them, so they are the shipped numbers.
+# 128 is the largest size the convergence study covers and stays inside the event limit
+# `figure3_config` sets; the seeds are the ensemble the mean and SD are taken over.
+LATTICE_SIZE = 128
+SEEDS = (2026, 2027, 2028, 2029, 2030)
 TIME_GRID_S = np.linspace(0.0, 40.0, 401)
 MORPHOLOGY_RATIO = 0.82
 

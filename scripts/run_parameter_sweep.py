@@ -24,16 +24,29 @@ from mbe_rheed_sim.workflows import (
 ROOT = Path(__file__).resolve().parents[1]
 TEMPERATURES_K = (700.0, 850.0, 1_000.0)
 FLUXES_ML_S = (0.25, 0.5, 0.75)
-SEEDS = (0, 1, 2)
+SEEDS = (0, 1, 2, 3, 4, 5)
+LATTICE_SIZE = 128
 BASE = SimulationConfig(
-    lattice_size=16,
+    lattice_size=LATTICE_SIZE,
     target_coverage_ml=2.0,
     sample_every_ml=0.05,
     max_isolated_hop_distance=3,
+    # Events grow with the site count, so the 2-million default would abort the hot corner
+    # of the map on a larger lattice.
+    max_events=50_000_000,
 )
 
 
-def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
+def main(
+    *,
+    workers: int = 4,
+    seeds: tuple[int, ...] = SEEDS,
+    sizes: tuple[int, ...] = (LATTICE_SIZE,),
+) -> None:
+    if len(sizes) != 1:
+        raise ValueError("the sweep maps temperature against flux at one lattice size")
+    (lattice_size,) = sizes
+    base = replace(BASE, lattice_size=lattice_size)
     output_root = artifact_root(ROOT)
     run_dir = output_root / "outputs" / "runs"
     figure_dir = output_root / "outputs" / "figures"
@@ -46,7 +59,7 @@ def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
     metrics_by_point = []
     configurations = [
         replace(
-            BASE,
+            base,
             temperature_k=temperature,
             deposition_flux_ml_s=flux,
             seed=seed,
@@ -61,7 +74,7 @@ def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
         workers=workers,
         description="temperature/flux parameter sweep",
     )
-    coverage_ml = np.linspace(0.0, float(BASE.target_coverage_ml), 201)
+    coverage_ml = np.linspace(0.0, float(base.target_coverage_ml), 201)
     for temperature_index, temperature in enumerate(TEMPERATURES_K):
         temperature_metrics = []
         for flux_index, flux in enumerate(FLUXES_ML_S):
@@ -87,7 +100,7 @@ def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
         metrics_by_point.append(temperature_metrics)
 
     summary = {
-        "base_config": asdict(BASE),
+        "base_config": asdict(base),
         "temperatures_k": TEMPERATURES_K,
         "fluxes_ml_s": FLUXES_ML_S,
         "seeds": seeds,
@@ -121,7 +134,11 @@ def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
         xticklabels=FLUXES_ML_S,
         yticks=range(len(TEMPERATURES_K)),
         yticklabels=TEMPERATURES_K,
-        title="Small-lattice RHEED-proxy regime map (mean +/- SD, 3 seeds)",
+        # Both numbers are overridable, so read them off the run rather than the default.
+        title=(
+            f"RHEED-proxy regime map, {lattice_size}x{lattice_size} "
+            f"(mean +/- SD, {len(seeds)} seeds)"
+        ),
     )
     for temperature_index in range(len(TEMPERATURES_K)):
         for flux_index in range(len(FLUXES_ML_S)):
@@ -140,4 +157,4 @@ def main(*, workers: int = 4, seeds: tuple[int, ...] = SEEDS) -> None:
 
 
 if __name__ == "__main__":
-    main(**parse_workflow_args(seeds=SEEDS))
+    main(**parse_workflow_args(seeds=SEEDS, sizes=(LATTICE_SIZE,)))

@@ -3,7 +3,7 @@
     "title": "Layer-by-layer growth (GaN paper parameters)",
     "story": "Temperature, effective Ga flux, and all four barriers come from the paper's fitted expressions for Ga/N = 0.82, not from the sliders. Adatoms are mobile enough to complete each layer before the next nucleates, so the surface returns to nearly flat every monolayer and the proxy oscillates with a ~1 ML period. This is the textbook RHEED oscillation the whole model is aiming at.",
     "config": {
-      "lattice_size": 7,
+      "lattice_size": 128,
       "target_coverage_ml": null,
       "target_time_s": 40.0,
       "temperature_k": 1003.15,
@@ -13,7 +13,7 @@
       "lateral_bond_energy_ev": 0.30502125565936716,
       "step_barrier_ev": 0.06589482796367255,
       "desorption_barrier_ev": 2.381280112184103,
-      "max_isolated_hop_distance": 3,
+      "max_isolated_hop_distance": 5,
       "sample_every_ml": 0.05,
       "seed": 7,
       "max_events": 10000000,
@@ -21,17 +21,17 @@
     },
     "predicted_growth_rate_ml_s": 0.22815899705450818,
     "figure3_ratio": 0.82,
-    "final_roughness_ml": 0.2397416351932802,
-    "oscillation_period_ml": 0.9208210643455488,
+    "final_roughness_ml": 0.5032736740738264,
+    "oscillation_period_ml": 0.9744290499202951,
     "is_oscillatory": true,
-    "frames": 224,
-    "bytes": 8918
+    "frames": 193,
+    "bytes": 331853
   },
   "island-growth": {
-    "title": "Island growth (damped oscillations)",
-    "story": "With the teaching parameters the diffusion length is comparable to the lattice, so new layers start before the one below closes. The proxy still oscillates but irregularly and with a decaying envelope: real growth, not the ideal limit.",
+    "title": "Island growth (oscillation lost to island nucleation)",
+    "story": "The teaching parameters give a diffusion length of a few sites, far shorter than this lattice, so islands nucleate independently all over the surface and every new layer starts long before the one below closes. Averaged over that many uncorrelated patches the proxy stops oscillating altogether. The same parameters on a 24x24 lattice do oscillate, with a 0.8 ML period, and at 48x48 with 0.54 ML: neither is the ~1 ML layer-by-layer period, so that signal was the small surface completing layers in step, not real layer-by-layer growth. This is what a finite-size artifact looks like when you grow the lattice out of it.",
     "config": {
-      "lattice_size": 24,
+      "lattice_size": 128,
       "target_coverage_ml": 3.0,
       "target_time_s": null,
       "temperature_k": 900.0,
@@ -44,22 +44,22 @@
       "max_isolated_hop_distance": 1,
       "sample_every_ml": 0.05,
       "seed": 7,
-      "max_events": 2000000,
+      "max_events": 50000000,
       "initial_surface": "flat"
     },
     "predicted_growth_rate_ml_s": null,
     "figure3_ratio": null,
-    "final_roughness_ml": 1.125771340508858,
-    "oscillation_period_ml": 0.8250000000000001,
-    "is_oscillatory": true,
-    "frames": 61,
-    "bytes": 20809
+    "final_roughness_ml": 1.2013481196919984,
+    "oscillation_period_ml": null,
+    "is_oscillatory": false,
+    "frames": 62,
+    "bytes": 464694
   },
   "step-barrier-mounding": {
     "title": "Mounding from an Ehrlich-Schwoebel barrier",
-    "story": "The same conditions plus a large down-step barrier. Adatoms that land on top of an island cannot descend, so material piles into mounds. This is the roughest run in the set and its oscillation dies fastest.",
+    "story": "The same conditions plus a large down-step barrier. Adatoms that land on top of an island cannot descend, so material piles into mounds instead of filling the layer below. This is the roughest run in the set.",
     "config": {
-      "lattice_size": 24,
+      "lattice_size": 128,
       "target_coverage_ml": 3.0,
       "target_time_s": null,
       "temperature_k": 900.0,
@@ -72,22 +72,22 @@
       "max_isolated_hop_distance": 1,
       "sample_every_ml": 0.05,
       "seed": 7,
-      "max_events": 2000000,
+      "max_events": 50000000,
       "initial_surface": "flat"
     },
     "predicted_growth_rate_ml_s": null,
     "figure3_ratio": null,
-    "final_roughness_ml": 3.010398644698074,
+    "final_roughness_ml": 2.99515396359269,
     "oscillation_period_ml": null,
     "is_oscillatory": false,
-    "frames": 61,
-    "bytes": 22741
+    "frames": 62,
+    "bytes": 540519
   },
   "too-cold": {
     "title": "Too cold: dense nucleation",
     "story": "Dropping to 650 K shortens the diffusion length. Islands nucleate densely, layers never fully close, and the surface ends rougher than the 900 K run.",
     "config": {
-      "lattice_size": 24,
+      "lattice_size": 128,
       "target_coverage_ml": 3.0,
       "target_time_s": null,
       "temperature_k": 650.0,
@@ -100,22 +100,22 @@
       "max_isolated_hop_distance": 1,
       "sample_every_ml": 0.05,
       "seed": 7,
-      "max_events": 2000000,
+      "max_events": 50000000,
       "initial_surface": "flat"
     },
     "predicted_growth_rate_ml_s": null,
     "figure3_ratio": null,
-    "final_roughness_ml": 1.9781795784115366,
+    "final_roughness_ml": 1.9881853181670466,
     "oscillation_period_ml": null,
     "is_oscillatory": false,
-    "frames": 61,
-    "bytes": 22393
+    "frames": 62,
+    "bytes": 528906
   },
   "too-fast": {
     "title": "Flux too high",
     "story": "900 K with three times the flux. Adatoms are buried before they reach a step edge, so the surface roughens even though the temperature is unchanged. Compare with the cold run: here diffusion is fast but there is less time per layer.",
     "config": {
-      "lattice_size": 24,
+      "lattice_size": 128,
       "target_coverage_ml": 3.0,
       "target_time_s": null,
       "temperature_k": 900.0,
@@ -128,22 +128,22 @@
       "max_isolated_hop_distance": 1,
       "sample_every_ml": 0.05,
       "seed": 7,
-      "max_events": 2000000,
+      "max_events": 50000000,
       "initial_surface": "flat"
     },
     "predicted_growth_rate_ml_s": null,
     "figure3_ratio": null,
-    "final_roughness_ml": 1.9658543520142415,
-    "oscillation_period_ml": 0.65,
-    "is_oscillatory": true,
-    "frames": 61,
-    "bytes": 23160
+    "final_roughness_ml": 2.0220947523545973,
+    "oscillation_period_ml": null,
+    "is_oscillatory": false,
+    "frames": 62,
+    "bytes": 541288
   },
   "no-diffusion": {
     "title": "No diffusion: pure random deposition",
     "story": "Switching diffusion off leaves uncorrelated random deposition, whose roughness grows as the square root of coverage and never oscillates at all. Note it is not the roughest run here: weak-but-nonzero diffusion builds islands and mounds that are rougher than random noise.",
     "config": {
-      "lattice_size": 24,
+      "lattice_size": 128,
       "target_coverage_ml": 3.0,
       "target_time_s": null,
       "temperature_k": 800.0,
@@ -156,15 +156,15 @@
       "max_isolated_hop_distance": 1,
       "sample_every_ml": 0.05,
       "seed": 7,
-      "max_events": 2000000,
+      "max_events": 50000000,
       "initial_surface": "flat"
     },
     "predicted_growth_rate_ml_s": null,
     "figure3_ratio": null,
-    "final_roughness_ml": 1.8171635406130437,
+    "final_roughness_ml": 1.7362742978861376,
     "oscillation_period_ml": null,
     "is_oscillatory": false,
-    "frames": 61,
-    "bytes": 15173
+    "frames": 62,
+    "bytes": 536393
   }
 }

@@ -1,9 +1,9 @@
 # Every workflow name accepted by scripts/run_workflow.py is a make target of the same name.
-WORKFLOWS := baseline figure3 sweep convergence figure3-convergence \
+WORKFLOWS := baseline figure3 sweep convergence figure3-convergence gallery \
 	validate-acceleration validate-science validate-sweep validate-rheed benchmark-sizes
 
 .PHONY: setup notebook test check export figure3-parameters digitize-figure3 \
-	reproduce reproduce-figure3 convergence-figure3 gallery readme-figures preset-pdf rheed-visuals $(WORKFLOWS)
+	reproduce reproduce-figure3 convergence-figure3 readme-figures preset-pdf rheed-visuals $(WORKFLOWS)
 
 NOTEBOOK := notebooks/mbe_rheed.py
 MARIMO_PORT ?= 2718
@@ -34,9 +34,6 @@ $(WORKFLOWS):
 reproduce: baseline
 reproduce-figure3: figure3
 convergence-figure3: figure3-convergence
-
-gallery:
-	uv run python scripts/build_gallery.py
 
 # One PDF page per preset on paper GaN physics; PRESET_SIZE=64 for a cheaper pass.
 preset-pdf:

@@ -10,12 +10,16 @@ MIT licensed, except the paper and the three Wikimedia schematics: [`LICENSE`](L
 
 ## Results so far
 
-Work in progress. The figures below are the current state, at reduced lattice sizes; the open
-items are listed in [`STATUS.md`](STATUS.md).
+Work in progress; the open items are listed in [`STATUS.md`](STATUS.md). The figures below and
+the stored notebook demos are all generated on a 128x128 lattice, the largest size the
+finite-size study covers.
 
 Oscillations against the paper's Figure 3, for three Ga/N ratios. Left is digitized from the
-published figure, right is a three-seed ensemble of this model. Periods line up; the proxy
-amplitude is smaller and still lattice-size dependent (`make figure3`).
+published figure, right is a five-seed 128x128 ensemble of this model. The model oscillates at
+0.94 to 0.96 ML in all three conditions, against 1.05 ML for the digitized Ga/N = 0.82 trace;
+the other two reference periods are less well defined. The proxy amplitude stays six to eight
+times smaller than the figure-derived signal, which is why the two panels keep separate scales
+(`make figure3`).
 
 ![RHEED oscillations for three Ga/N ratios, experiment beside model](assets/figure3_comparison.png)
 
@@ -24,9 +28,12 @@ the next nucleates, which is what makes the proxy oscillate (`make figure3`).
 
 ![Surface height maps from 0 to 2 ML](assets/figure4_inspired_morphology.png)
 
-Proxy amplitude against temperature and flux, three seeds per point. Higher flux raises it at
-every temperature; the temperature trend is weaker and not monotonic at the lowest flux
-(`make sweep`).
+Proxy amplitude against temperature and flux, 128x128, six seeds per point. Higher flux raises
+the plotted raw amplitude at every temperature, while the temperature trend is weaker and not
+monotonic at the lowest flux. The detrended amplitude, which is the principal observable in the
+stored JSON, does rise with both: 0.088 to 0.099 from the coldest/slowest to the hottest/fastest
+corner, with a seed spread under 0.0011. None of the nine conditions passes the oscillation test
+at this lattice size, which is the same finding as the island-growth demo (`make sweep`).
 
 ![Temperature/flux heatmap of proxy amplitude](assets/parameter_sweep.png)
 
@@ -169,7 +176,7 @@ live or read the committed artifacts, which is why it opens instantly when prese
 
 Requires [Git](https://git-scm.com/) and [uv](https://docs.astral.sh/uv/getting-started/installation/);
 `make` is optional. Python 3.12 is pinned in `.python-version`, dependencies in `uv.lock`; uv
-installs both, so nothing else has to be on the machine — no system Python, no compiler.
+installs both, so nothing else has to be on the machine - no system Python, no compiler.
 
 ```bash
 git clone <repo>
@@ -179,7 +186,7 @@ uv sync          # or: make setup, which refuses to change the lockfile
 
 ### Getting uv (and make)
 
-**macOS** — Homebrew, or the standalone installer:
+**macOS** - Homebrew, or the standalone installer:
 
 ```bash
 brew install uv          # curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -187,7 +194,7 @@ brew install uv          # curl -LsSf https://astral.sh/uv/install.sh | sh
 
 `make` comes with the Xcode command line tools (`xcode-select --install`).
 
-**Linux** — the standalone installer works on any distro:
+**Linux** - the standalone installer works on any distro:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -195,7 +202,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 `make` is usually already there; otherwise `sudo apt install make` / `sudo dnf install make`.
 
-**Windows** — PowerShell, or winget:
+**Windows** - PowerShell, or winget:
 
 ```powershell
 winget install --id=astral-sh.uv -e    # irm https://astral.sh/uv/install.ps1 | iex
@@ -240,12 +247,15 @@ Section **5** asks where results come from:
 
 - **Pre-computed demo** (default) loads a stored trajectory from `data/gallery/` instantly. Good
   for presenting. Six runs: layer-by-layer growth with the paper's GaN parameters, island growth,
-  step-barrier mounding, too-cold and too-high-flux roughening, pure random deposition.
+  step-barrier mounding, too-cold and too-high-flux roughening, pure random deposition. All six
+  are 128x128, about 3 MB in total, so a laptop that cannot afford that lattice still gets it.
   `make gallery` rebuilds them and fails if the measured roughness ordering or oscillation
   periods stop matching the captions.
 - **Simulate now** runs the model live, with either hand-tuned parameters or the paper's fitted
   GaN values. Nothing runs until **Run simulation** is pressed. Runs estimated above 20 s, or on
-  a 64x64-or-larger lattice, ask for a second confirmation.
+  a 64x64-or-larger lattice, ask for a second confirmation. One trajectory cannot be split
+  across cores, so a large lattice on a slow machine takes what it takes: if you are waiting
+  too long, go back to the pre-computed demos, which cover the same physics at 128x128.
 
 One trajectory cannot use more than one core, since each event mutates the surface the next event
 is sampled from. Cores only help across independent runs, which is what section **11. Batch
@@ -254,20 +264,20 @@ workflows** is for; it drives the same CLI as `make` and reloads promoted data i
 ## Commands
 
 Every workflow name is both a make target and a `scripts/run_workflow.py` argument, so
-`make <name>` is always `uv run python scripts/run_workflow.py <name>` — use whichever your shell
+`make <name>` is always `uv run python scripts/run_workflow.py <name>` - use whichever your shell
 has. The non-workflow targets are listed with their commands at the bottom of the table.
 
 | Command | What it does |
 |---|---|
 | `make reproduce` | 8x8, 1 ML, seed 2026 baseline; checks event counts and the final-height SHA-256 |
-| `make figure3` | three seeds x three Ga/N ratios over 40 s vs. the published Figure 3 |
+| `make figure3` | 128x128, five seeds x three Ga/N ratios over 40 s vs. the published Figure 3 |
 | `make figure3-parameters` | prints the Figure 3 flux conversion, fitted barriers, rate diagnostics |
-| `make sweep` | 16x16 three-seed temperature/flux heatmap (notebook input) |
+| `make sweep` | 128x128 six-seed temperature/flux heatmap (notebook input) |
 | `make convergence`, `make figure3-convergence` | finite-size sensitivity; add `SIZES=8,16,32,64` for the ~2 min 64x64 point |
 | `make validate-acceleration`, `-science`, `-sweep` | accelerated vs. exact ensembles and model trends |
 | `make benchmark-sizes` | sequential 64/128/256 runtime envelope |
-| `make gallery` | rebuild the notebook demos — `uv run python scripts/build_gallery.py` |
-| `make readme-figures` | rerun `figure3` + `sweep`, then copy the three PNGs from `outputs/figures/` into `assets/` |
+| `make gallery` | rebuild the six stored notebook demos at 128x128; `SIZES=<one size>` to change |
+| `make readme-figures` | rerun `figure3` + `sweep`, then copy the three PNGs from `outputs/figures/` into `assets/`; about 35 min at the 128x128 defaults |
 | `make test` | `uv run pytest` |
 | `make check` | `uv run ruff check .`, `uv run marimo check --strict notebooks/mbe_rheed.py`, `uv run python notebooks/mbe_rheed.py` |
 | `make export` | `uv run marimo export html notebooks/mbe_rheed.py -o outputs/mbe_rheed.html -f` |
@@ -333,7 +343,7 @@ may not reassign a variable another cell defines (hence the `_`-prefixed locals)
 
 ## Troubleshooting
 
-- **`uv: command not found`**: install uv ([Setup](#getting-uv-and-make)) and open a new shell —
+- **`uv: command not found`**: install uv ([Setup](#getting-uv-and-make)) and open a new shell , 
   the installer adds `~/.local/bin` (or `%USERPROFILE%\.local\bin`) to PATH only for new sessions.
 - **`make: command not found`** / **`'make' is not recognized`**: you do not need make. Run the
   `uv run` command from the [Commands](#commands) table instead.

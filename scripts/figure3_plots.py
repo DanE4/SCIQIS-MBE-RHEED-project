@@ -50,13 +50,18 @@ def plot_comparison(traces: list[dict[str, object]], figure_dir: Path) -> None:
         axes[row, 1].set_ylim(0, 1)
         axes[row, 1].set_ylabel(r"raw $1-S_d$")
     axes[0, 0].set_title("Figure-derived experimental RHEED\n(panel-coordinate normalized)")
-    axes[0, 1].set_title("This model: morphology-derived proxy\n(7x7, 3-seed ensemble)")
+    # Size and ensemble are workflow overrides, so read them off the traces being plotted.
+    _size = traces[0]["simulation_config"]["lattice_size"]
+    axes[0, 1].set_title(
+        "This model: morphology-derived proxy\n"
+        f"({_size}x{_size}, {len(traces[0]['seeds'])}-seed ensemble)"
+    )
     axes[0, 1].legend(loc="lower right")
     for axis in axes[-1]:
         axis.set_xlabel("time (s)")
         axis.set_xlim(0, 40)
     figure.suptitle(
-        "Figure 3 comparison — separate scales, shared time domain\n"
+        "Figure 3 comparison - separate scales, shared time domain\n"
         "Reference is figure-derived; proxy amplitude is not finite-size converged"
     )
     figure.savefig(figure_dir / "figure3_comparison.png", dpi=README_DPI)
@@ -133,7 +138,7 @@ def morphology_sequence(
         axis.set_axis_off()
     figure.colorbar(image, ax=axes, shrink=0.7, label="column height (ML)")
     figure.suptitle(
-        "Figure 4-inspired homoepitaxial morphology sequence — "
+        "Figure 4-inspired homoepitaxial morphology sequence - "
         f"Ga/N={ratio:.2f}, seed {morphology_seed}; no strain"
     )
     figure.savefig(figure_dir / "figure4_inspired_morphology.png", dpi=README_DPI)

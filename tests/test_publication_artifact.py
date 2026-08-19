@@ -2,6 +2,8 @@ import json
 from itertools import pairwise
 from pathlib import Path
 
+from reproduce_figure3 import LATTICE_SIZE, SEEDS
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -20,10 +22,15 @@ def test_publication_inputs_are_traceable_and_distinguish_signals() -> None:
     assert artifact["signal_definitions"]["reference"] != artifact["signal_definitions"][
         "simulation"
     ]
-    assert artifact["provenance"]["seeds"] == [2026, 2027, 2028]
+    # Against the generating script's defaults, so regenerating at a new size or ensemble
+    # updates one constant instead of drifting silently away from the committed artifact.
+    assert artifact["provenance"]["seeds"] == list(SEEDS)
     assert len(artifact["provenance"]["code_version"]["generation_source_sha256"]) == 64
     assert len(artifact["comparisons"]) == 3
-    assert all(trace["simulation_config"]["lattice_size"] == 7 for trace in artifact["traces"])
+    assert all(
+        trace["simulation_config"]["lattice_size"] == LATTICE_SIZE
+        for trace in artifact["traces"]
+    )
     assert [
         frame["target_predicted_coverage_ml"]
         for frame in artifact["morphology_sequence"]["frames"]

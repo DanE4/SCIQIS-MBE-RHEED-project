@@ -89,7 +89,7 @@ def _draw_screen(axes, pattern, *, title: str, mark_rods: bool = False) -> objec
             linewidths=1.0,
         )
     # Only draw the horizon when this screen actually reaches it. An unconditional axhline
-    # stretches the axes below the data, and that empty strip renders as white — which reads
+    # stretches the axes below the data, and that empty strip renders as white - which reads
     # as high intensity next to the black below-horizon shadow.
     if pattern.exit_angle_deg[0] < 0.0 < pattern.exit_angle_deg[-1]:
         axes.axhline(0.0, color="#94a3b8", linestyle=":", linewidth=0.8)
@@ -134,7 +134,7 @@ def page_synthetic(surfaces: dict[str, np.ndarray], angle: float) -> Figure:
                 screen_image, ax=axes[1, column], label="log10 I (flat surface = 0)"
             )
     figure.suptitle(
-        "Synthetic surfaces and their kinematic screens — "
+        "Synthetic surfaces and their kinematic screens - "
         f"{angle:.3f}° grazing, {pattern.beam_energy_kev:.0f} keV, "
         f"{pattern.coherence_length_nm:.1f} nm coherence.\n"
         "A is the reference: any departure from it is disorder.\n"
@@ -179,10 +179,10 @@ def page_montage(result, angle: float) -> Figure:
     trace.set(xlabel="coverage (ML)", ylabel="normalized signal", xlim=(0, 2.05), ylim=(0, 1.05))
     trace.legend(loc="lower right", fontsize=8, ncol=3)
     figure.suptitle(
-        f"Coverage montage, 0 to 2 ML — Ga/N = {RATIO} paper preset, "
+        f"Coverage montage, 0 to 2 ML - Ga/N = {RATIO} paper preset, "
         f"{result.config.lattice_size}x{result.config.lattice_size}, {angle:.3f}° grazing.\n"
         "Roughens near half coverage, partially smooths near integer ML: one cycle per\n"
-        "monolayer, but not a return to flat — at 1 ML $\\sigma_h$ is still 0.246 and the "
+        "monolayer, but not a return to flat - at 1 ML $\\sigma_h$ is still 0.246 and the "
         "specular recovers only to 0.781. The incomplete recovery is the damping.",
         fontsize=12,
     )
@@ -199,7 +199,7 @@ def page_phase_orders(heights: np.ndarray) -> Figure:
             axes[0, column],
             pattern,
             title=(
-                f"$q_z d/\\pi$ = {order} — {pattern.condition}\n"
+                f"$q_z d/\\pi$ = {order} - {pattern.condition}\n"
                 f"{angle:.3f}° grazing, $I_{{00}}$ = {pattern.specular_intensity:.4f}"
             ),
         )
@@ -231,7 +231,7 @@ def page_phase_orders(heights: np.ndarray) -> Figure:
         "Phase-order sweep on one frozen half-covered two-level surface "
         f"({np.mean(heights):.2f} ML).\n"
         "Odd orders put adjacent terraces pi out of phase and must cancel; even orders must "
-        "recover. The surface never changes — only the beam does.",
+        "recover. The surface never changes - only the beam does.",
         fontsize=12,
     )
     return figure
@@ -255,7 +255,7 @@ def page_azimuths(heights: np.ndarray) -> Figure:
             axes[column],
             pattern,
             title=(
-                f"azimuth {azimuth:g}° — {len(rods)} reachable rods\n"
+                f"azimuth {azimuth:g}° - {len(rods)} reachable rods\n"
                 + "\n".join(
                     ", ".join(rod.label for rod in rods[start : start + 4])
                     for start in range(0, len(rods), 4)
@@ -267,7 +267,7 @@ def page_azimuths(heights: np.ndarray) -> Figure:
         if column == len(AZIMUTHS_DEG) - 1:
             figure.colorbar(image, ax=axes[column], label="log10 I (flat surface = 0)")
     figure.suptitle(
-        f"Azimuth sweep on one frozen surface — {angle:.3f}° grazing (phase order "
+        f"Azimuth sweep on one frozen surface - {angle:.3f}° grazing (phase order "
         f"{AZIMUTH_ORDER}), where first orders exist.\n"
         "Rotating the sample sweeps the Ewald sphere across a hexagonal reciprocal lattice, so "
         "which rods are reachable changes. Circles are `rod_orders()`, not hand placement.\n"
@@ -304,7 +304,7 @@ def page_coherence(surfaces: dict[str, np.ndarray], angle: float) -> Figure:
             axes,
             pattern,
             title=(
-                f"$L_c$ = {coherence:g} nm — $I_{{00}}$ = {pattern.specular_intensity:.4f}\n"
+                f"$L_c$ = {coherence:g} nm - $I_{{00}}$ = {pattern.specular_intensity:.4f}\n"
                 f"rod FWHM {pattern.streak_width_deg:.3f}°"
             ),
         )
@@ -379,13 +379,13 @@ def page_coherence(surfaces: dict[str, np.ndarray], angle: float) -> Figure:
         title=(
             "Measured rod width follows the analytic $1/L_c$ prediction\n"
             f"(largest deviation {max(abs(m - p.streak_width_deg) for m, p in zip(measured, patterns, strict=True)):.4f}°"
-            " — `make validate-rheed` asserts this)"
+            " - `make validate-rheed` asserts this)"
         ),
     )
     width_axes.legend(fontsize=8)
     width_axes.title.set_fontsize(9)
     figure.suptitle(
-        "Coherence sweep on one frozen stepped surface (0.50 ML, two levels) — "
+        "Coherence sweep on one frozen stepped surface (0.50 ML, two levels) - "
         f"{angle:.3f}° grazing.\n"
         "Longer coherence narrows the rods and, on this surface, destroys the specular beam:\n"
         "at 1 nm the beam sees one flat terrace ($I_{00}$ = 0.99), at 16 nm it spans both and "

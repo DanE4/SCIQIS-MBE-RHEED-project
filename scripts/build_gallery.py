@@ -1,7 +1,10 @@
 """Pre-compute the demonstration runs the notebook offers instead of simulating live.
 
-These are committed so a talk or demo never waits on a KMC run. Regenerate with
-`make gallery` after any change to the model.
+These are committed so a talk or demo never waits on a KMC run, and so a laptop that cannot
+afford a large lattice still gets one. Regenerate with `make gallery` after any change to the
+model. `make gallery SIZES=96 WORKERS=6` trades statistics for a smaller build; above 128 the
+paper entry needs more events than the limit `figure3_config` sets, and it stops rather than
+quietly truncating.
 """
 
 import json
@@ -10,19 +13,33 @@ from pathlib import Path
 
 from mbe_rheed_sim import SimulationConfig, run
 from mbe_rheed_sim.analysis import rheed_oscillation_metrics
+from mbe_rheed_sim.kmc import SimulationResult
 from mbe_rheed_sim.paper import figure3_config, figure3_parameters
-from mbe_rheed_sim.workflows import run_parallel, setup_logging
+from mbe_rheed_sim.workflows import (
+    artifact_root,
+    log_progress,
+    parse_workflow_args,
+    run_parallel,
+    setup_logging,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "data" / "gallery"
+# Every size here must be one the notebook's lattice dropdown offers, or the preset that
+# reloads a stored run into the live form cannot express it (tests/test_notebook.py).
+# 128 is the largest that keeps the paper entry inside the 10-million event safety limit
+# `figure3_config` sets, and the whole set inside a few MB of committed data.
+LATTICE_SIZE = 128
 
 # Each entry is one story the notebook can tell without running anything.
 BASE = SimulationConfig(
-    lattice_size=24,
+    lattice_size=LATTICE_SIZE,
     target_coverage_ml=3.0,
     sample_every_ml=0.05,
     seed=7,
     desorption_barrier_ev=1.2,  # suppress desorption so morphology is the only story
+    # Events scale with the site count, so the 2-million default aborts these runs above
+    # about a 48 lattice. 50 million is the largest limit the notebook form can express.
+    max_events=50_000_000,
 )
 # Ga/N condition behind the paper entry. Written into the index so the notebook can reload
 # this run into the live-run form in paper mode instead of guessing the ratio back.
@@ -38,15 +55,22 @@ ENTRIES = {
             "to nearly flat every monolayer and the proxy oscillates with a ~1 ML period. "
             "This is the textbook RHEED oscillation the whole model is aiming at."
         ),
-        "config": figure3_config(PAPER_RATIO, lattice_size=7, duration_s=40.0, seed=7),
+        "config": figure3_config(
+            PAPER_RATIO, lattice_size=LATTICE_SIZE, duration_s=40.0, seed=7
+        ),
         "figure3_ratio": PAPER_RATIO,
     },
     "island-growth": {
-        "title": "Island growth (damped oscillations)",
+        "title": "Island growth (oscillation lost to island nucleation)",
         "story": (
-            "With the teaching parameters the diffusion length is comparable to the lattice, "
-            "so new layers start before the one below closes. The proxy still oscillates but "
-            "irregularly and with a decaying envelope: real growth, not the ideal limit."
+            "The teaching parameters give a diffusion length of a few sites, far shorter than "
+            "this lattice, so islands nucleate independently all over the surface and every "
+            "new layer starts long before the one below closes. Averaged over that many "
+            "uncorrelated patches the proxy stops oscillating altogether. The same parameters "
+            "on a 24x24 lattice do oscillate, with a 0.8 ML period, and at 48x48 with 0.54 ML: "
+            "neither is the ~1 ML layer-by-layer period, so that signal was the small surface "
+            "completing layers in step, not real layer-by-layer growth. This is what a "
+            "finite-size artifact looks like when you grow the lattice out of it."
         ),
         "config": replace(BASE, temperature_k=900.0, step_barrier_ev=0.0),
     },
@@ -54,8 +78,8 @@ ENTRIES = {
         "title": "Mounding from an Ehrlich-Schwoebel barrier",
         "story": (
             "The same conditions plus a large down-step barrier. Adatoms that land on top of "
-            "an island cannot descend, so material piles into mounds. This is the roughest "
-            "run in the set and its oscillation dies fastest."
+            "an island cannot descend, so material piles into mounds instead of filling the "
+            "layer below. This is the roughest run in the set."
         ),
         "config": replace(BASE, temperature_k=900.0, step_barrier_ev=0.25),
     },
@@ -89,29 +113,78 @@ ENTRIES = {
 }
 
 # The stories above make ordering claims. Fail the build rather than ship a false caption.
+# Grouped, because that is how strong the claims are: the captions rank the cold and the
+# fast run above the random one and below the mounded one, but say nothing about which of
+# the two is rougher, and on a large lattice they land within noise of each other.
 EXPECTED_ROUGHNESS_ORDER = (
-    "gan-paper-082",
-    "island-growth",
-    "no-diffusion",
-    "too-fast",
-    "too-cold",
-    "step-barrier-mounding",
+    ("gan-paper-082",),
+    ("island-growth",),
+    ("no-diffusion",),
+    ("too-cold", "too-fast"),
+    ("step-barrier-mounding",),
 )
 
 
-def main() -> None:
+def _configs(size: int) -> dict[str, SimulationConfig]:
+    """The gallery configurations at one lattice size."""
+    return {
+        name: (
+            figure3_config(PAPER_RATIO, lattice_size=size, duration_s=40.0, seed=7)
+            if entry.get("figure3_ratio")
+            else replace(entry["config"], lattice_size=size)
+        )
+        for name, entry in ENTRIES.items()
+    }
+
+
+def _run_entry(item: tuple[str, SimulationConfig]) -> SimulationResult:
+    """Run one entry, reporting its own percentage as it goes.
+
+    Spawn workers start with no logging configuration, so without the `setup_logging` here
+    the per-run lines would be dropped and a multi-minute build would look frozen.
+    """
+    name, config = item
     setup_logging()
-    OUTPUT.mkdir(parents=True, exist_ok=True)
-    names = list(ENTRIES)
+    return run(config, on_progress=log_progress(name))
+
+
+def _check_roughness_order(index: dict) -> None:
+    """Reject the build if the measured roughness contradicts a caption."""
+    measured = sorted(index, key=lambda name: index[name]["final_roughness_ml"])
+    position = 0
+    for group in EXPECTED_ROUGHNESS_ORDER:
+        if set(measured[position : position + len(group)]) != set(group):
+            raise RuntimeError(
+                "gallery captions claim a roughness ordering the runs no longer produce:\n"
+                f"  expected {EXPECTED_ROUGHNESS_ORDER}\n  measured {tuple(measured)}"
+            )
+        position += len(group)
+
+
+def main(*, workers: int = len(ENTRIES), sizes: tuple[int, ...] = (LATTICE_SIZE,)) -> None:
+    setup_logging()
+    if len(sizes) != 1:
+        raise ValueError("the gallery is built at one lattice size")
+    (size,) = sizes
+    # Checked before the runs, not after: a size the notebook's dropdown cannot express
+    # would only fail in tests/test_notebook.py, hours later.
+    from mbe_rheed_notebook.controls import LATTICE_SIZES
+
+    if size not in LATTICE_SIZES.values():
+        raise ValueError(f"lattice size must be one the notebook offers: {sorted(LATTICE_SIZES.values())}")
+    output = artifact_root(ROOT) / "data" / "gallery"
+    output.mkdir(parents=True, exist_ok=True)
+    configs = _configs(size)
+    names = list(configs)
     results = run_parallel(
-        run,
-        [ENTRIES[name]["config"] for name in names],
-        workers=len(names),
-        description="pre-computed gallery",
+        _run_entry,
+        [(name, configs[name]) for name in names],
+        workers=workers,
+        description=f"pre-computed gallery at {size}x{size}",
     )
     index = {}
     for name, result in zip(names, results, strict=True):
-        result.save_npz(OUTPUT / f"{name}.npz")
+        result.save_npz(output / f"{name}.npz")
         entry = ENTRIES[name]
         # The paper entry runs on a physical clock, so record how coverage was derived.
         growth_rate = (
@@ -133,25 +206,26 @@ def main() -> None:
             "oscillation_period_ml": metrics.period_ml,
             "is_oscillatory": metrics.is_oscillatory,
             "frames": len(result.snapshots),
-            "bytes": (OUTPUT / f"{name}.npz").stat().st_size,
+            "bytes": (output / f"{name}.npz").stat().st_size,
         }
         print(f"{name:20s} {index[name]['bytes'] / 1024:7.0f} KiB  {index[name]['frames']} frames")
-    ordered = sorted(index, key=lambda name: index[name]["final_roughness_ml"])
-    if tuple(ordered) != EXPECTED_ROUGHNESS_ORDER:
-        raise RuntimeError(
-            "gallery captions claim a roughness ordering the runs no longer produce:\n"
-            f"  expected {EXPECTED_ROUGHNESS_ORDER}\n  measured {tuple(ordered)}"
-        )
+    _check_roughness_order(index)
     if index["gan-paper-082"]["oscillation_period_ml"] is None or not (
         0.8 <= index["gan-paper-082"]["oscillation_period_ml"] <= 1.2
     ):
         raise RuntimeError("the layer-by-layer caption requires a ~1 ML period")
     if index["no-diffusion"]["is_oscillatory"]:
         raise RuntimeError("the random-deposition caption requires no oscillation")
+    if index["island-growth"]["is_oscillatory"]:
+        raise RuntimeError(
+            "the island-growth caption says the proxy stops oscillating once the lattice is "
+            "much larger than the diffusion length; it oscillates at this size, so either "
+            "rebuild larger or rewrite the caption"
+        )
 
-    (OUTPUT / "index.json").write_text(json.dumps(index, indent=2) + "\n")
+    (output / "index.json").write_text(json.dumps(index, indent=2) + "\n")
     print(f"total {sum(item['bytes'] for item in index.values()) / 1024:.0f} KiB")
 
 
 if __name__ == "__main__":
-    main()
+    main(**parse_workflow_args(sizes=(LATTICE_SIZE,)))
