@@ -158,6 +158,7 @@ env.bak/
 venv.bak/
 tmp/
 outputs/*.html
+outputs/*.pdf
 outputs/figures/*
 outputs/animations/*
 outputs/runs/*

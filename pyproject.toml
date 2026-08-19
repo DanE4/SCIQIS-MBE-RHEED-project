@@ -15,6 +15,8 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    # scripts/build_reconstruction_frames.py, a hand-run reduction tool, imports it.
+    "pillow>=12.3.0",
     "pytest>=9.1.1",
     "ruff>=0.16.3",
 ]

@@ -222,6 +222,10 @@ def run_parallel[T, R](
         effective_workers=effective_workers,
     )
     if effective_workers == 1:
+        # Not just `ProcessPoolExecutor(max_workers=1)`: a spawn worker re-imports numpy and
+        # numba, which costs seconds of the very build that asked for no parallelism, and it
+        # buries tracebacks in a subprocess. One process also cannot oversubscribe the BLAS
+        # thread pool, so the clamp below is not needed here.
         results = []
         for completed, item in enumerate(items, start=1):
             results.append(function(item))

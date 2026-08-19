@@ -324,10 +324,7 @@ _LAYOUT = _layout()
 
 def _label(options: dict, value) -> str:
     """The dropdown label that carries `value`; dropdowns are keyed by label, not value."""
-    for label, option in options.items():
-        if option == value:
-            return label
-    raise KeyError(f"no option for {value!r}")
+    return {option: label for label, option in options.items()}[value]
 
 
 LATTICE_SIZES = {
@@ -403,13 +400,6 @@ def saved_browser(saved_dir: Path) -> mo.ui.file_browser:
         initial_path=saved_dir, filetypes=[".npz"], multiple=False, label="Saved run file"
     )
 
-
-def save_controls() -> tuple[mo.ui.text, mo.ui.run_button]:
-    """Name field and button for storing the active result. Read the button in another cell."""
-    return (
-        mo.ui.text(placeholder="my_run", label="Save as"),
-        mo.ui.run_button(label="Save this result"),
-    )
 
 
 def save_result(result: SimulationResult, saved_dir: Path, name: str) -> str:

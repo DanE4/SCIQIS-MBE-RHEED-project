@@ -12,7 +12,7 @@ def _():
     import marimo as mo
     import numpy as np
 
-    from mbe_rheed_notebook import batch, controls, figures, reconstruction
+    from mbe_rheed_notebook import controls, figures, reconstruction
     from mbe_rheed_sim import SimulationConfig, rheed, run
     from mbe_rheed_sim.kmc import SimulationResult
     from mbe_rheed_sim.paper import FIGURE3_NOMINAL_GA_N_RATIOS
@@ -34,7 +34,6 @@ def _():
         SAVED_DIR,
         SimulationConfig,
         SimulationResult,
-        batch,
         controls,
         figures,
         json,
@@ -210,8 +209,8 @@ def _(GALLERY, SAVED_DIR, controls, mo):
                 + controls.info(
                     "Pre-computed demo loads a stored trajectory instantly - use this when "
                     "presenting. Simulate now runs the model live with the parameters below, "
-                    "single-threaded. Saved run reloads a trajectory you stored yourself, "
-                    "from the Reproducibility panel at the end."
+                    "single-threaded. Saved run reloads a trajectory stored under "
+                    "`outputs/saved/`."
                 )
                 + " picks where the trajectory comes from; **Start from**"
                 + controls.info(
@@ -271,6 +270,8 @@ def _(
     mo,
     saved_browser,
 ):
+    # Only a demo recorded for the regime turns the switch on; see the gallery branch below.
+    reconstruction_default = False
     if data_source.value == controls.SAVED_RUN:
         mo.stop(
             not saved_browser.value,
@@ -290,6 +291,9 @@ def _(
         experiment_name = _meta["title"]
         experiment_detail = controls.gallery_detail(_meta, simulation.config)
         experiment_source = f"stored trajectory `data/gallery/{_entry}.npz` - nothing was simulated"
+        # A demo recorded for the regime arrives with the switch already on, so the view it was
+        # built to show is the one that appears.
+        reconstruction_default = bool(_meta.get("reconstruction"))
     else:
         _config, _estimate, growth_rate, experiment_name, experiment_detail = controls.build_run(
             get_parameters()
@@ -316,6 +320,7 @@ def _(
         experiment_detail,
         experiment_name,
         experiment_source,
+        reconstruction_default,
         simulation,
     )
 
@@ -340,21 +345,38 @@ def _(experiment_detail, experiment_name, experiment_source, mo, simulation):
 
 
 @app.cell
-def _(mo):
+def _(mo, reconstruction_default):
     # Its own cell, like the view selector below: a switch rebuilt on a playback tick would snap
-    # back to its constructor value.
-    reconstruction_toggle = mo.ui.switch(label="Stranski-Krastanov regime", value=False)
+    # back to its constructor value. Loading a different run is the one thing that may reposition
+    # it, and that is a deliberate act rather than a tick.
+    reconstruction_toggle = mo.ui.switch(
+        label="Stranski-Krastanov regime", value=reconstruction_default
+    )
     return (reconstruction_toggle,)
 
 
 @app.cell
-def _(coverage_axis, reconstruction, reconstruction_toggle, simulation):
+def _():
+    # A plain dict, deliberately. The playback ticker below must not reference the extended run:
+    # marimo remounts a rebuilt `mo.ui.refresh` at `off`, so a ticker that named it stopped
+    # playing every time the regime switch moved, and the ordered phase was never reached under
+    # playback at all. The extension writes what the ticker needs in here instead, and this cell
+    # never re-runs, so the ticker is never rebuilt.
+    playback_cursor = {"order": None, "total": 1}
+    return (playback_cursor,)
+
+
+@app.cell
+def _(coverage_axis, playback_cursor, reconstruction, reconstruction_toggle, simulation):
     # Continues the trajectory past its target coverage with a prescribed ordered phase.
     # `reconstruction.extend` is the identity until the switch above is set, so by default every
     # cell below sees the recorded run exactly as it was simulated. See the module for what the
     # appended frames are and are not.
     display_simulation, display_coverage_axis, reconstruction_order = reconstruction.extend(
         simulation, coverage_axis, enabled=reconstruction_toggle.value
+    )
+    playback_cursor.update(
+        order=reconstruction_order, total=len(display_simulation.snapshots)
     )
     return display_coverage_axis, display_simulation, reconstruction_order
 
@@ -368,7 +390,7 @@ def _(mo, simulation):
 
 
 @app.cell
-def _(display_simulation, mo, reconstruction, reconstruction_order, set_frame):
+def _(mo, playback_cursor, reconstruction, set_frame):
     # marimo renders this as a step button plus an interval dropdown, and the label is plain
     # text beside them. No play triangle here: a glyph in the label is not clickable, and one
     # that looks like a button is worse than a name that reads like a verb.
@@ -377,7 +399,7 @@ def _(display_simulation, mo, reconstruction, reconstruction_order, set_frame):
         label="**Play the growth**",
         on_change=lambda _value: set_frame(
             lambda frame: reconstruction.next_frame(
-                reconstruction_order, frame, len(display_simulation.snapshots)
+                playback_cursor["order"], frame, playback_cursor["total"]
             )
         ),
     )
@@ -511,25 +533,37 @@ def _(
             The annotated 0–2 ML milestones encode the **ideal layer-by-layer hypothesis**. The
             linked morphology and proxy show what this stochastic run actually produces;
             disagreement is a result, not hidden by relabeling.
+
+            **Do try the Stranski-Krastanov regime.** The switch below carries the run past its
+            target coverage into the ordered phase that strained GaN on AlN reaches once its
+            wetting layer is complete - the growth mode the primary paper is about, and the one
+            thing this model is too simple to reach on its own. The frames past the target are
+            therefore prescribed rather than simulated, and everything measured from them is
+            measured the ordinary way; the panel under the surface views says exactly which is
+            which. It needs a live run of 64x64 or larger to resolve, or the stored 256x256 demo
+            in section 2, which arrives with the switch already on. Then press play and watch the
+            camera come overhead as the surface orders.
             """),
-            # Two rows: which frame is showing, then how it is drawn. Seven widgets in one row
-            # left the play control third among equals, where nobody found it.
+            # Three rows: which frame is showing, then how it is drawn, then the play control
+            # last so it sits directly above the figure it animates.
             mo.hstack(
-                [snapshot_slider, milestone_picker, playback],
+                [snapshot_slider, milestone_picker],
                 justify="start",
                 gap=2,
                 wrap=True,
-            ),
-            mo.md(
-                "*Drag **Recorded growth frame** to scrub the run by hand, or set **Play the "
-                "growth** from `off` to a number of seconds per frame to animate it and back to "
-                "`off` to pause. The circular arrows beside that menu step one frame.*"
             ),
             mo.hstack(
                 [display_mode, beam_condition, sample_azimuth, reconstruction_toggle],
                 justify="start",
                 gap=2,
                 wrap=True,
+            ),
+            mo.hstack([playback], justify="start"),
+            mo.md(
+                "*Drag **Recorded growth frame** to scrub the run by hand, or animate it with "
+                "**Play the growth** just above the figure: the menu is seconds per frame, so "
+                "`0.25` runs fast and smooth, `1.0` runs slow and stepped, and `off` pauses. "
+                "The circular-arrows button beside the menu advances a single frame each click.*"
             ),
         ]
     )
@@ -675,7 +709,7 @@ def _(mo):
                 "because they are three different pieces of physics. The simulation box is "
                 "tiled or cropped to fill the illuminated patch, so a 7×7 run and a 64×64 run "
                 "of the same physical surface give the same streaks.\n\n"
-                "**Two honest limits.** The model surface repeats every $N$ sites, so disorder "
+                "**Two limits.** The model surface repeats every $N$ sites, so disorder "
                 "can only scatter into multiples of $2\\pi/Na$; once the coherence length "
                 "approaches the box width that background breaks into discrete satellites, "
                 "and translating the illuminated patch cannot cure it because the satellite "
@@ -774,14 +808,7 @@ def _(coverage_axis_label, display_coverage_axis, display_simulation, figures, m
 
 
 @app.cell
-def _(mo):
-    get_artifact_revision, set_artifact_revision = mo.state(0)
-    return get_artifact_revision, set_artifact_revision
-
-
-@app.cell
-def _(ROOT, get_artifact_revision, json):
-    get_artifact_revision()
+def _(ROOT, json):
     figure3_data = json.loads(
         (ROOT / "data/processed/figure3_simulated_reduced.json").read_text()
     )
@@ -922,9 +949,12 @@ def _(ASSETS, figure3_data, mo):
 
 
 @app.cell
-def _(ROOT, get_artifact_revision, json, mo):
-    get_artifact_revision()
+def _(ROOT, json, mo):
     sweep_data = json.loads((ROOT / "data/processed/parameter_sweep.json").read_text())
+    _oscillatory_fraction = sweep_data["oscillatory_fraction"]
+    _seed_count = len(sweep_data["seeds"])
+    _total_runs = sum(len(row) for row in _oscillatory_fraction) * _seed_count
+    _oscillatory_runs = round(sum(sum(row) for row in _oscillatory_fraction) * _seed_count)
     _temperatures = sweep_data["temperatures_k"]
     _fluxes = sweep_data["fluxes_ml_s"]
     _default = {"temperature_k": _temperatures[1], "flux_ml_s": _fluxes[1]}
@@ -957,10 +987,15 @@ def _(ROOT, get_artifact_revision, json, mo):
     mo.vstack(
         [
             mo.md(
-                "## 5. Beyond the paper: a temperature/flux regime map\n"
-                "The paper fixes the growth condition. The model does not, so the same machinery "
-                "can ask how the oscillation changes with temperature and flux. Select one point "
-                "from the reproducible three-seed sweep; the linked run uses seed 0 on the same "
+                "## 5. Beyond the paper: how temperature and flux affect surface roughening\n"
+                "A small exploratory sweep, not a second result. The paper fixes the growth "
+                "condition; the model does not, so the same machinery can ask how the *surface* "
+                "responds to temperature and flux. The map below is final RMS roughness, a "
+                "morphology observable that stays meaningful even where the proxy trace is a "
+                "monotonic decay rather than an oscillation. Across this sweep, "
+                f"**{_oscillatory_runs}/{_total_runs} runs are classified as oscillatory**, so "
+                "nothing here should be read as a RHEED-oscillation regime map. Select "
+                "one point from the reproducible six-seed sweep; the linked run uses seed 0 on a "
                 "16x16 lattice."
             ),
             sweep_form,
@@ -995,14 +1030,21 @@ def _(figures, mo, np, selected_sweep_result, sweep_data, sweep_selection):
     _column = int(
         np.flatnonzero(np.asarray(sweep_data["fluxes_ml_s"]) == sweep_selection["flux_ml_s"])[0]
     )
+    _seeds = len(sweep_data["seeds"])
     mo.vstack(
         [
             sweep_figure,
             mo.md(
-                f"Selected ensemble amplitude: "
-                f"**{sweep_data['mean_amplitude'][_row][_column]:.3f} "
-                f"+/- {sweep_data['std_amplitude'][_row][_column]:.3f}**; "
-                f"single-run final roughness: **{selected_sweep_result.roughness_ml[-1]:.3f} ML**."
+                f"Selected ensemble final roughness: "
+                f"**{sweep_data['mean_final_roughness_ml'][_row][_column]:.3f} "
+                f"+/- {sweep_data['std_final_roughness_ml'][_row][_column]:.3f} ML** "
+                f"(seed 0 single run: **{selected_sweep_result.roughness_ml[-1]:.3f} ML**). "
+                f"Detrended proxy amplitude here is "
+                f"**{sweep_data['mean_detrended_amplitude'][_row][_column]:.3f} "
+                f"+/- {sweep_data['std_detrended_amplitude'][_row][_column]:.3f}**, which is a "
+                f"range about the linear trend, not evidence of an oscillation: "
+                f"**{round(sweep_data['oscillatory_fraction'][_row][_column] * _seeds):d}"
+                f"/{_seeds} seeds** at this point are classified as oscillatory."
             ),
         ]
     )
@@ -1056,8 +1098,9 @@ def _(
     2. **The oscillation is a morphology signal.** The proxy is $1-S_d$, so it is the step
        density that oscillates; the linked morphology view in section 3 shows the islands that
        create those steps forming and merging once per monolayer.
-    3. **Growth conditions change the oscillation**, in the paper's Ga/N series and in the
-       temperature/flux map of section 5, which the model reaches with the same machinery.
+    3. **Growth conditions change the surface.** The paper's Ga/N series changes the
+       oscillation; the exploratory temperature/flux sweep in section 5 changes final
+       roughness without producing oscillations at all, and is reported as such.
     4. **Agreement with the published data is qualitative, not quantitative.** Periods match
        within {worst_period_gap_ml:.2f} ML, but the experimental traces damp
        ({min(reference_damping):.2f} to {max(reference_damping):.2f} per ML) where the
@@ -1067,139 +1110,6 @@ def _(
        through 64x64 and `1-S_d` is not a diffracted intensity, so neither absolute amplitudes
        nor damping should be read as physical predictions of this model.
     """)
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md("""
-    ## Reproducibility and batch workflows
-
-    Everything below regenerates or stores data; no figures live here. One KMC trajectory is
-    sequential *in this algorithm* - every event changes the surface the next event is drawn
-    from - so a single run cannot be split across cores, and the workers below parallelise
-    across *independent* runs instead.
-    """)
-    return
-
-
-@app.cell
-def _(controls, mo):
-    # Own cell: reading a run button resets it.
-    save_name, save_button = controls.save_controls()
-    mo.hstack([save_name, save_button], justify="start", gap=1, wrap=True)
-    return save_button, save_name
-
-
-@app.cell
-def _(SAVED_DIR, controls, mo, save_button, save_name, simulation):
-    mo.md(
-        controls.save_result(simulation, SAVED_DIR, save_name.value)
-        if save_button.value
-        else "Saving writes the active result's arrays and configuration to `outputs/saved/`, "
-        "which **Result source → Saved run** in section 2 reads back."
-    )
-    return
-
-
-@app.cell
-def _(batch, mo):
-    get_batch_request, set_batch_request = mo.state(None)
-    get_batch_process, set_batch_process = mo.state(None, allow_self_loops=True)
-    batch_form = batch.controls(
-        on_change=lambda value: set_batch_request(dict(value) if value else None)
-    )
-    mo.vstack(
-        [
-            mo.md(
-                "These controls launch the same reproducible CLI used by `make`. Blank overrides "
-                "retain the preset. Successful jobs are retained under `outputs/batches/`, then "
-                "atomically promoted to the canonical artifacts; failed or cancelled jobs never "
-                "replace canonical data. On promotion, sections 4 and 5 re-read "
-                "`data/processed/` and redraw themselves. Only one batch can run per session."
-            ),
-            mo.accordion(
-                {
-                    "Canonical seeds, sizes, and measured runtimes": mo.md(
-                        "| Workflow | Canonical seeds | Canonical sizes / grid |\n"
-                        "|---|---|---|\n"
-                        "| Baseline | 2026 | 8x8 |\n"
-                        "| GaN Ga/N comparison | 2026-2028 | 7x7, three Ga/N ratios |\n"
-                        "| Sweep | 0-2 | 16x16, 3 temperatures x 3 fluxes |\n"
-                        "| Generic convergence | 0-2 | 8/16/24 |\n"
-                        "| Figure 3 convergence | 0-2 | 8/16/32; add 64 via the size override |\n"
-                        "| Acceleration validation | 0-99 | 7x7 exact/accelerated pairs |\n"
-                        "| Scientific trends | 0-4 | 8x8, three physics configurations |\n"
-                        "| Sweep validation | 0-2 | 24x24, 3 temperatures x 2 fluxes |\n"
-                        "| Runtime benchmark | 0 | 64/128/256, sequential |\n\n"
-                        "Measured timings: the Ga/N comparison is about 16 s with four workers; "
-                        "Figure 3 convergence through 64x64 is about 52 s with three effective "
-                        "workers; the sequential 64/128/256 benchmark is about 34 s. Runtime "
-                        "varies with the machine and its load."
-                    )
-                }
-            ),
-            batch_form,
-        ]
-    )
-    return get_batch_process, get_batch_request, set_batch_process
-
-
-@app.cell
-def _(batch, get_batch_process, get_batch_request, mo, set_batch_process):
-    _request = get_batch_request()
-    _existing = get_batch_process()
-    if _request is None:
-        batch_launch_message = mo.md("Select a workflow and press **Launch batch workflow**.")
-    elif _existing is not None and _existing["process"].poll() is None:
-        batch_launch_message = mo.callout(
-            "A batch is already running. Cancel it or wait for it to finish before "
-            "launching another.",
-            kind="warn",
-        )
-    elif batch.needs_confirmation(_request) and not _request["confirm_expensive"]:
-        batch_launch_message = mo.callout(
-            "This workflow is intentionally gated. Tick the expensive-workflow confirmation "
-            "and submit again.",
-            kind="warn",
-        )
-    else:
-        _state = batch.launch(_request)
-        set_batch_process(_state)
-        batch_launch_message = mo.callout(
-            f"Launched `{_request['workflow']}` as process {_state['process'].pid}.", kind="info"
-        )
-    batch_launch_message
-    return
-
-
-@app.cell
-def _(mo):
-    batch_refresh = mo.ui.refresh(
-        options=[1.0, 2.0, 5.0], default_interval=1.0, label="Batch status refresh"
-    )
-    return (batch_refresh,)
-
-
-@app.cell
-def _(batch, batch_refresh, get_batch_process, mo, set_artifact_revision):
-    batch_refresh.value
-    _state = get_batch_process()
-    _status, _elapsed, _just_promoted = batch.read_status(_state)
-    if _just_promoted:
-        set_artifact_revision(lambda revision: revision + 1)
-    cancel_batch = mo.ui.run_button(
-        label="Cancel active batch",
-        kind="danger",
-        disabled=_state is None or _state["process"].poll() is not None,
-        on_change=lambda _value: batch.cancel(get_batch_process()),
-    )
-    mo.vstack(
-        [
-            mo.md(batch.status_markdown(_status, _elapsed)),
-            mo.hstack([batch_refresh, cancel_batch], justify="start", gap=2),
-        ]
-    )
     return
 
 

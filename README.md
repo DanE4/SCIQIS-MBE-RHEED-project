@@ -43,14 +43,15 @@ at half coverage and from 0.056 to 0.030 at layer completion, so the richer Ga c
 closer to ideal layer-by-layer filling. This is homoepitaxial GaN throughout - no strain, no
 Stranski-Krastanov transition and no quantum dots are modelled or claimed.
 
-Proxy amplitude against temperature and flux, 128x128, six seeds per point. Higher flux raises
-the plotted raw amplitude at every temperature, while the temperature trend is weaker and not
-monotonic at the lowest flux. The detrended amplitude, which is the principal observable in the
-stored JSON, does rise with both: 0.088 to 0.099 from the coldest/slowest to the hottest/fastest
-corner, with a seed spread under 0.0011. None of the nine conditions passes the oscillation test
-at this lattice size, which is the same finding as the island-growth demo (`make sweep`).
+Final RMS roughness against temperature and flux, 128x128, six seeds per point. This is an
+exploratory sweep beyond the paper, not a RHEED-oscillation regime map: **0/54 runs pass the
+oscillation test**, so roughness rather than amplitude carries the map. Roughness falls with
+flux (1.90 to 1.55 ML at 700 K) and rises with temperature (1.90 to 2.34 ML at 0.25 ML/s), with
+a seed spread under 0.02 ML. The detrended proxy amplitude stored alongside it rises weakly over
+the same corners, 0.088 to 0.099, but that is a range about the linear trend of a decaying
+curve, not an oscillation amplitude (`make sweep`).
 
-![Temperature/flux heatmap of proxy amplitude](assets/parameter_sweep.png)
+![Temperature/flux heatmap of final RMS roughness](assets/parameter_sweep.png)
 
 The notebook adds the interactive versions: a rotatable surface, playback over the recorded
 frames, and a frame slider tied to the RHEED trace. `make export` writes the whole thing to
@@ -310,11 +311,13 @@ make notebook    # uv run marimo edit notebooks/mbe_rheed.py --no-token --port 2
 Section **5** asks where results come from:
 
 - **Pre-computed demo** (default) loads a stored trajectory from `data/gallery/` instantly. Good
-  for presenting. Six runs: layer-by-layer growth with the paper's GaN parameters, island growth,
-  step-barrier mounding, too-cold and too-high-flux roughening, pure random deposition. All six
-  are 128x128, about 3 MB in total, so a laptop that cannot afford that lattice still gets it.
-  `make gallery` rebuilds them and fails if the measured roughness ordering or oscillation
-  periods stop matching the captions.
+  for presenting. Seven runs: layer-by-layer growth with the paper's GaN parameters, island
+  growth, step-barrier mounding, too-cold and too-high-flux roughening, pure random deposition,
+  and a Stranski-Krastanov wetting layer. Six are 128x128, about 3 MB in total, so a laptop that
+  cannot afford that lattice still gets it; the Stranski-Krastanov entry is recorded at 256x256
+  because the ordered phase its switch draws is only fully resolved there, and it loads with that
+  switch already on. `make gallery` rebuilds them and fails if the measured roughness ordering or
+  oscillation periods stop matching the captions.
 - **Simulate now** runs the model live, with either hand-tuned parameters or the paper's fitted
   GaN values. Nothing runs until **Run simulation** is pressed. Runs estimated above 20 s, or on
   a 64x64-or-larger lattice, ask for a second confirmation. One trajectory cannot be split
@@ -340,8 +343,9 @@ stops responding. The interactive surface, hex-cell and step-edge views work on 
 lattices section **2** runs, where they are responsive and worth having.
 
 One trajectory cannot use more than one core, since each event mutates the surface the next event
-is sampled from. Cores only help across independent runs, which is what section **11. Batch
-workflows** is for; it drives the same CLI as `make` and reloads promoted data in place.
+is sampled from. Cores only help across independent runs, which is what the batch workflows are
+for; run them with `make` or `scripts/run_workflow.py`, then reopen the notebook to pick up the
+promoted data.
 
 ### If you have not used marimo before
 
@@ -365,8 +369,8 @@ What this notebook actually uses, all from `import marimo as mo`:
 | [`mo.ui.form`](https://docs.marimo.io/api/inputs/form/) | wraps a group of controls so nothing downstream reruns until **Submit** |
 | [`mo.ui.run_button`](https://docs.marimo.io/api/inputs/button/) | **Run simulation**; keeps a long run from starting on every keystroke |
 | [`mo.stop`](https://docs.marimo.io/api/control_flow/) | early-exit a cell with a message instead of running the expensive part |
-| [`mo.state`](https://docs.marimo.io/api/state/) | the few things a widget cannot hold: current playback frame, the running batch process |
-| [`mo.ui.refresh`](https://docs.marimo.io/api/inputs/refresh/) | a timer cell; drives frame playback and batch progress polling |
+| [`mo.state`](https://docs.marimo.io/api/state/) | the one thing a widget cannot hold: the current playback frame |
+| [`mo.ui.refresh`](https://docs.marimo.io/api/inputs/refresh/) | a timer cell; drives frame playback |
 | [`mo.vstack`, `mo.hstack`, `mo.accordion`, `mo.callout`](https://docs.marimo.io/api/layouts/) | layout and the warning/error boxes |
 | [`mo.status.progress_bar`](https://docs.marimo.io/api/status/) | progress during a live run |
 
@@ -394,7 +398,7 @@ has. The non-workflow targets are listed with their commands at the bottom of th
 | `make validate-rheed` | 32x32 flat/stepped/rough screens, analytic and published-geometry checks |
 | `make rheed-visuals` | `uv run python scripts/export_rheed_visuals.py --size 128`; writes `outputs/rheed_visuals.pdf` |
 | `make preset-pdf` | `uv run python scripts/export_preset_pdf.py --size 128`; one page per preset, `outputs/preset_gallery.pdf` |
-| `make gallery` | rebuild the six stored notebook demos at 128x128; `SIZES=<one size>` to change |
+| `make gallery` | rebuild the stored notebook demos, six at 128x128 plus the 256x256 Stranski-Krastanov entry; `SIZES=<one size>` changes the six |
 | `make readme-figures` | rerun `figure3` + `sweep`, then copy the four PNGs from `outputs/figures/` into `assets/` |
 | `make test` | `uv run pytest` |
 | `make check` | `uv run ruff check .`, `uv run marimo check --strict notebooks/mbe_rheed.py`, `uv run python notebooks/mbe_rheed.py` |
@@ -446,7 +450,7 @@ volume down or up; `2>/dev/null | jq .` keeps only the JSON.
 ## Layout
 
 ```text
-notebooks/mbe_rheed.py       narrative and reactive wiring only (~650 lines)
+notebooks/mbe_rheed.py       narrative and reactive wiring only
 src/mbe_rheed_sim/           physics and reproducible execution (no marimo, no plotting)
   rheed.py                   kinematic diffraction screen, separate from the 1-S_d proxy
 src/mbe_rheed_notebook/      notebook widgets and figures (marimo + Plotly)

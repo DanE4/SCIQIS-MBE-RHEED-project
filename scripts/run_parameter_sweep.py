@@ -1,4 +1,4 @@
-"""Generate a small deterministic temperature/flux RHEED-amplitude map."""
+"""Generate a small deterministic temperature/flux surface-roughening map."""
 
 import json
 from dataclasses import asdict, replace
@@ -11,10 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from mbe_rheed_sim import SimulationConfig, run
-from mbe_rheed_sim.analysis import (
-    oscillation_amplitude,
-    rheed_oscillation_metrics,
-)
+from mbe_rheed_sim.analysis import rheed_oscillation_metrics
 from mbe_rheed_sim.workflows import (
     artifact_root,
     parse_workflow_args,
@@ -51,11 +48,11 @@ def main(
     run_dir = output_root / "outputs" / "runs"
     figure_dir = output_root / "outputs" / "figures"
     processed_data = output_root / "data" / "processed" / "parameter_sweep.json"
-    mean_amplitude = np.empty((len(TEMPERATURES_K), len(FLUXES_ML_S)))
-    std_amplitude = np.empty_like(mean_amplitude)
-    mean_detrended_amplitude = np.empty_like(mean_amplitude)
-    std_detrended_amplitude = np.empty_like(mean_amplitude)
-    oscillatory_fraction = np.empty_like(mean_amplitude)
+    mean_roughness_ml = np.empty((len(TEMPERATURES_K), len(FLUXES_ML_S)))
+    std_roughness_ml = np.empty_like(mean_roughness_ml)
+    mean_detrended_amplitude = np.empty_like(mean_roughness_ml)
+    std_detrended_amplitude = np.empty_like(mean_roughness_ml)
+    oscillatory_fraction = np.empty_like(mean_roughness_ml)
     metrics_by_point = []
     configurations = [
         replace(
@@ -86,11 +83,11 @@ def main(
                     for result in point_results
                 ]
             )
-            amplitudes = np.array([oscillation_amplitude(trace) for trace in traces])
+            roughness = np.array([result.roughness_ml[-1] for result in point_results])
             metrics = [rheed_oscillation_metrics(coverage_ml, trace) for trace in traces]
             detrended = np.array([metric.detrended_amplitude for metric in metrics])
-            mean_amplitude[temperature_index, flux_index] = amplitudes.mean()
-            std_amplitude[temperature_index, flux_index] = amplitudes.std()
+            mean_roughness_ml[temperature_index, flux_index] = roughness.mean()
+            std_roughness_ml[temperature_index, flux_index] = roughness.std(ddof=1)
             mean_detrended_amplitude[temperature_index, flux_index] = detrended.mean()
             std_detrended_amplitude[temperature_index, flux_index] = detrended.std(ddof=1)
             oscillatory_fraction[temperature_index, flux_index] = np.mean(
@@ -105,13 +102,13 @@ def main(
         "fluxes_ml_s": FLUXES_ML_S,
         "seeds": seeds,
         "effective_workers": min(workers, len(configurations)),
-        "amplitude_definition": "half of the 95th-minus-5th percentile proxy range",
-        "mean_amplitude": mean_amplitude.tolist(),
-        "std_amplitude": std_amplitude.tolist(),
         "principal_observable": {
-            "name": "detrended_amplitude",
-            "reason": "measures the periodic component after removing linear drift",
+            "name": "final_roughness_ml",
+            "reason": "RMS surface roughness at the end of growth, a morphology observable "
+            "that stays meaningful whether or not the proxy oscillates",
         },
+        "mean_final_roughness_ml": mean_roughness_ml.tolist(),
+        "std_final_roughness_ml": std_roughness_ml.tolist(),
         "mean_detrended_amplitude": mean_detrended_amplitude.tolist(),
         "std_detrended_amplitude": std_detrended_amplitude.tolist(),
         "oscillatory_fraction": oscillatory_fraction.tolist(),
@@ -125,8 +122,8 @@ def main(
     processed_data.write_text(serialized)
 
     figure, axis = plt.subplots(figsize=(6.5, 4.5), constrained_layout=True)
-    image = axis.imshow(mean_amplitude, origin="lower", cmap="magma", aspect="auto")
-    figure.colorbar(image, ax=axis, label="mean proxy amplitude")
+    image = axis.imshow(mean_roughness_ml, origin="lower", cmap="magma", aspect="auto")
+    figure.colorbar(image, ax=axis, label="mean final RMS roughness (ML)")
     axis.set(
         xlabel="deposition flux (ML/s)",
         ylabel="temperature (K)",
@@ -136,8 +133,10 @@ def main(
         yticklabels=TEMPERATURES_K,
         # Both numbers are overridable, so read them off the run rather than the default.
         title=(
-            f"RHEED-proxy regime map, {lattice_size}x{lattice_size} "
-            f"(mean +/- SD, {len(seeds)} seeds)"
+            f"Surface roughening map, {lattice_size}x{lattice_size}\n"
+            f"mean +/- SD over {len(seeds)} seeds; "
+            f"{round(oscillatory_fraction.sum() * len(seeds))}/"
+            f"{oscillatory_fraction.size * len(seeds)} runs oscillatory"
         ),
     )
     for temperature_index in range(len(TEMPERATURES_K)):
@@ -145,8 +144,8 @@ def main(
             axis.text(
                 flux_index,
                 temperature_index,
-                f"{mean_amplitude[temperature_index, flux_index]:.3f}\n"
-                f"+/- {std_amplitude[temperature_index, flux_index]:.3f}",
+                f"{mean_roughness_ml[temperature_index, flux_index]:.3f}\n"
+                f"+/- {std_roughness_ml[temperature_index, flux_index]:.3f}",
                 color="white",
                 ha="center",
                 va="center",

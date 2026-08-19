@@ -5,6 +5,10 @@ afford a large lattice still gets one. Regenerate with `make gallery` after any 
 model. `make gallery SIZES=96 WORKERS=6` trades statistics for a smaller build; above 128 the
 paper entry needs more events than the limit `figure3_config` sets, and it stops rather than
 quietly truncating.
+
+One entry ignores that size. `stranski-krastanov` is always recorded at 256, because the ordered
+phase the regime switch draws over it is only fully resolved there and nobody should have to wait
+two minutes for a live run to see it.
 """
 
 import json
@@ -100,6 +104,27 @@ ENTRIES = {
         ),
         "config": replace(BASE, temperature_k=900.0, deposition_flux_ml_s=1.5),
     },
+    "stranski-krastanov": {
+        "title": "Stranski-Krastanov regime (256x256)",
+        "story": (
+            "The paper's Ga/N = 0.82 physics again, on the largest lattice the notebook offers "
+            "and stopped at roughly the two monolayers that make up a wetting layer. On its own "
+            "this is the layer-by-layer entry at higher resolution and a shorter clock. Its "
+            "purpose is the switch it arrives with: the **Stranski-Krastanov regime** carries "
+            "the run past its target coverage into the ordered phase strained GaN on AlN reaches "
+            "once the wetting layer is complete. The model has no strain and no reconstruction, "
+            "so those frames are prescribed rather than simulated - but 256 sites is where the "
+            "ordered structure is fully resolved, which is why this run is recorded at that size."
+        ),
+        "config": figure3_config(PAPER_RATIO, lattice_size=256, duration_s=8.5, seed=7),
+        "figure3_ratio": PAPER_RATIO,
+        # Recorded at the size in the config above on purpose: below 256 the ordered phase loses
+        # its detail, and the point of this entry is to have that size available without a
+        # two-minute live run. So it ignores the build's `SIZES`.
+        "fixed_size": True,
+        # Loads with the regime switch already on, so the view it exists for is the one shown.
+        "reconstruction": True,
+    },
     "no-diffusion": {
         "title": "No diffusion: pure random deposition",
         "story": (
@@ -125,16 +150,19 @@ EXPECTED_ROUGHNESS_ORDER = (
 )
 
 
+def _entry_config(entry: dict, size: int) -> SimulationConfig:
+    """One gallery configuration at the build's lattice size."""
+    if entry.get("fixed_size"):
+        # Opted out of the build size: the size it is recorded at is the one in its own config.
+        return entry["config"]
+    if entry.get("figure3_ratio"):
+        return figure3_config(PAPER_RATIO, lattice_size=size, duration_s=40.0, seed=7)
+    return replace(entry["config"], lattice_size=size)
+
+
 def _configs(size: int) -> dict[str, SimulationConfig]:
     """The gallery configurations at one lattice size."""
-    return {
-        name: (
-            figure3_config(PAPER_RATIO, lattice_size=size, duration_s=40.0, seed=7)
-            if entry.get("figure3_ratio")
-            else replace(entry["config"], lattice_size=size)
-        )
-        for name, entry in ENTRIES.items()
-    }
+    return {name: _entry_config(entry, size) for name, entry in ENTRIES.items()}
 
 
 def _run_entry(item: tuple[str, SimulationConfig]) -> SimulationResult:
@@ -150,7 +178,11 @@ def _run_entry(item: tuple[str, SimulationConfig]) -> SimulationResult:
 
 def _check_roughness_order(index: dict) -> None:
     """Reject the build if the measured roughness contradicts a caption."""
-    measured = sorted(index, key=lambda name: index[name]["final_roughness_ml"])
+    ranked = {name for group in EXPECTED_ROUGHNESS_ORDER for name in group}
+    measured = sorted(
+        (name for name in index if name in ranked),
+        key=lambda name: index[name]["final_roughness_ml"],
+    )
     position = 0
     for group in EXPECTED_ROUGHNESS_ORDER:
         if set(measured[position : position + len(group)]) != set(group):
@@ -159,6 +191,39 @@ def _check_roughness_order(index: dict) -> None:
                 f"  expected {EXPECTED_ROUGHNESS_ORDER}\n  measured {tuple(measured)}"
             )
         position += len(group)
+
+
+def index_entry(name: str, result: SimulationResult, output: Path) -> dict:
+    """Save one run and describe it the way the notebook's index expects.
+
+    Separate from `main` so a single entry can be rebuilt on its own without the description
+    drifting from the one a full `make gallery` would write.
+    """
+    result.save_npz(output / f"{name}.npz")
+    entry = ENTRIES[name]
+    # Paper-physics entries run on a physical clock, so record how coverage was derived.
+    growth_rate = (
+        figure3_parameters(PAPER_RATIO).predicted_growth_rate_ml_s
+        if entry.get("figure3_ratio")
+        else None
+    )
+    metrics = rheed_oscillation_metrics(
+        result.time_s * growth_rate if growth_rate else result.coverage_ml,
+        result.rheed_proxy,
+    )
+    return {
+        "title": entry["title"],
+        "story": entry["story"],
+        "config": asdict(result.config),
+        "predicted_growth_rate_ml_s": growth_rate,
+        "figure3_ratio": entry.get("figure3_ratio"),
+        "reconstruction": entry.get("reconstruction", False),
+        "final_roughness_ml": float(result.roughness_ml[-1]),
+        "oscillation_period_ml": metrics.period_ml,
+        "is_oscillatory": metrics.is_oscillatory,
+        "frames": len(result.snapshots),
+        "bytes": (output / f"{name}.npz").stat().st_size,
+    }
 
 
 def main(*, workers: int = len(ENTRIES), sizes: tuple[int, ...] = (LATTICE_SIZE,)) -> None:
@@ -184,30 +249,7 @@ def main(*, workers: int = len(ENTRIES), sizes: tuple[int, ...] = (LATTICE_SIZE,
     )
     index = {}
     for name, result in zip(names, results, strict=True):
-        result.save_npz(output / f"{name}.npz")
-        entry = ENTRIES[name]
-        # The paper entry runs on a physical clock, so record how coverage was derived.
-        growth_rate = (
-            figure3_parameters(PAPER_RATIO).predicted_growth_rate_ml_s
-            if name == "gan-paper-082"
-            else None
-        )
-        metrics = rheed_oscillation_metrics(
-            result.time_s * growth_rate if growth_rate else result.coverage_ml,
-            result.rheed_proxy,
-        )
-        index[name] = {
-            "title": entry["title"],
-            "story": entry["story"],
-            "config": asdict(result.config),
-            "predicted_growth_rate_ml_s": growth_rate,
-            "figure3_ratio": entry.get("figure3_ratio"),
-            "final_roughness_ml": float(result.roughness_ml[-1]),
-            "oscillation_period_ml": metrics.period_ml,
-            "is_oscillatory": metrics.is_oscillatory,
-            "frames": len(result.snapshots),
-            "bytes": (output / f"{name}.npz").stat().st_size,
-        }
+        index[name] = index_entry(name, result, output)
         print(f"{name:20s} {index[name]['bytes'] / 1024:7.0f} KiB  {index[name]['frames']} frames")
     _check_roughness_order(index)
     if index["gan-paper-082"]["oscillation_period_ml"] is None or not (

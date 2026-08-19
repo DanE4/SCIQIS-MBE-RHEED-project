@@ -635,6 +635,9 @@ def specular_intensity(
     return intensities[0] if stack.ndim == 2 else intensities
 
 
+# Decades of intensity shown below the flat-surface specular value. A real screen is viewed
+# well short of this range; three keeps the rods bright and the background near black while
+# still showing the diffuse scattering that roughening produces.
 SCREEN_LOG_DECADES = 3.0
 
 

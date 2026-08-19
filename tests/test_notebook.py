@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mbe_rheed_notebook import batch, controls, figures
+from mbe_rheed_notebook import controls, figures
 from mbe_rheed_sim import rheed
 from mbe_rheed_sim.paper import FIGURE3_NOMINAL_GA_N_RATIOS
 
@@ -145,20 +145,6 @@ def test_rheed_trace_marks_the_current_frame() -> None:
     assert "kinematic specular (00) intensity" in {trace.name for trace in overlaid.data}
     # The frame marker must stay last, since the notebook and this suite both read it there.
     assert overlaid.data[-1].y[0] == pytest.approx(proxy[5])
-
-
-def test_batch_workflow_labels_match_the_cli() -> None:
-    """The dropdown must not offer a workflow run_workflow.py would reject."""
-    from run_workflow import WORKFLOWS
-
-    assert set(batch.WORKFLOW_LABELS.values()) <= set(WORKFLOWS)
-
-
-def test_expensive_batch_confirmation_covers_the_64_size_override() -> None:
-    request = {"workflow": "figure3-convergence", "sizes": "8,16,32,64"}
-    assert batch.needs_confirmation(request)
-    assert not batch.needs_confirmation({"workflow": "sweep", "sizes": "8,16"})
-    assert batch.needs_confirmation({"workflow": "benchmark-sizes", "sizes": ""})
 
 
 def test_save_result_round_trips_through_the_saved_directory(tmp_path: Path) -> None:

@@ -48,12 +48,6 @@ ORDERS_Z_EXAGGERATION = 3.0
 # Shown wherever a computed pattern is displayed, so a kinematic image is never mistaken for
 # the dynamical scattering a real RHEED screen records.
 DIFFRACTION_LABEL = "kinematic single scattering only - not dynamical RHEED"
-# Decades of intensity shown below the flat-surface specular value. A real screen is viewed
-# well short of this range; three keeps the rods bright and the background near black while
-# still showing the diffuse scattering that roughening produces.
-# One monolayer of height drawn as one in-plane site spacing. For GaN that is c/2 = 0.259 nm
-# against a = 0.319 nm, so the true vertical:lateral aspect is 0.81 of what the beam shows.
-ML_PER_SITE_SPACING = 1.0
 
 
 def _axial_to_cartesian(heights: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -106,10 +100,28 @@ def height_surface(
     return figure
 
 
-def hex_cells(heights: np.ndarray, coverage: float, zmax: int) -> go.Figure:
-    """Same lattice drawn on its true six-neighbor geometry rather than a square grid."""
+def _hex_lattice(
+    heights: np.ndarray,
+    *,
+    values: np.ndarray,
+    colorscale: str,
+    cmax: float,
+    colorbar_title: str,
+    grid_alpha: float,
+    extra_hover: str,
+    title: str,
+    name: str,
+) -> go.Figure:
+    """One marker per site on the true six-neighbour geometry, coloured by `values`.
+
+    Both hex views are this figure; only what the colour means differs. `values` and any
+    `extra_hover` column past height are the caller's, everything else is the shared geometry.
+    """
     row, column = np.indices(heights.shape)
     x, y = _axial_to_cartesian(heights)
+    columns = [column.ravel(), row.ravel(), heights.ravel()]
+    if extra_hover:
+        columns.append(np.asarray(values).ravel())
     figure = go.Figure(
         go.Scatter(
             x=x,
@@ -122,29 +134,45 @@ def hex_cells(heights: np.ndarray, coverage: float, zmax: int) -> go.Figure:
                 # ponytail: SVG markers, swap for a downsampled patch if playback drags.
                 # The floor is 3 px, not 9, so a large lattice does not draw as overlap.
                 "size": max(3, min(24, 320 / len(heights))),
-                "color": heights.ravel(),
-                "colorscale": "Viridis",
+                "color": np.asarray(values).ravel(),
+                "colorscale": colorscale,
                 "cmin": 0,
-                "cmax": zmax,
-                "colorbar": {"title": "height (ML)", "len": 0.7},
-                "line": {"color": "rgba(255,255,255,0.65)", "width": 0.5},
+                "cmax": cmax,
+                "colorbar": {"title": colorbar_title, "len": 0.7},
+                "line": {"color": f"rgba(255,255,255,{grid_alpha})", "width": 0.5},
             },
-            customdata=np.column_stack((column.ravel(), row.ravel(), heights.ravel())),
+            customdata=np.column_stack(columns),
             hovertemplate=(
                 "q=%{customdata[0]}<br>r=%{customdata[1]}<br>"
-                "height=%{customdata[2]} ML<extra></extra>"
+                "height=%{customdata[2]} ML" + extra_hover + "<extra></extra>"
             ),
-            name="hexagonal cells",
+            name=name,
         )
     )
     figure.update_layout(
         height=430,
-        margin={"l": 20, "r": 20, "t": 50, "b": 30},
-        title=f"Six-neighbor axial lattice at {coverage:.2f} ML",
+        # Two title lines need the extra headroom; one does not.
+        margin={"l": 20, "r": 20, "t": 70 if "<br>" in title else 50, "b": 30},
+        title=title,
         xaxis={"title": "axial q + r/2", "scaleanchor": "y", "scaleratio": 1},
         yaxis={"title": "sqrt(3) r / 2"},
     )
     return figure
+
+
+def hex_cells(heights: np.ndarray, coverage: float, zmax: int) -> go.Figure:
+    """Same lattice drawn on its true six-neighbor geometry rather than a square grid."""
+    return _hex_lattice(
+        heights,
+        values=heights,
+        colorscale="Viridis",
+        cmax=zmax,
+        colorbar_title="height (ML)",
+        grid_alpha=0.65,
+        extra_hover="",
+        title=f"Six-neighbor axial lattice at {coverage:.2f} ML",
+        name="hexagonal cells",
+    )
 
 
 def _stepped_neighbours(heights: np.ndarray) -> np.ndarray:
@@ -158,49 +186,23 @@ def step_edges(heights: np.ndarray, coverage: float, zmax: int) -> go.Figure:
     """Where the steps are, drawn on the same hex geometry the proxy is measured on.
 
     `zmax` is accepted for a common signature with the other surface views; the colour scale
-    here is the fixed 0–6 count of unequal neighbours, not height.
+    here is the fixed 0-6 count of unequal neighbours, not height.
     """
-    row, column = np.indices(heights.shape)
-    x, y = _axial_to_cartesian(heights)
-    unequal = _stepped_neighbours(heights)
-    figure = go.Figure(
-        go.Scatter(
-            x=x,
-            y=y,
-            mode="markers",
-            marker={
-                "symbol": HEX_SYMBOL,
-                # Same one-marker-per-site ceiling as hex_cells above.
-                "size": max(3, min(24, 320 / len(heights))),
-                "color": unequal.ravel(),
-                "colorscale": "Inferno",
-                "cmin": 0,
-                "cmax": 6,
-                "colorbar": {"title": "stepped<br>neighbours", "len": 0.7},
-                "line": {"color": "rgba(255,255,255,0.35)", "width": 0.5},
-            },
-            customdata=np.column_stack(
-                (column.ravel(), row.ravel(), heights.ravel(), unequal.ravel())
-            ),
-            hovertemplate=(
-                "q=%{customdata[0]}<br>r=%{customdata[1]}<br>height=%{customdata[2]} ML"
-                "<br>stepped neighbours=%{customdata[3]} of 6<extra></extra>"
-            ),
-            name="step edges",
-        )
-    )
     density = step_density(heights)
-    figure.update_layout(
-        height=430,
-        margin={"l": 20, "r": 20, "t": 70, "b": 30},
+    return _hex_lattice(
+        heights,
+        values=_stepped_neighbours(heights),
+        colorscale="Inferno",
+        cmax=6,
+        colorbar_title="stepped<br>neighbours",
+        grid_alpha=0.35,
+        extra_hover="<br>stepped neighbours=%{customdata[3]} of 6",
         title=(
             f"Step edges at {coverage:.2f} ML"
             f"<br><sub>S_d = {density:.3f}, so the proxy 1 - S_d = {1 - density:.3f}</sub>"
         ),
-        xaxis={"title": "axial q + r/2", "scaleanchor": "y", "scaleratio": 1},
-        yaxis={"title": "sqrt(3) r / 2"},
+        name="step edges",
     )
-    return figure
 
 
 def detector_screen(pattern: ScreenPattern, coverage: float) -> go.Figure:
@@ -296,6 +298,158 @@ def detector_screen(pattern: ScreenPattern, coverage: float) -> go.Figure:
         plot_bgcolor="#000000",
     )
     return figure
+
+
+def _detector_inset(
+    figure: go.Figure, rods: tuple[rheed.RodOrder, ...], grazing_angle_deg: float
+) -> None:
+    """The detector plane face-on (x3/y3), in its own angular coordinates.
+
+    The readable answer to "which orders, and where do they land", drawn from the same
+    rods the 3D rays came from. No projection, no scene camera, nothing to rotate away
+    from. Owns its own axis pair, so not calling this leaves no empty box behind.
+    """
+    figure.update_layout(
+        xaxis3={
+            "domain": [0.63, 0.99],
+            "anchor": "y3",
+            "title": {"text": "deflection (\u00b0)", "font": {"size": 10}},
+            "tickfont": {"size": 9},
+            "range": [-ORDERS_ACCEPTANCE_DEG, ORDERS_ACCEPTANCE_DEG],
+            "zeroline": False,
+        },
+        yaxis3={
+            "domain": [0.52, 0.99],
+            "anchor": "x3",
+            "scaleanchor": "x3",
+            "scaleratio": 1.0,
+            "title": {"text": "exit angle (\u00b0)", "font": {"size": 10}},
+            "tickfont": {"size": 9},
+            "zeroline": False,
+        },
+    )
+    orders = [rod for rod in rods if (rod.h, rod.k) != (0, 0)]
+    figure.add_trace(
+        go.Scatter(
+            x=[rod.deflection_deg for rod in orders],
+            y=[rod.exit_angle_deg for rod in orders],
+            text=[rod.label for rod in orders],
+            mode="markers+text",
+            marker={"color": "#a78bfa", "size": 9},
+            textposition="top center",
+            textfont={"color": "#7c3aed", "size": 11},
+            xaxis="x3",
+            yaxis="y3",
+            showlegend=False,
+            name="inset: reachable (hk)",
+            hovertemplate=(
+                "%{text}<br>deflection=%{x:.2f}°<br>exit=%{y:.2f}°<extra></extra>"
+            ),
+        )
+    )
+    figure.add_trace(
+        go.Scatter(
+            x=[0.0],
+            y=[grazing_angle_deg],
+            mode="markers+text",
+            marker={
+                "color": "rgba(0,0,0,0)",
+                "size": 13,
+                "line": {"color": SPECULAR_COLOR, "width": 3},
+            },
+            text=["(00)"],
+            textposition="bottom center",
+            textfont={"color": SPECULAR_COLOR, "size": 11},
+            xaxis="x3",
+            yaxis="y3",
+            showlegend=False,
+            name="inset: nominal specular",
+            hovertemplate="nominal specular (00)<extra></extra>",
+        )
+    )
+    # The horizon: anything at or below it is in the substrate's shadow.
+    figure.add_trace(
+        go.Scatter(
+            x=[-ORDERS_ACCEPTANCE_DEG, ORDERS_ACCEPTANCE_DEG],
+            y=[0.0, 0.0],
+            mode="lines",
+            line={"color": "#94a3b8", "width": 1, "dash": "dot"},
+            xaxis="x3",
+            yaxis="y3",
+            showlegend=False,
+            hoverinfo="skip",
+        )
+    )
+    if len(rods) == 1:
+        # Say it rather than leaving an empty box that reads as a drawing failure.
+        figure.add_annotation(
+            text="only (00) is reachable<br>at this condition",
+            xref="x3",
+            yref="y3",
+            x=0.0,
+            y=grazing_angle_deg + 0.35 * ORDERS_ACCEPTANCE_DEG,
+            showarrow=False,
+            font={"size": 11, "color": "#475569"},
+        )
+
+
+def _side_view_inset(
+    figure: go.Figure, geometry: rheed.BeamGeometry, grazing_angle_deg: float
+) -> None:
+    """True-aspect side view (x2/y2), 1:1: the main scene cannot show what a couple of
+    degrees looks like, and a stretched picture of a grazing beam is the one thing
+    readers misread. Owns its own axis pair, as the detector inset does."""
+    figure.update_layout(
+        xaxis2={
+            "domain": [0.015, 0.30],
+            "anchor": "y2",
+            "title": {
+                "text": f"true {grazing_angle_deg:.2f}\u00b0 grazing (1:1)",
+                "font": {"size": 10},
+            },
+            "showticklabels": False,
+            "zeroline": False,
+            "showgrid": False,
+        },
+        yaxis2={
+            "domain": [0.80, 0.97],
+            "anchor": "x2",
+            "scaleanchor": "x2",
+            "scaleratio": 1.0,
+            "showticklabels": False,
+            "zeroline": False,
+            "showgrid": False,
+        },
+    )
+    tangent = float(geometry.specular_direction[2] / geometry.specular_direction[0])
+    for xs, ys, colour in (
+        ((-1.0, 0.0), (tangent, 0.0), BEAM_COLOR),
+        ((0.0, 1.0), (0.0, tangent), SPECULAR_COLOR),
+    ):
+        figure.add_trace(
+            go.Scatter(
+                x=xs,
+                y=ys,
+                mode="lines",
+                line={"color": colour, "width": 2},
+                xaxis="x2",
+                yaxis="y2",
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        )
+    figure.add_trace(
+        go.Scatter(
+            x=[-1.0, 1.0],
+            y=[0.0, 0.0],
+            mode="lines",
+            line={"color": "#475569", "width": 2},
+            xaxis="x2",
+            yaxis="y2",
+            showlegend=False,
+            hovertemplate="surface<extra></extra>",
+        )
+    )
 
 
 def rheed_geometry(
@@ -600,105 +754,8 @@ def rheed_geometry(
     )
 
     if show_orders:
-        # The readable answer to "which orders, and where do they land": the detector plane
-        # face-on, in its own angular coordinates, from the same rods the 3D rays came from.
-        # No projection, no scene camera, nothing to rotate away from.
-        figure.add_trace(
-            go.Scatter(
-                x=[rod.deflection_deg for rod in rods if (rod.h, rod.k) != (0, 0)],
-                y=[rod.exit_angle_deg for rod in rods if (rod.h, rod.k) != (0, 0)],
-                text=[rod.label for rod in rods if (rod.h, rod.k) != (0, 0)],
-                mode="markers+text",
-                marker={"color": "#a78bfa", "size": 9},
-                textposition="top center",
-                textfont={"color": "#7c3aed", "size": 11},
-                xaxis="x3",
-                yaxis="y3",
-                showlegend=False,
-                name="inset: reachable (hk)",
-                hovertemplate=(
-                    "%{text}<br>deflection=%{x:.2f}°<br>exit=%{y:.2f}°<extra></extra>"
-                ),
-            )
-        )
-        figure.add_trace(
-            go.Scatter(
-                x=[0.0],
-                y=[grazing_angle_deg],
-                mode="markers+text",
-                marker={
-                    "color": "rgba(0,0,0,0)",
-                    "size": 13,
-                    "line": {"color": SPECULAR_COLOR, "width": 3},
-                },
-                text=["(00)"],
-                textposition="bottom center",
-                textfont={"color": SPECULAR_COLOR, "size": 11},
-                xaxis="x3",
-                yaxis="y3",
-                showlegend=False,
-                name="inset: nominal specular",
-                hovertemplate="nominal specular (00)<extra></extra>",
-            )
-        )
-        # The horizon: anything at or below it is in the substrate's shadow.
-        figure.add_trace(
-            go.Scatter(
-                x=[-ORDERS_ACCEPTANCE_DEG, ORDERS_ACCEPTANCE_DEG],
-                y=[0.0, 0.0],
-                mode="lines",
-                line={"color": "#94a3b8", "width": 1, "dash": "dot"},
-                xaxis="x3",
-                yaxis="y3",
-                showlegend=False,
-                hoverinfo="skip",
-            )
-        )
-        if len(rods) == 1:
-            # Say it rather than leaving an empty box that reads as a drawing failure.
-            figure.add_annotation(
-                text="only (00) is reachable<br>at this condition",
-                xref="x3",
-                yref="y3",
-                x=0.0,
-                y=grazing_angle_deg + 0.35 * ORDERS_ACCEPTANCE_DEG,
-                showarrow=False,
-                font={"size": 11, "color": "#475569"},
-            )
-
-    # True-aspect side view, 1:1, because the main scene cannot show what 2.75 degrees looks
-    # like and a stretched picture of a grazing beam is the one thing readers misread.
-    tangent = float(
-        geometry.specular_direction[2] / geometry.specular_direction[0]
-    )
-    for xs, ys, colour in (
-        ((-1.0, 0.0), (tangent, 0.0), BEAM_COLOR),
-        ((0.0, 1.0), (0.0, tangent), SPECULAR_COLOR),
-    ):
-        figure.add_trace(
-            go.Scatter(
-                x=xs,
-                y=ys,
-                mode="lines",
-                line={"color": colour, "width": 2},
-                xaxis="x2",
-                yaxis="y2",
-                showlegend=False,
-                hoverinfo="skip",
-            )
-        )
-    figure.add_trace(
-        go.Scatter(
-            x=[-1.0, 1.0],
-            y=[0.0, 0.0],
-            mode="lines",
-            line={"color": "#475569", "width": 2},
-            xaxis="x2",
-            yaxis="y2",
-            showlegend=False,
-            hovertemplate="surface<extra></extra>",
-        )
-    )
+        _detector_inset(figure, rods, grazing_angle_deg)
+    _side_view_inset(figure, geometry, grazing_angle_deg)
 
     condition = f"{pattern.condition}, " if pattern is not None else ""
     orders_note = (
@@ -727,42 +784,6 @@ def rheed_geometry(
             f"<br><sub>{GEOMETRY_LABEL}</sub>"
             f"<br><sub><b>{scale_note}</b> - the inset is the same beam at 1:1</sub>"
         ),
-        xaxis2={
-            "domain": [0.015, 0.30],
-            "anchor": "y2",
-            "title": {"text": f"true {grazing_angle_deg:.2f}° grazing (1:1)", "font": {"size": 10}},
-            "showticklabels": False,
-            "zeroline": False,
-            "showgrid": False,
-        },
-        xaxis3={
-            "domain": [0.63, 0.99],
-            "anchor": "y3",
-            "visible": show_orders,
-            "title": {"text": "deflection (°)", "font": {"size": 10}},
-            "tickfont": {"size": 9},
-            "range": [-ORDERS_ACCEPTANCE_DEG, ORDERS_ACCEPTANCE_DEG],
-            "zeroline": False,
-        },
-        yaxis3={
-            "domain": [0.52, 0.99],
-            "anchor": "x3",
-            "visible": show_orders,
-            "scaleanchor": "x3",
-            "scaleratio": 1.0,
-            "title": {"text": "exit angle (°)", "font": {"size": 10}},
-            "tickfont": {"size": 9},
-            "zeroline": False,
-        },
-        yaxis2={
-            "domain": [0.80, 0.97],
-            "anchor": "x2",
-            "scaleanchor": "x2",
-            "scaleratio": 1.0,
-            "showticklabels": False,
-            "zeroline": False,
-            "showgrid": False,
-        },
         scene={
             "domain": {"x": [0.0, 1.0], "y": [0.0, 1.0]},
             "uirevision": "beam-geometry",
@@ -981,21 +1002,21 @@ def observables(
 
 
 def sweep_panels(sweep_data: dict, selection: dict, result) -> Figure:
-    """Heatmap of the stored ensemble with the selected point circled, plus that single run."""
+    """Roughening heatmap of the stored ensemble, the selected point circled, plus that run."""
     temperatures = np.asarray(sweep_data["temperatures_k"])
     fluxes = np.asarray(sweep_data["fluxes_ml_s"])
-    amplitudes = np.asarray(sweep_data["mean_amplitude"])
+    roughness = np.asarray(sweep_data["mean_final_roughness_ml"])
     row = int(np.flatnonzero(temperatures == selection["temperature_k"])[0])
     column = int(np.flatnonzero(fluxes == selection["flux_ml_s"])[0])
 
     figure = Figure(figsize=(12, 3.5), constrained_layout=True)
     axes = figure.subplots(1, 3)
-    heatmap = axes[0].imshow(amplitudes, origin="lower", cmap="magma", aspect="auto")
+    heatmap = axes[0].imshow(roughness, origin="lower", cmap="magma", aspect="auto")
     axes[0].scatter(
         column, row, marker="s", s=120, facecolors="none", edgecolors="cyan", linewidths=2
     )
     axes[0].set(
-        title="Mean proxy amplitude",
+        title="Mean final RMS roughness (ML)",
         xlabel="flux (ML/s)",
         ylabel="temperature (K)",
         xticks=range(len(fluxes)),
@@ -1009,7 +1030,7 @@ def sweep_panels(sweep_data: dict, selection: dict, result) -> Figure:
     figure.colorbar(surface, ax=axes[1], shrink=0.8, label="height (ML)")
     axes[2].plot(result.coverage_ml, result.rheed_proxy, color="tab:red")
     axes[2].set(
-        title="Selected proxy trace",
+        title="Selected proxy trace (not necessarily oscillatory)",
         xlabel="coverage (ML)",
         ylabel=r"$1-S_d$",
         ylim=(0, 1.03),

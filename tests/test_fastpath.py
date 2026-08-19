@@ -38,7 +38,6 @@ def _run_with_backend(config: SimulationConfig, backend: str, monkeypatch) -> di
     }
 
 
-@pytest.mark.skipif(fastpath.njit is None, reason="numba is not installed")
 @pytest.mark.parametrize("config", CASES, ids=lambda config: f"L{config.lattice_size}")
 def test_compiled_backend_reproduces_the_reference_trajectory(config, monkeypatch) -> None:
     reference = _run_with_backend(config, "reference", monkeypatch)
