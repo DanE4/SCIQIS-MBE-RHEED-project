@@ -59,8 +59,20 @@ def _axial_to_cartesian(heights: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return (column + 0.5 * row).ravel(), (np.sqrt(3.0) / 2.0 * row).ravel()
 
 
-def height_surface(heights: np.ndarray, coverage: float, zmax: int) -> go.Figure:
-    """Rotatable 3D surface. `uirevision` keeps the camera fixed across playback frames."""
+def height_surface(
+    heights: np.ndarray,
+    coverage: float,
+    zmax: int,
+    *,
+    camera: dict | None = None,
+    revision: str = "surface-playback",
+) -> go.Figure:
+    """Rotatable 3D surface. `uirevision` keeps the camera fixed across playback frames.
+
+    `camera` drives the view from the caller. Plotly only applies a supplied camera when
+    `revision` changes, so a caller that wants to move the view has to vary `revision` with it,
+    and a caller that wants a view to settle holds `revision` constant.
+    """
     extent = len(heights) - 0.5
     figure = go.Figure(
         go.Surface(
@@ -74,18 +86,18 @@ def height_surface(heights: np.ndarray, coverage: float, zmax: int) -> go.Figure
         )
     )
     figure.update_layout(
-        uirevision="surface-playback",
+        uirevision=revision,
         height=430,
         margin={"l": 0, "r": 0, "t": 50, "b": 0},
         title=f"Surface at {coverage:.2f} ML",
         scene={
-            "uirevision": "surface-playback",
+            "uirevision": revision,
             "xaxis": {"title": "array x", "range": [-0.5, extent], "autorange": False},
             "yaxis": {"title": "array y", "range": [-0.5, extent], "autorange": False},
             "zaxis": {"title": "height (ML)", "range": [0, zmax], "autorange": False},
             "aspectmode": "manual",
             "aspectratio": {"x": 1, "y": 1, "z": 0.55},
-            "camera": {"eye": {"x": 1.4, "y": 1.4, "z": 1.0}},
+            "camera": camera or {"eye": {"x": 1.4, "y": 1.4, "z": 1.0}},
         },
     )
     return figure
