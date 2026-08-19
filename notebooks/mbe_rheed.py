@@ -117,9 +117,10 @@ def _(IMAGES, mo):
             from a smooth terraced surface, broadened and modulated streaks as step density
             rises, transmission spots once three-dimensional islands stand proud. During
             layer-by-layer growth the specular intensity therefore oscillates once per
-            monolayer. **This notebook computes no electron diffraction.** It tracks the
-            morphology the diffraction responds to and reports a step-density proxy, defined in
-            section 3.
+            monolayer. **The signal plotted throughout is a step-density proxy, not a
+            diffraction calculation** - it tracks the morphology the diffraction responds to,
+            and is defined in section 3. Section 3 also computes the kinematic diffraction
+            screen itself, as a separate observable that is never fed back into the proxy.
             """),
             mo.image(
                 IMAGES / "03_rheed_surface_patterns.png",

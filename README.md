@@ -4,7 +4,8 @@ Kinetic Monte Carlo (KMC) simulation of molecular-beam-epitaxy growth. Depositio
 activated surface diffusion, downward step barriers and desorption on a periodic solid-on-solid
 lattice, with a step-density RHEED proxy plotted alongside the surface morphology.
 
-The RHEED signal here is a step-density proxy, not a diffraction calculation. Scope and known
+The plotted RHEED signal is a step-density proxy, not a diffraction calculation; a separate
+kinematic diffraction module computes the screen itself. Scope and known
 limitations: [`STATUS.md`](STATUS.md). Source paper: `nanomaterials-12-03052.pdf` (CC BY).
 MIT licensed, except the paper and the three Wikimedia schematics: [`LICENSE`](LICENSE).
 
@@ -142,13 +143,29 @@ drawn from. Only independent runs parallelise, which is why the batch workflows 
 how much step edge the surface has ([`observables.py`](src/mbe_rheed_sim/observables.py)). The
 plotted signal is `1 - S_d`: high on a completed, flat layer, low when a layer is half filled and
 covered in island edges. One oscillation per monolayer follows from that, which is the same
-argument used for real specular RHEED intensity. It stays a morphology measure though: no
-electron scattering is computed anywhere in this project.
+argument used for real specular RHEED intensity. It stays a morphology measure: no electron
+scattering enters it. The kinematic diffraction calculation below is a separate observable,
+computed from the same height fields but never fed back into the proxy.
 
 The paper's Figure 3 puts its own simulated signal next to measured GaN oscillations (originally
 from Adelmann et al., 2002), which is the panel this project digitizes and compares against. What
 can be checked that way is period, phase and damping; absolute amplitude cannot, since the two
 signals are different quantities.
+
+### The kinematic diffraction screen
+
+Separately from the proxy, [`rheed.py`](src/mbe_rheed_sim/rheed.py) computes what a detector
+would actually collect, in the kinematic (single-scattering) approximation: each occupied column
+contributes one scatterer at the top of its stack, and the screen follows the exact Ewald
+construction of Liu, Chang and Zou (2022) rather than a flat-Ewald approximation. It gives the
+full angular screen, the specular `(00)` intensity against coverage, and which `(h, k)` rods are
+reachable at a given beam energy, grazing angle and azimuth. Dynamical (multiple) scattering is
+still not computed, so absolute intensities remain model quantities.
+
+The notebook paints the computed screen on the beam-geometry view, and the specular trace sits
+beside `1 - S_d` so the two observables can be compared. `make validate-rheed` checks the
+geometry against analytic and published values with tolerances; `make rheed-visuals` is the
+picture companion, on surfaces whose answer is known.
 
 ### How the pieces connect
 
@@ -158,14 +175,17 @@ flowchart LR
     P["paper.py<br>Figure 3 parameters"] --> C
     K --> R["SimulationResult<br>heights, traces, snapshots"]
     R --> A["analysis.py<br>period, damping, amplitude"]
+    R --> H["rheed.py<br>kinematic screen and specular intensity"]
     R --> W["workflows.py<br>runs seeds and parameter points in worker processes"]
     A --> S
+    H --> S
     W --> S["scripts + Makefile"]
     S --> O["outputs/<br>figures, JSON, NPZ"]
     S --> D["data/processed<br>committed notebook inputs"]
     D --> N["notebook"]
     G["data/gallery<br>stored demo runs"] --> N
     K --> N
+    H --> N
 ```
 
 `src/mbe_rheed_sim/` holds the physics and knows nothing about marimo or plotting;
@@ -339,6 +359,9 @@ has. The non-workflow targets are listed with their commands at the bottom of th
 | `make convergence`, `make figure3-convergence` | finite-size sensitivity; add `SIZES=8,16,32,64` for the ~2 min 64x64 point |
 | `make validate-acceleration`, `-science`, `-sweep` | accelerated vs. exact ensembles and model trends |
 | `make benchmark-sizes` | sequential 64/128/256 runtime envelope |
+| `make validate-rheed` | 32x32 flat/stepped/rough screens, analytic and published-geometry checks |
+| `make rheed-visuals` | `uv run python scripts/export_rheed_visuals.py --size 128`; writes `outputs/rheed_visuals.pdf` |
+| `make preset-pdf` | `uv run python scripts/export_preset_pdf.py --size 128`; one page per preset, `outputs/preset_gallery.pdf` |
 | `make gallery` | rebuild the six stored notebook demos at 128x128; `SIZES=<one size>` to change |
 | `make readme-figures` | rerun `figure3` + `sweep`, then copy the three PNGs from `outputs/figures/` into `assets/`; about 35 min at the 128x128 defaults |
 | `make test` | `uv run pytest` |
@@ -392,6 +415,7 @@ volume down or up; `2>/dev/null | jq .` keeps only the JSON.
 ```text
 notebooks/mbe_rheed.py       narrative and reactive wiring only (~650 lines)
 src/mbe_rheed_sim/           physics and reproducible execution (no marimo, no plotting)
+  rheed.py                   kinematic diffraction screen, separate from the 1-S_d proxy
 src/mbe_rheed_notebook/      notebook widgets and figures (marimo + Plotly)
 scripts/                     baseline, Figure 3, validation, sweep entry points
 tests/                       scientific and software invariants
