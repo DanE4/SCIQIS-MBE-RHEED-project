@@ -203,7 +203,7 @@ def _(GALLERY, SAVED_DIR, controls, mo):
                 "Grow a film and watch the surface. Hover any &#9432; for what a control does.\n\n"
                 "**Result source**"
                 + controls.info(
-                    "Pre-computed demo loads a stored trajectory instantly — use this when "
+                    "Pre-computed demo loads a stored trajectory instantly - use this when "
                     "presenting. Simulate now runs the model live with the parameters below, "
                     "single-threaded. Saved run reloads a trajectory you stored yourself, "
                     "from the Reproducibility panel at the end."
@@ -276,7 +276,7 @@ def _(
         growth_rate = None
         experiment_name = _path.stem
         experiment_detail = controls.saved_detail(simulation.config)
-        experiment_source = f"saved run `{_path}` — nothing was simulated"
+        experiment_source = f"saved run `{_path}` - nothing was simulated"
     elif data_source.value == controls.PRE_COMPUTED:
         _entry = gallery_choice.value
         _meta = GALLERY[_entry]
@@ -284,7 +284,7 @@ def _(
         growth_rate = _meta["predicted_growth_rate_ml_s"]
         experiment_name = _meta["title"]
         experiment_detail = controls.gallery_detail(_meta, simulation.config)
-        experiment_source = f"stored trajectory `data/gallery/{_entry}.npz` — nothing was simulated"
+        experiment_source = f"stored trajectory `data/gallery/{_entry}.npz` - nothing was simulated"
     else:
         _config, _estimate, growth_rate, experiment_name, experiment_detail = controls.build_run(
             get_parameters()
@@ -421,7 +421,7 @@ def _(
     }
     _milestone_indices = {
         (
-            f"{coverage:.1f} ML — {_cycle_labels[coverage]}"
+            f"{coverage:.1f} ML - {_cycle_labels[coverage]}"
             if coverage in _cycle_labels
             else f"{coverage:.1f} ML"
         ): int(np.argmin(np.abs(coverage_axis - coverage)))
@@ -458,9 +458,9 @@ def _(
 
             Below it there is now also an actual diffraction calculation: the **kinematic**
             detector image, $|\sum_j \exp(-i\,\mathbf{q}\cdot\mathbf{R}_j)|^2$ summed over
-            the column tops of the same surface. It is single scattering only — real RHEED
+            the column tops of the same surface. It is single scattering only - real RHEED
             phase and amplitude also depend on refraction, absorption, surface reconstruction,
-            and strong multiple scattering, none of which are modelled — but it does produce
+            and strong multiple scattering, none of which are modelled - but it does produce
             the screen, the streaks, and the specular oscillation from first principles rather
             than by analogy.
 
@@ -509,7 +509,7 @@ def _(
         azimuth_deg=float(sample_azimuth.value),
     )
     if display_mode.value in ("RHEED beam geometry", "Reachable diffraction orders"):
-        # The same pattern the 2D screen below draws, so the two cannot disagree.
+        # The same pattern the screen figure in the next cell draws, so they cannot disagree.
         surface_figure = figures.rheed_geometry(
             _heights,
             _coverage,
@@ -544,30 +544,6 @@ def _(
                 </style>
             """),
             mo.hstack([surface_figure, rheed_figure], widths="equal", wrap=True, align="center"),
-            mo.md(
-                "The 3D height view uses array coordinates. **Hexagonal cells** maps the "
-                "same periodic axial lattice to Cartesian centers so its six-neighbor "
-                "topology is shown without implying a square metric. **Step edges** colours "
-                "each site by how many of its six neighbours sit at a different height, "
-                "which is the quantity $S_d$ averages. **RHEED beam geometry** places the "
-                "grazing ray, the surface normal and the detector plane on the same surface "
-                "at the beam condition selected above, and paints the computed screen onto "
-                "that plane: its centre pixel is exactly where the specular ray lands, so it "
-                "is the same data as the 2D screen below. Changing the azimuth rotates the "
-                "**sample** in the lab frame while the beam and the plane stay put, so the "
-                "morphology is unchanged and the reachable rods move — the specular direction "
-                "itself does not, because turning a sample about its own normal cannot move "
-                "its mirror direction. Only the grazing angle moves that. "
-                "**Reachable diffraction orders** adds one ray per order that `rod_orders()` "
-                "finds inside the drawn detector's acceptance, each stopping at its own Ewald "
-                "intersection with the plane and labelled with its real $(h,k)$ — so the "
-                "azimuth changes which orders exist while $k_i$, $n$ and $k_f^{(00)}$ hold "
-                "still. That mode is drawn to scale on all three axes, so the surface reads as "
-                "the thin sheet a grazing beam actually sees. "
-                "On the RHEED trace, "
-                "the **green diamond** is the initially flat maximum and the **purple x** "
-                "is the most stepped stored frame through the first monolayer."
-            ),
         ]
     )
     return (screen_pattern,)
@@ -580,14 +556,43 @@ def _(coverage_axis, figures, get_frame, mo, screen_pattern, simulation):
         [
             figures.detector_screen(screen_pattern, float(coverage_axis[_frame])),
             mo.md(
-                "This is the detector image the surface above would produce, built from the "
+                "**The surface views.** The 3D height view uses array coordinates. "
+                "**Hexagonal cells** maps the same periodic axial lattice to Cartesian "
+                "centers so its six-neighbor "
+                "topology is shown without implying a square metric. **Step edges** colours "
+                "each site by how many of its six neighbours sit at a different height, "
+                "which is the quantity $S_d$ averages. **RHEED beam geometry** places the "
+                "grazing ray, the surface normal and the detector plane on the same surface "
+                "at the beam condition selected above, and paints the computed screen onto "
+                "that plane: its centre pixel is exactly where the specular ray lands, so it "
+                "is the same data as the 2D screen above. Changing the azimuth rotates the "
+                "**sample** in the lab frame while the beam and the plane stay put, so the "
+                "morphology is unchanged and the reachable rods move - the specular direction "
+                "itself does not, because turning a sample about its own normal cannot move "
+                "its mirror direction. Only the grazing angle moves that. "
+                "**Reachable diffraction orders** adds one ray per order that `rod_orders()` "
+                "finds inside the drawn detector's acceptance, each stopping at its own Ewald "
+                "intersection with the plane and labelled with its real $(h,k)$ - so the "
+                "azimuth changes which orders exist while $k_i$, $n$ and $k_f^{(00)}$ hold "
+                "still. Its z is exaggerated 3x so the rays separate, while the hit positions "
+                "stay exact; the two insets are the readable views - a 1:1 side view for the "
+                "true grazing angle, and the detector plane face-on with every reachable "
+                "$(h,k)$ where it lands. At a shallow condition no first order is reachable at "
+                "all, and the figure says so rather than drawing something. "
+                "On the RHEED trace, "
+                "the **green diamond** is the initially flat maximum and the **purple x** "
+                "is the most stepped stored frame through the first monolayer."
+            ),
+            mo.md(
+                "**The detector screen.** This is the detector image the surface above would "
+                "produce, built from the "
                 "exact Ewald construction: each `(h k)` reciprocal rod is intersected with "
                 "the sphere $|\\mathbf{k}_f| = |\\mathbf{k}_i|$, and the crosses mark where "
                 "that intersection lands. **Only orders the geometry actually reaches are "
                 "drawn.** A rod exists only when $|\\mathbf{G}_{hk}| \\le k\\sin\\theta_i$, "
                 "so at the shallowest beam conditions the specular $(00)$ beam is the only "
-                "order on the screen and the side orders appear — *below* the specular "
-                "beam, on the zeroth Laue circle — once the grazing angle is raised past "
+                "order on the screen and the side orders appear - *below* the specular "
+                "beam, on the zeroth Laue circle - once the grazing angle is raised past "
                 "about 2.1° at 15 keV. Turning the **sample azimuth** rotates the whole "
                 "reciprocal lattice against the fixed beam, sweeping the Ewald sphere across "
                 "the rods: away from a mirror direction they climb the Laue circle and leave "
@@ -606,8 +611,8 @@ def _(coverage_axis, figures, get_frame, mo, screen_pattern, simulation):
                 "approaches the box width that background breaks into discrete satellites, "
                 "and translating the illuminated patch cannot cure it because the satellite "
                 "positions are fixed by the box period, not by where the beam lands. And the "
-                "calculation is kinematic — single scattering, no dynamical diffraction, "
-                "refraction, absorption, Kikuchi lines or inelastic background — so absolute "
+                "calculation is kinematic - single scattering, no dynamical diffraction, "
+                "refraction, absorption, Kikuchi lines or inelastic background - so absolute "
                 "brightness means nothing. The shape over a run is the result.\n\n"
                 "Switch the **beam condition** control between odd (anti-phase) and even "
                 "(in-phase) orders and watch the dashed specular curve on the right: at "
@@ -899,8 +904,8 @@ def _(mo):
     ## Reproducibility and batch workflows
 
     Everything below regenerates or stores data; no figures live here. One KMC trajectory is
-    sequential *in this algorithm* — every event changes the surface the next event is drawn
-    from — so a single run cannot be split across cores, and the workers below parallelise
+    sequential *in this algorithm* - every event changes the surface the next event is drawn
+    from - so a single run cannot be split across cores, and the workers below parallelise
     across *independent* runs instead.
     """)
     return

@@ -29,16 +29,22 @@ GRAZING_ANGLE_DEG = 2.0
 # The geometry view paints the computed screen, so its label must not claim nothing was
 # calculated (the retired BEAM_GEOMETRY_LABEL said exactly that). What it must still say is that
 # the rays and the plane are drawn for explanation, at a disclosed distortion.
-GEOMETRY_LABEL = "geometry view only — rays and plane are explanatory, the painted screen is the computed one"
+GEOMETRY_LABEL = "geometry view only - rays and plane are explanatory, the painted screen is the computed one"
 
 # Angular acceptance of the drawn detector in the reachable-orders mode, matching the span the
 # azimuth sweep and validate_rheed.py already use. rod_orders still decides what is reachable
 # inside it: every order is reachable somewhere -- 40 of them, out past 40 deg exit at 15 keV --
 # and drawing those would picture the max_order loop rather than a RHEED screen.
 ORDERS_ACCEPTANCE_DEG = 9.0
+
+# Modest, disclosed z exaggeration for the orders mode. Fully to scale is honest and unreadable:
+# a grazing geometry is a sliver, so the orders collapse into a few pixels. The rays keep their
+# true plane coordinates either way -- this only scales the drawing -- and the 1:1 side inset and
+# the detector inset carry the true angles.
+ORDERS_Z_EXAGGERATION = 3.0
 # Shown wherever a computed pattern is displayed, so a kinematic image is never mistaken for
 # the dynamical scattering a real RHEED screen records.
-DIFFRACTION_LABEL = "kinematic single scattering only — not dynamical RHEED"
+DIFFRACTION_LABEL = "kinematic single scattering only - not dynamical RHEED"
 # Decades of intensity shown below the flat-surface specular value. A real screen is viewed
 # well short of this range; three keeps the rods bright and the background near black while
 # still showing the diffuse scattering that roughening produces.
@@ -96,7 +102,11 @@ def hex_cells(heights: np.ndarray, coverage: float, zmax: int) -> go.Figure:
             mode="markers",
             marker={
                 "symbol": HEX_SYMBOL,
-                "size": max(9, min(24, 320 / len(heights))),
+                # One marker per site: legible up to a few thousand sites, and the stored
+                # demos are 128x128 = 16k, where the browser redraws every frame slower.
+                # ponytail: SVG markers, swap for a downsampled patch if playback drags.
+                # The floor is 3 px, not 9, so a large lattice does not draw as overlap.
+                "size": max(3, min(24, 320 / len(heights))),
                 "color": heights.ravel(),
                 "colorscale": "Viridis",
                 "cmin": 0,
@@ -140,7 +150,8 @@ def step_edges(heights: np.ndarray, coverage: float, zmax: int) -> go.Figure:
             mode="markers",
             marker={
                 "symbol": HEX_SYMBOL,
-                "size": max(9, min(24, 320 / len(heights))),
+                # Same one-marker-per-site ceiling as hex_cells above.
+                "size": max(3, min(24, 320 / len(heights))),
                 "color": unequal.ravel(),
                 "colorscale": "Inferno",
                 "cmin": 0,
@@ -237,7 +248,7 @@ def detector_screen(pattern: ScreenPattern, coverage: float) -> go.Figure:
         margin={"l": 60, "r": 10, "t": 112, "b": 60},
         legend={"orientation": "h", "y": -0.2},
         title=(
-            f"<b>Kinematic RHEED screen</b> at {coverage:.2f} ML — specular "
+            f"<b>Kinematic RHEED screen</b> at {coverage:.2f} ML - specular "
             f"{pattern.specular_intensity:.4f} of flat"
             f"<br><sub>{pattern.beam_energy_kev:g} keV · "
             f"{pattern.grazing_angle_deg:.2f}° grazing · "
@@ -364,12 +375,12 @@ def rheed_geometry(
         + [impact_z + vertical for _, vertical in hits.values()]
     )
     if show_orders:
-        # True aspect on all three axes, so the drawn ray angles in this mode *are* the real
-        # ones and the exit angles can be read off the plane. The surface is a thin sheet at
-        # this scale, which is what a grazing-incidence geometry actually looks like.
+        # Plane coordinates stay true -- stretch is 1, so a ray lands where the screen says --
+        # and only the drawing is scaled, by a stated factor, so the rays are separable.
         z_top = reach * 1.12
         x_aspect = x_span / max(y_span, 1.0)
-        y_aspect, z_aspect = 1.0, z_top / max(y_span, 1.0)
+        y_aspect = 1.0
+        z_aspect = ORDERS_Z_EXAGGERATION * z_top / max(y_span, 1.0)
         stretch = 1.0
     else:
         z_top = reach * 1.45
@@ -393,6 +404,8 @@ def rheed_geometry(
             cmin=0,
             cmax=zmax,
             colorbar={"title": "height (ML)", "len": 0.55, "x": 1.02},
+            # Slightly translucent in orders mode so a ray crossing the surface stays visible.
+            opacity=0.82 if show_orders else 1.0,
             hovertemplate="lab x=%{x:.1f}<br>lab y=%{y:.1f}<br>height=%{z} ML<extra></extra>",
             name="surface",
         )
@@ -526,7 +539,7 @@ def rheed_geometry(
                     y=rays_y,
                     z=rays_z,
                     mode="lines",
-                    line={"color": "#a78bfa", "width": 3},
+                    line={"color": "#a78bfa", "width": 6},
                     name=f"reachable orders ({len(labels)} beside (00))",
                     hoverinfo="skip",
                 )
@@ -537,10 +550,14 @@ def rheed_geometry(
                     y=label_y,
                     z=label_z,
                     mode="markers+text",
-                    marker={"color": "#a78bfa", "size": 4},
+                    marker={
+                        "color": "#a78bfa",
+                        "size": 9,
+                        "line": {"color": "#f5f3ff", "width": 1},
+                    },
                     text=labels,
                     textposition="middle right",
-                    textfont={"color": "#c4b5fd", "size": 11},
+                    textfont={"color": "#a78bfa", "size": 15},
                     name="(hk) from rod_orders()",
                     hovertemplate="%{text}<extra>reachable order</extra>",
                 )
@@ -554,13 +571,80 @@ def rheed_geometry(
             mode="markers",
             marker={
                 "color": "rgba(0,0,0,0)",
-                "size": 9,
+                "size": 14 if show_orders else 9,
                 "line": {"color": SPECULAR_COLOR, "width": 3},
             },
             name="specular hit point",
-            hovertemplate="specular hit point — the (00) pixel of the screen<extra></extra>",
+            hovertemplate="specular hit point - the (00) pixel of the screen<extra></extra>",
         )
     )
+
+    if show_orders:
+        # The readable answer to "which orders, and where do they land": the detector plane
+        # face-on, in its own angular coordinates, from the same rods the 3D rays came from.
+        # No projection, no scene camera, nothing to rotate away from.
+        figure.add_trace(
+            go.Scatter(
+                x=[rod.deflection_deg for rod in rods if (rod.h, rod.k) != (0, 0)],
+                y=[rod.exit_angle_deg for rod in rods if (rod.h, rod.k) != (0, 0)],
+                text=[rod.label for rod in rods if (rod.h, rod.k) != (0, 0)],
+                mode="markers+text",
+                marker={"color": "#a78bfa", "size": 9},
+                textposition="top center",
+                textfont={"color": "#7c3aed", "size": 11},
+                xaxis="x3",
+                yaxis="y3",
+                showlegend=False,
+                name="inset: reachable (hk)",
+                hovertemplate=(
+                    "%{text}<br>deflection=%{x:.2f}°<br>exit=%{y:.2f}°<extra></extra>"
+                ),
+            )
+        )
+        figure.add_trace(
+            go.Scatter(
+                x=[0.0],
+                y=[grazing_angle_deg],
+                mode="markers+text",
+                marker={
+                    "color": "rgba(0,0,0,0)",
+                    "size": 13,
+                    "line": {"color": SPECULAR_COLOR, "width": 3},
+                },
+                text=["(00)"],
+                textposition="bottom center",
+                textfont={"color": SPECULAR_COLOR, "size": 11},
+                xaxis="x3",
+                yaxis="y3",
+                showlegend=False,
+                name="inset: nominal specular",
+                hovertemplate="nominal specular (00)<extra></extra>",
+            )
+        )
+        # The horizon: anything at or below it is in the substrate's shadow.
+        figure.add_trace(
+            go.Scatter(
+                x=[-ORDERS_ACCEPTANCE_DEG, ORDERS_ACCEPTANCE_DEG],
+                y=[0.0, 0.0],
+                mode="lines",
+                line={"color": "#94a3b8", "width": 1, "dash": "dot"},
+                xaxis="x3",
+                yaxis="y3",
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        )
+        if len(rods) == 1:
+            # Say it rather than leaving an empty box that reads as a drawing failure.
+            figure.add_annotation(
+                text="only (00) is reachable<br>at this condition",
+                xref="x3",
+                yref="y3",
+                x=0.0,
+                y=grazing_angle_deg + 0.35 * ORDERS_ACCEPTANCE_DEG,
+                showarrow=False,
+                font={"size": 11, "color": "#475569"},
+            )
 
     # True-aspect side view, 1:1, because the main scene cannot show what 2.75 degrees looks
     # like and a stretched picture of a grazing beam is the one thing readers misread.
@@ -598,12 +682,17 @@ def rheed_geometry(
 
     condition = f"{pattern.condition}, " if pattern is not None else ""
     orders_note = (
-        f" · {len(rods)} reachable orders inside ±{ORDERS_ACCEPTANCE_DEG:g}°"
+        (
+            f" · only (00) reachable inside ±{ORDERS_ACCEPTANCE_DEG:g}°"
+            if len(rods) == 1
+            else f" · {len(rods)} reachable orders inside ±{ORDERS_ACCEPTANCE_DEG:g}°"
+        )
         if show_orders
         else ""
     )
     scale_note = (
-        "all three axes to scale; displayed ray angles are the real ones"
+        f"z exaggerated {ORDERS_Z_EXAGGERATION:g}x for readability; hit positions are exact - "
+        "read the angles off the detector inset"
         if show_orders
         else f"z exaggerated {stretch:.0f}x; displayed ray angles not to scale"
     )
@@ -613,10 +702,10 @@ def rheed_geometry(
         margin={"l": 0, "r": 0, "t": 92, "b": 0},
         legend={"orientation": "h", "y": -0.02},
         title=(
-            f"Beam geometry at {coverage:.2f} ML — {condition}{grazing_angle_deg:.2f}° grazing, "
+            f"Beam geometry at {coverage:.2f} ML - {condition}{grazing_angle_deg:.2f}° grazing, "
             f"{azimuth_deg:g}° sample azimuth{orders_note}"
             f"<br><sub>{GEOMETRY_LABEL}</sub>"
-            f"<br><sub><b>{scale_note}</b> — the inset is the same beam at 1:1</sub>"
+            f"<br><sub><b>{scale_note}</b> - the inset is the same beam at 1:1</sub>"
         ),
         xaxis2={
             "domain": [0.015, 0.30],
@@ -625,6 +714,25 @@ def rheed_geometry(
             "showticklabels": False,
             "zeroline": False,
             "showgrid": False,
+        },
+        xaxis3={
+            "domain": [0.63, 0.99],
+            "anchor": "y3",
+            "visible": show_orders,
+            "title": {"text": "deflection (°)", "font": {"size": 10}},
+            "tickfont": {"size": 9},
+            "range": [-ORDERS_ACCEPTANCE_DEG, ORDERS_ACCEPTANCE_DEG],
+            "zeroline": False,
+        },
+        yaxis3={
+            "domain": [0.52, 0.99],
+            "anchor": "x3",
+            "visible": show_orders,
+            "scaleanchor": "x3",
+            "scaleratio": 1.0,
+            "title": {"text": "exit angle (°)", "font": {"size": 10}},
+            "tickfont": {"size": 9},
+            "zeroline": False,
         },
         yaxis2={
             "domain": [0.80, 0.97],
@@ -650,7 +758,16 @@ def rheed_geometry(
             # Looking downstream from upstream-left, roughly 40 degrees off the detector's
             # normal, so the painted screen reads as a screen instead of the edge-on sliver a
             # side-on view gives. Drag to taste: uirevision above keeps whatever you set.
-            "camera": {"eye": {"x": -1.22, "y": -1.02, "z": 0.5}, "center": {"z": -0.05}},
+            # Orders mode pulls in and recentres on the downstream half, where every ray, the
+            # hit points and the plane are; the sample is context there, not the subject.
+            "camera": (
+                {
+                    "eye": {"x": -0.72, "y": -0.60, "z": 0.30},
+                    "center": {"x": 0.22, "y": 0.0, "z": 0.04},
+                }
+                if show_orders
+                else {"eye": {"x": -1.22, "y": -1.02, "z": 0.5}, "center": {"z": -0.05}}
+            ),
         },
     )
     return figure

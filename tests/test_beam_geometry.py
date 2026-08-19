@@ -312,3 +312,49 @@ def test_the_footprint_is_the_coherence_area_not_a_point() -> None:
     centre_y = float(_named_traces(figure)["specular hit point"].y[0])
     expected = pattern.coherence_length_nm / rheed.GAN_IN_PLANE_SPACING_NM
     assert max(np.asarray(footprint.y)) - centre_y == pytest.approx(expected)
+
+
+def _inset_hits(figure):
+    return next(
+        (t for t in figure.data if t.name == "inset: reachable (hk)"),
+        None,
+    )
+
+
+@pytest.mark.parametrize("azimuth_deg", [0.0, 10.0, 25.0])
+def test_detector_inset_plots_exactly_the_reachable_orders(azimuth_deg: float) -> None:
+    """The readable inset and the 3D rays must be the same rods, in the same angles."""
+    _, _, figure = _orders(azimuth_deg)
+    hits = _inset_hits(figure)
+    expected = {
+        rod.label: (rod.deflection_deg, rod.exit_angle_deg)
+        for rod in rheed.rod_orders(
+            grazing_angle_deg=GRAZING_DEG,
+            azimuth_deg=azimuth_deg,
+            span_deg=figures.ORDERS_ACCEPTANCE_DEG,
+        )
+        if (rod.h, rod.k) != (0, 0)
+    }
+    assert dict(zip(hits.text, zip(hits.x, hits.y, strict=True), strict=True)) == pytest.approx(
+        expected
+    )
+    # Same labels the 3D rays carry, so the two panels cannot disagree.
+    assert set(hits.text) == set(_order_labels(figure))
+
+
+def test_inset_is_true_angle_and_tracks_the_azimuth() -> None:
+    _, _, figure = _orders(10.0)
+    assert figure.layout.yaxis3.scaleanchor == "x3"
+    assert figure.layout.yaxis3.scaleratio == 1.0
+    assert set(_inset_hits(figure).text) != set(_inset_hits(_orders(25.0)[2]).text)
+
+
+def test_only_the_specular_is_drawn_when_only_the_specular_is_reachable() -> None:
+    """A shallow beam reaches no first order, and the figure has to say so, not fill space."""
+    shallow = rheed.antiphase_grazing_angle_deg(3)
+    assert len(rheed.rod_orders(grazing_angle_deg=shallow, span_deg=9.0)) == 1
+    _, _, figure = _orders(0.0, grazing_angle_deg=shallow)
+    assert _inset_hits(figure).text == ()
+    assert not any(t.name and t.name.startswith("(hk)") for t in figure.data)
+    assert any("only (00)" in a.text for a in figure.layout.annotations)
+    assert "only (00) reachable" in figure.layout.title.text
