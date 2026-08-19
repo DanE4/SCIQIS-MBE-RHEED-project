@@ -20,6 +20,9 @@ PROXY_COLOR = "#d62728"
 SIMULATION_COLOR = "#1f77b4"
 BEAM_COLOR = "#ff7f0e"
 SPECULAR_COLOR = "#0ea5e9"
+ORDER_COLOR = "#7e22ce"
+AXIS_INK = "#111827"
+MUTED_INK = "#6b7280"
 # Typical RHEED incidence is 1-3 degrees. This is a visualization
 # assumption for drawing the geometry, not a value taken from the primary paper, which reports
 # no beam angle. Nothing downstream of this figure consumes it.
@@ -892,6 +895,67 @@ def rheed_trace(
         xaxis_title=axis_label,
         yaxis_title="normalized proxy" if specular is None else "normalized signal",
         yaxis_range=[0, 1.03],
+    )
+    return figure
+
+
+def reconstruction_order_parameter(
+    coverage_axis: np.ndarray,
+    r_sk: np.ndarray,
+    frame: int,
+    theta_ml: float | None,
+    threshold: float,
+    axis_label: str,
+) -> go.Figure:
+    """The reconstruction order parameter against coverage, with the threshold crossing marked.
+
+    One series, so the title names it and there is no legend box. The threshold is a recessive
+    dashed rule and the crossing carries the only direct label.
+    """
+    figure = go.Figure(
+        go.Scatter(
+            x=coverage_axis,
+            y=r_sk,
+            mode="lines",
+            line={"color": ORDER_COLOR, "width": 2},
+            name="R_SK",
+            hovertemplate="coverage=%{x:.2f} ML<br>R_SK=%{y:.3f}<extra></extra>",
+        )
+    )
+    figure.add_trace(
+        go.Scatter(
+            x=[coverage_axis[frame]],
+            y=[r_sk[frame]],
+            mode="markers",
+            marker={"color": AXIS_INK, "size": 9},
+            hovertemplate="current frame<br>R_SK=%{y:.3f}<extra></extra>",
+            showlegend=False,
+        )
+    )
+    figure.add_hline(
+        y=threshold,
+        line={"color": MUTED_INK, "width": 1, "dash": "dot"},
+        annotation={"text": f"R_SK = {threshold:g}", "font": {"color": MUTED_INK, "size": 11}},
+        annotation_position="top left",
+    )
+    if theta_ml is not None:
+        figure.add_vline(
+            x=theta_ml,
+            line={"color": AXIS_INK, "width": 1, "dash": "dash"},
+            annotation={
+                "text": f"Stranski-Krastanov transition<br>&#920; = {theta_ml:.2f} ML",
+                "font": {"color": AXIS_INK, "size": 12},
+            },
+            annotation_position="bottom left",
+        )
+    figure.update_layout(
+        height=430,
+        margin={"l": 60, "r": 10, "t": 50, "b": 60},
+        title="Stranski-Krastanov order parameter",
+        showlegend=False,
+        xaxis_title=axis_label,
+        yaxis_title="R_SK",
+        yaxis_range=[-0.15, 1.1],
     )
     return figure
 

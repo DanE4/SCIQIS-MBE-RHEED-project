@@ -234,3 +234,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# The Stranski-Krastanov template is reduced from a local animation by
+# scripts/build_reconstruction_frames.py; only the reduction is committed.
+/*.gif
+data/reconstruction/*.png

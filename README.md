@@ -321,6 +321,18 @@ Section **5** asks where results come from:
   across cores, so a large lattice on a slow machine takes what it takes: if you are waiting
   too long, go back to the pre-computed demos, which cover the same physics at 128x128.
 
+Section **3**'s surface views carry one optional overlay, the **Stranski-Krastanov regime**
+switch. The primary paper grows strained GaN on AlN, where the wetting layer stops growing
+layer-by-layer at a couple of monolayers and the surface reorders; this model has neither strain
+nor reconstruction, so it cannot produce that, and the switch appends a *prescribed* ordered phase
+past the run's target coverage to show what the transition would look like in the same observables.
+Everything measured from those surfaces - coverage, roughness, island density, the proxy, and the
+order parameter whose threshold crossing fixes the quoted transition coverage - is computed by the
+ordinary `mbe_rheed_sim.observables` functions, so the numbers are real measurements of a
+prescribed surface. It needs a live run of at least 64x64 to resolve, and it says so instead of
+doing nothing when the lattice is too small. Nothing in `mbe_rheed_sim` can reach it, so no saved
+run, gallery entry or workflow artifact is affected.
+
 Section **4** carries the Figure 3 comparison and, below it, the two morphology figures shown
 above. Both are the committed PNGs rather than interactive plots: a 128x128 surface is 16k sites,
 and drawing six of them as live markers costs tens of thousands of SVG nodes and a page that
@@ -389,7 +401,8 @@ has. The non-workflow targets are listed with their commands at the bottom of th
 | `make export` | `uv run marimo export html notebooks/mbe_rheed.py -o outputs/mbe_rheed.html -f` |
 
 Output goes to `outputs/`, which is Git-ignored and can always be rebuilt. Committed notebook
-inputs live in `data/processed/`, figure-derived reference curves in `data/reference/`.
+inputs live in `data/processed/`, figure-derived reference curves in `data/reference/`, and the
+display-only Stranski-Krastanov template in `data/reconstruction/`.
 
 `make digitize-figure3` re-extracts the reference curves from page 10 of the paper. It is the
 only command that needs a non-Python tool (`pdftocairo` from Poppler), and it is not part of

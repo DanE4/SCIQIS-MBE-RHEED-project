@@ -12,7 +12,7 @@ def _():
     import marimo as mo
     import numpy as np
 
-    from mbe_rheed_notebook import batch, controls, figures
+    from mbe_rheed_notebook import batch, controls, figures, reconstruction
     from mbe_rheed_sim import SimulationConfig, rheed, run
     from mbe_rheed_sim.kmc import SimulationResult
     from mbe_rheed_sim.paper import FIGURE3_NOMINAL_GA_N_RATIOS
@@ -40,6 +40,7 @@ def _():
         json,
         mo,
         np,
+        reconstruction,
         rheed,
         run,
     )
@@ -339,19 +340,53 @@ def _(experiment_detail, experiment_name, experiment_source, mo, simulation):
 
 
 @app.cell
+def _(mo):
+    # Its own cell, like the view selector below: a switch rebuilt on a playback tick would snap
+    # back to its constructor value.
+    reconstruction_toggle = mo.ui.switch(label="Stranski-Krastanov regime", value=False)
+    return (reconstruction_toggle,)
+
+
+@app.cell
+def _(coverage_axis, reconstruction, reconstruction_toggle, simulation):
+    # Continues the trajectory past its target coverage with a prescribed ordered phase.
+    # `reconstruction.extend` is the identity until the switch above is set, so by default every
+    # cell below sees the recorded run exactly as it was simulated. See the module for what the
+    # appended frames are and are not.
+    display_simulation, display_coverage_axis, reconstruction_order = reconstruction.extend(
+        simulation, coverage_axis, enabled=reconstruction_toggle.value
+    )
+    return display_coverage_axis, display_simulation, reconstruction_order
+
+
+@app.cell
 def _(mo, simulation):
+    # Deliberately keyed on the recorded run, not on whatever the cell above extended it into:
+    # re-running this cell would rebuild the state at its last frame and jump the view there.
     get_frame, set_frame = mo.state(len(simulation.snapshots) - 1, allow_self_loops=True)
     return get_frame, set_frame
 
 
 @app.cell
-def _(mo, set_frame, simulation):
+def _(display_simulation, mo, reconstruction, reconstruction_order, set_frame):
     playback = mo.ui.refresh(
         options=[0.25, 0.5, 1.0],
         label="Playback interval",
-        on_change=lambda _value: set_frame(lambda frame: (frame + 1) % len(simulation.snapshots)),
+        on_change=lambda _value: set_frame(
+            lambda frame: reconstruction.next_frame(
+                reconstruction_order, frame, len(display_simulation.snapshots)
+            )
+        ),
     )
     return (playback,)
+
+
+@app.cell
+def _(display_simulation, get_frame):
+    # Clamped once, here. The frame state outlives the run it was created for, so every cell that
+    # reads it needs the same guard, and repeating it is how the four of them drift apart.
+    current_frame = min(get_frame(), len(display_simulation.snapshots) - 1)
+    return (current_frame,)
 
 
 @app.cell
@@ -405,17 +440,17 @@ def _(mo):
 @app.cell
 def _(
     beam_condition,
-    coverage_axis,
+    current_frame,
+    display_coverage_axis,
     display_mode,
-    get_frame,
+    display_simulation,
     mo,
     np,
     playback,
+    reconstruction_toggle,
     sample_azimuth,
     set_frame,
-    simulation,
 ):
-    _current_frame = min(get_frame(), len(simulation.snapshots) - 1)
     _cycle_labels = {
         0.0: "flat reference",
         0.5: "expected island/step maximum",
@@ -428,13 +463,13 @@ def _(
             f"{coverage:.1f} ML - {_cycle_labels[coverage]}"
             if coverage in _cycle_labels
             else f"{coverage:.1f} ML"
-        ): int(np.argmin(np.abs(coverage_axis - coverage)))
-        for coverage in np.arange(0.0, max(0.5, float(coverage_axis[-1])) + 0.01, 0.5)
+        ): int(np.argmin(np.abs(display_coverage_axis - coverage)))
+        for coverage in np.arange(0.0, max(0.5, float(display_coverage_axis[-1])) + 0.01, 0.5)
     }
     snapshot_slider = mo.ui.slider(
         0,
-        len(simulation.snapshots) - 1,
-        value=_current_frame,
+        len(display_simulation.snapshots) - 1,
+        value=current_frame,
         label="Recorded growth frame",
         show_value=True,
         on_change=set_frame,
@@ -443,7 +478,9 @@ def _(
         options=_milestone_indices,
         value=min(
             _milestone_indices,
-            key=lambda label: abs(coverage_axis[_current_frame] - float(label.split()[0])),
+            key=lambda label: abs(
+                display_coverage_axis[current_frame] - float(label.split()[0])
+            ),
         ),
         label="Coverage milestone",
         on_change=set_frame,
@@ -480,6 +517,7 @@ def _(
                     display_mode,
                     beam_condition,
                     sample_azimuth,
+                    reconstruction_toggle,
                 ],
                 justify="start",
                 gap=2,
@@ -493,20 +531,27 @@ def _(
 @app.cell
 def _(
     beam_condition,
-    coverage_axis,
     coverage_axis_label,
+    current_frame,
+    display_coverage_axis,
     display_mode,
+    display_simulation,
     figures,
-    get_frame,
     mo,
+    reconstruction,
+    reconstruction_order,
     rheed,
     sample_azimuth,
     simulation,
 ):
-    _frame = min(get_frame(), len(simulation.snapshots) - 1)
-    _heights = simulation.snapshots[_frame]
-    _zmax = max(1, int(simulation.snapshots.max()))
-    _coverage = float(coverage_axis[_frame])
+    _heights = display_simulation.snapshots[current_frame]
+    _coverage = float(display_coverage_axis[current_frame])
+    # Camera, colour scale and title for this frame. Without the extension this is just the
+    # recorded run's own height range and the builder's default view.
+    _scene = reconstruction.scene(
+        reconstruction_order, current_frame, display_simulation.snapshots, simulation.snapshots
+    )
+    _zmax = _scene.zmax
     screen_pattern = rheed.diffraction_screen(
         _heights,
         grazing_angle_deg=beam_condition.value,
@@ -523,19 +568,24 @@ def _(
             pattern=screen_pattern,
             show_orders=display_mode.value == "Reachable diffraction orders",
         )
+    elif display_mode.value == "3D height surface":
+        surface_figure = figures.height_surface(
+            _heights, _coverage, _zmax, camera=_scene.camera, revision=_scene.revision
+        )
     else:
         surface_figure = {
-            "3D height surface": figures.height_surface,
             "Hexagonal cells": figures.hex_cells,
             "Step edges": figures.step_edges,
         }[display_mode.value](_heights, _coverage, _zmax)
+    if _scene.title:
+        surface_figure.update_layout(title=_scene.title)
     rheed_figure = figures.rheed_trace(
-        coverage_axis,
-        simulation.rheed_proxy,
-        _frame,
+        display_coverage_axis,
+        display_simulation.rheed_proxy,
+        current_frame,
         coverage_axis_label,
         specular=rheed.specular_intensity(
-            simulation.snapshots, grazing_angle_deg=beam_condition.value
+            display_simulation.snapshots, grazing_angle_deg=beam_condition.value
         ),
     )
     mo.vstack(
@@ -554,11 +604,12 @@ def _(
 
 
 @app.cell
-def _(coverage_axis, figures, get_frame, mo, screen_pattern, simulation):
-    _frame = min(get_frame(), len(simulation.snapshots) - 1)
+def _(current_frame, display_coverage_axis, figures, mo, screen_pattern):
     mo.vstack(
         [
-            figures.detector_screen(screen_pattern, float(coverage_axis[_frame])),
+            figures.detector_screen(
+                screen_pattern, float(display_coverage_axis[current_frame])
+            ),
             mo.md(
                 "**The surface views.** The 3D height view uses array coordinates. "
                 "**Hexagonal cells** maps the same periodic axial lattice to Cartesian "
@@ -630,12 +681,64 @@ def _(coverage_axis, figures, get_frame, mo, screen_pattern, simulation):
 
 
 @app.cell
-def _(coverage_axis, coverage_axis_label, figures, mo, simulation):
+def _(
+    coverage_axis_label,
+    current_frame,
+    display_coverage_axis,
+    figures,
+    mo,
+    reconstruction,
+    reconstruction_order,
+    reconstruction_toggle,
+    simulation,
+):
+    # Say why nothing happened rather than leaving a switch that appears to do nothing: the stored
+    # demos are too small a lattice to resolve the template, so this needs a live run.
+    mo.stop(
+        reconstruction_order is None,
+        mo.md(
+            f"**Stranski-Krastanov regime:** needs at least "
+            f"{reconstruction.MIN_LATTICE_SIZE} sites to resolve; this run is "
+            f"{simulation.config.lattice_size}x{simulation.config.lattice_size}."
+        )
+        if reconstruction_toggle.value
+        else mo.md(""),
+    )
+    mo.vstack(
+        [
+            figures.reconstruction_order_parameter(
+                display_coverage_axis,
+                reconstruction_order.r_sk,
+                current_frame,
+                reconstruction_order.theta_ml,
+                reconstruction.CRITICAL_ORDER_PARAMETER,
+                coverage_axis_label,
+            ),
+            mo.md(
+                "**Not a simulation result.** Every frame at or below the run's target coverage "
+                "is unmodified KMC output. The frames beyond it are a *prescribed* ordered phase "
+                "appended by `mbe_rheed_notebook.reconstruction`: this model has no strain and no "
+                "reconstruction, so it cannot produce one, and the overlay only shows what the "
+                "Stranski-Krastanov transition of the primary paper would look like in these same "
+                "observables. What is genuinely computed is everything measured *from* those "
+                "surfaces: the coverage, roughness, island density, and $1-S_d$ proxy come from "
+                "the ordinary `mbe_rheed_sim.observables` functions, and "
+                r"$R_{SK} = \langle H, H_t\rangle / (\|H\|\,\|H_t\|)$ is the cosine "
+                "similarity between each mean-subtracted surface and the fully ordered template, "
+                "so the quoted \u0398 is an interpolated crossing rather than a chosen number."
+            ),
+        ]
+    )
+    return
+
+
+@app.cell
+def _(coverage_axis_label, display_coverage_axis, display_simulation, figures, mo):
     observable_figure = figures.observables(
-        coverage_axis,
-        simulation.roughness_ml,
-        simulation.island_density_per_site,
-        simulation.rheed_proxy,
+        display_coverage_axis,
+        display_simulation.roughness_ml,
+        display_simulation.island_density_per_site,
+        display_simulation.rheed_proxy,
         coverage_axis_label,
     )
     mo.vstack(
