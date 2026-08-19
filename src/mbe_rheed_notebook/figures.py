@@ -484,9 +484,10 @@ def rheed_geometry(
             "zaxis": {"title": "height / lab z (ML)", "range": [0, z_top], "autorange": False},
             "aspectmode": "manual",
             "aspectratio": {"x": x_aspect, "y": y_aspect, "z": z_aspect},
-            # Near side-on along the plane of incidence, close in, so grazing reads as grazing
-            # and the painted screen is large enough to compare with the 2D figure below.
-            "camera": {"eye": {"x": 0.34, "y": -1.55, "z": 0.42}, "center": {"z": -0.12}},
+            # Looking downstream from upstream-left, roughly 40 degrees off the detector's
+            # normal, so the painted screen reads as a screen instead of the edge-on sliver a
+            # side-on view gives. Drag to taste: uirevision above keeps whatever you set.
+            "camera": {"eye": {"x": -1.22, "y": -1.02, "z": 0.5}, "center": {"z": -0.05}},
         },
     )
     return figure
