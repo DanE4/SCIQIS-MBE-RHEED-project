@@ -112,7 +112,14 @@ all: odd order is the anti-phase condition where adjacent terraces cancel, even 
 in-phase where filling a layer changes nothing. `d` is one KMC monolayer of height, taken as
 the GaN c/2 bilayer spacing 0.2593 nm. Because the heights are integers, only the order's
 parity matters to the specular intensity -- orders 1, 3, 5 give identical traces and differ
-only in geometry. `antiphase_grazing_angle_deg` returns the angle that sets a chosen odd
+only in geometry. The in-plane phases cancel on the specular rod, so a surface holding only
+heights 0 and 1 has amplitude `(1 - theta) + theta exp(-i q_z d)`, and at odd order the
+interference term `2 A_1 A_2 cos(q_z d)` enters with `cos = -1`, leaving the closed form
+
+    I_00(theta) = (1 - 2 theta)^2,
+
+one oscillation per monolayer with no morphology argument in it (tested in
+`tests/test_rheed.py`). Even order gives `cos = +1`, where filling a layer changes nothing. `antiphase_grazing_angle_deg` returns the angle that sets a chosen odd
 order, which is what an experimenter tunes for.
 """
 

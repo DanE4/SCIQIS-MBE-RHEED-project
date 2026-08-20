@@ -318,6 +318,24 @@ def test_a_half_filled_layer_cancels_at_anti_phase_and_survives_in_phase() -> No
     assert in_phase == pytest.approx(1.0)
 
 
+@pytest.mark.parametrize("coverage", [0.0, 0.25, 0.5, 0.75, 1.0])
+def test_the_two_level_specular_intensity_follows_the_interference_law(coverage: float) -> None:
+    """`I_00 = (1 - 2 theta)^2`, the closed form of the two-terrace interference term.
+
+    On the specular rod `q` is purely vertical, so the in-plane phases cancel and a surface
+    with only heights 0 and 1 has amplitude `(1 - theta) + theta exp(-i q_z d)`. At anti-phase
+    that is `1 - 2 theta`, which is the whole oscillation, derived without any morphology
+    argument. The tolerance covers the finite patch: the Gaussian illumination weights sites,
+    so a random arrangement realizes the nominal coverage only to within its own sampling.
+    """
+    size = 64
+    lattice = np.zeros((size, size), dtype=np.int64)
+    filled = round(coverage * size * size)
+    lattice.ravel()[np.random.default_rng(3).permutation(size * size)[:filled]] = 1
+    intensity = float(rheed.specular_intensity(lattice, grazing_angle_deg=ANGLE))
+    assert intensity == pytest.approx((1.0 - 2.0 * coverage) ** 2, abs=0.01)
+
+
 def test_a_flat_surface_is_the_brightest_the_specular_beam_ever_gets() -> None:
     pattern = rheed.diffraction_screen(
         np.zeros((16, 16), dtype=np.int64), grazing_angle_deg=ANGLE

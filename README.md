@@ -167,6 +167,64 @@ from Adelmann et al., 2002), which is the panel this project digitizes and compa
 can be checked that way is period, phase and damping; absolute amplitude cannot, since the two
 signals are different quantities.
 
+### Where the interference is
+
+`1 - S_d` counts step edges and stops there. The reason a step-edge count tracks a measured
+intensity at all is interference, which is what the diffraction module below actually computes, so
+it is worth writing out once.
+
+The probe is a fast electron, so it arrives as a plane wave `exp(i k_i . r)` and, in the kinematic
+approximation, scatters once off each surface scatterer. The scattered amplitudes add with the
+phase of the position they came from, and the detector measures the squared modulus:
+
+```text
+A(q) = sum_j f_j exp(-i q . R_j),    q = k_f - k_i,    I(q) = |A(q)|^2
+```
+
+Squaring the sum is where the quantum mechanics enters. `|A|^2` is not a count of scatterers: it
+carries one cross term `2 f_i f_j cos(q . (R_i - R_j))` per pair, so the screen reports relative
+positions. Nothing else in this project uses the phases; `S_d` throws them away.
+
+On the specular `(00)` beam the in-plane part of `q` vanishes, `q = (0, 0, q_z)` with
+`q_z = 2 k sin(incidence)`, so every in-plane position drops out and only the column heights
+survive. That is why the specular trace is a *layer-occupancy* interferometer. For two terraces one
+monolayer `d` apart, covering fractions `1 - theta` and `theta` of the surface:
+
+```text
+delta_phi = q_z d
+A         = A_1 + A_2 exp(-i delta_phi)
+I         = |A_1|^2 + |A_2|^2 + 2 A_1 A_2 cos(q_z d)
+```
+
+That last term is the oscillation. At the **anti-phase** condition `q_z d = pi` (or any odd
+multiple) the cosine is `-1`, the two populations subtract, and normalizing on a flat surface
+leaves the closed form
+
+```text
+I_00(theta) = (1 - 2 theta)^2
+```
+
+which is 1 on a closed layer, 0 at half coverage, and 1 again when the next layer closes: one
+oscillation per monolayer, with no morphology argument anywhere in it. At the **in-phase**
+condition `q_z d = 2 pi` the cosine is `+1`, filling a layer changes nothing, and the oscillation
+disappears - which is why the grazing angle is an experimental knob and why
+`antiphase_grazing_angle_deg` exists. Because KMC heights are integers, only the parity of
+`q_z d / pi` reaches the specular intensity: orders 1, 3, 5 give the same trace.
+
+`1 - S_d` is the classical shadow of that cosine. It is large when one height dominates and small
+when two heights share the surface, so it follows the same flat -> mixed -> flat sequence for a
+geometric reason instead of an interference one - which is also why its amplitude is a different
+quantity from a measured intensity. Both come off the same height field:
+
+```text
+KMC height field  ->  1 - S_d                              morphology proxy, no wave
+                  ->  |sum_j f_j exp(-i q . R_j)|^2        kinematic interference
+```
+
+The two-level formula above is only the illustrative case; `rheed.py` sums the real height
+distribution over the whole illuminated patch, which is what produces damping as the surface
+roughens past two levels.
+
 ### The kinematic diffraction screen
 
 Separately from the proxy, [`rheed.py`](src/mbe_rheed_sim/rheed.py) computes what a detector

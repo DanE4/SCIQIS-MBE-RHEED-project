@@ -528,13 +528,41 @@ def _(
             where $S_d$ is the fraction of unique nearest-neighbor bonds whose endpoint heights
             differ. Smooth, nearly complete layers have fewer steps and a larger proxy.
 
-            Below it there is now also an actual diffraction calculation: the **kinematic**
-            detector image, $|\sum_j \exp(-i\,\mathbf{q}\cdot\mathbf{R}_j)|^2$ summed over
-            the column tops of the same surface. It is single scattering only - real RHEED
-            phase and amplitude also depend on refraction, absorption, surface reconstruction,
-            and strong multiple scattering, none of which are modelled - but it does produce
-            the screen, the streaks, and the specular oscillation from first principles rather
-            than by analogy.
+            Below it there is now also an actual diffraction calculation, and it is a
+            different kind of quantity. The probe is a fast electron, so it arrives as a plane
+            wave $\psi_{\mathrm{in}}\sim e^{i\mathbf{k}_i\cdot\mathbf{r}}$; in the
+            **kinematic** (single-scattering) approximation it scatters once off each surface
+            scatterer and the amplitudes add with the phase of the position they came from,
+
+            $$A(\mathbf q)=\sum_j f_j\,e^{-i\,\mathbf q\cdot\mathbf R_j},\qquad
+            \mathbf q=\mathbf k_f-\mathbf k_i,\qquad I(\mathbf q)=|A(\mathbf q)|^2 .$$
+
+            Squaring the sum is where the quantum mechanics is: $|A|^2$ carries a cross term
+            $2f_if_j\cos\!\big(\mathbf q\cdot(\mathbf R_i-\mathbf R_j)\big)$ for every
+            pair of scatterers, so the screen measures *relative positions*. The proxy above
+            discards those phases; this does not.
+
+            On the specular $(00)$ beam the in-plane part of $\mathbf q$ cancels,
+            $\mathbf q=(0,0,q_z)$ with $q_z=2k\sin\theta_i$, so only the column heights
+            survive and the specular trace becomes a layer-occupancy interferometer. Two
+            terraces one monolayer $d$ apart, covering $1-\theta$ and $\theta$ of the surface,
+            differ in phase by $\Delta\phi=q_zd$:
+
+            $$I=|A_1|^2+|A_2|^2+\underbrace{2A_1A_2\cos(q_zd)}_{\text{interference}} .$$
+
+            At the **anti-phase** condition $q_zd=\pi$ (any odd multiple) the cosine is $-1$,
+            the two populations subtract, and normalising on a flat surface leaves
+            $I_{00}(\theta)=(1-2\theta)^2$: bright on a closed layer, dark at half coverage,
+            bright again as the next layer closes - one oscillation per monolayer with no
+            morphology argument in it. At the **in-phase** condition $q_zd=2\pi$ the cosine is
+            $+1$, filling a layer changes nothing, and the oscillation vanishes, which the
+            **Beam condition** control below switches between. Since the heights are integers, only the parity
+            of $q_zd/\pi$ reaches the specular intensity.
+
+            The calculation is single scattering only - real RHEED phase and amplitude also
+            depend on refraction, absorption, surface reconstruction, and strong multiple
+            scattering, none of which are modelled - but it does produce the screen, the
+            streaks, and the specular oscillation from first principles rather than by analogy.
 
             The annotated 0–2 ML milestones encode the **ideal layer-by-layer hypothesis**. The
             linked morphology and proxy show what this stochastic run actually produces;

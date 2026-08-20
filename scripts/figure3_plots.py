@@ -12,6 +12,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.collections import PolyCollection
 
 MORPHOLOGY_TARGETS_ML = (0.0, 0.5, 1.0, 1.5, 2.0)
 # Rows of the 2x3 montage: a half-filled layer beside a completed one.
@@ -19,6 +20,43 @@ MONTAGE_COVERAGES_ML = (0.5, 1.0)
 # The two figures copied into assets/ by `make readme-figures` are fetched on every GitHub
 # README load, where the column is under 900 px wide, so print resolution only costs bytes.
 README_DPI = 120
+
+
+# The surface is a triangular lattice in axial coordinates, so each site's Voronoi cell is a
+# pointy-top hexagon of circumradius 1/sqrt(3) - flat-to-flat exactly the nearest-neighbour
+# distance, so the cells tile the rhombus without gaps or overlap. Oversized scatter markers
+# used to do this job and smeared the slanted boundaries where they overlapped and clipped.
+_HEX_CELL = np.column_stack(
+    (
+        np.cos(np.deg2rad(np.arange(30.0, 360.0, 60.0))),
+        np.sin(np.deg2rad(np.arange(30.0, 360.0, 60.0))),
+    )
+) / np.sqrt(3.0)
+
+
+def _draw_hex_cells(axis, heights: np.ndarray, maximum_height: int) -> PolyCollection:
+    """Fill one hexagonal cell per lattice site, coloured by that column's integer height."""
+    heights = np.asarray(heights)
+    row, column = np.indices(heights.shape)
+    # Axial to Cartesian: x = q + r/2, y = sqrt(3) r / 2 (column is q, row is r).
+    centers = np.column_stack(
+        (column.ravel() + 0.5 * row.ravel(), np.sqrt(3.0) / 2.0 * row.ravel())
+    )
+    collection = PolyCollection(
+        centers[:, None, :] + _HEX_CELL[None, :, :],
+        array=heights.ravel().astype(float),
+        cmap="viridis",
+        edgecolors="face",
+        linewidths=0.0,
+        antialiaseds=False,
+    )
+    collection.set_clim(0, max(1, maximum_height))
+    axis.add_collection(collection)
+    margin = 1.0 / np.sqrt(3.0)
+    axis.set_xlim(centers[:, 0].min() - margin, centers[:, 0].max() + margin)
+    axis.set_ylim(centers[:, 1].min() - margin, centers[:, 1].max() + margin)
+    axis.set_aspect("equal")
+    return collection
 
 
 def plot_comparison(traces: list[dict[str, object]], figure_dir: Path) -> None:
@@ -119,19 +157,9 @@ def morphology_sequence(
     ]
 
     figure, axes = plt.subplots(1, len(frames), figsize=(12, 2.8), constrained_layout=True)
-    y, x = np.indices(result.final_heights.shape)
     maximum_height = max(max(max(row) for row in frame["height_ml"]) for frame in frames)
     for axis, frame in zip(axes, frames, strict=True):
-        image = axis.scatter(
-            x + 0.5 * y,
-            np.sqrt(3.0) / 2.0 * y,
-            c=np.asarray(frame["height_ml"]),
-            marker="h",
-            s=190,
-            cmap="viridis",
-            vmin=0,
-            vmax=max(1, maximum_height),
-        )
+        image = _draw_hex_cells(axis, np.asarray(frame["height_ml"]), maximum_height)
         axis.set_title(
             f"target {frame['target_predicted_coverage_ml']:.1f} ML\n"
             f"actual {frame['predicted_coverage_ml']:.2f} ML"
@@ -197,21 +225,7 @@ def morphology_montage(runs: list[dict[str, object]], figure_dir: Path) -> dict[
         row = MONTAGE_COVERAGES_ML.index(panel["target_predicted_coverage_ml"])
         column = ratios.index(panel["nominal_ga_n_ratio"])
         axis = axes[row, column]
-        heights = np.asarray(panel["height_ml"])
-        y, x = np.indices(heights.shape)
-        image = axis.scatter(
-            x + 0.5 * y,
-            np.sqrt(3.0) / 2.0 * y,
-            c=heights,
-            marker="h",
-            # One marker per site, deliberately overfilled so the map reads as a continuous
-            # surface at any lattice size. Same convention as `morphology_sequence`, rescaled
-            # from its (128 sites, s=190, 2.4 in) panel to this figure's wider ones.
-            s=5.9e6 / len(heights) ** 2,
-            cmap="viridis",
-            vmin=0,
-            vmax=max(1, maximum_height),
-        )
+        image = _draw_hex_cells(axis, np.asarray(panel["height_ml"]), maximum_height)
         axis.set_title(
             f"Ga/N = {panel['nominal_ga_n_ratio']:.2f}, "
             f"{panel['predicted_coverage_ml']:.2f} ML",
