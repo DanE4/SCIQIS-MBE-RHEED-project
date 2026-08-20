@@ -170,17 +170,17 @@
   },
   "no-diffusion": {
     "title": "No diffusion: pure random deposition",
-    "story": "Switching diffusion off leaves uncorrelated random deposition, whose roughness grows as the square root of coverage and never oscillates at all. Note it is not the roughest run here: weak-but-nonzero diffusion builds islands and mounds that are rougher than random noise.",
+    "story": "Switching diffusion off leaves uncorrelated random deposition, whose roughness grows as the square root of coverage and never oscillates at all. Note it is not the roughest run here: weak-but-nonzero diffusion builds islands and mounds that are rougher than random noise. Temperature, flux, barriers and seed match the island-growth entry, so the notebook can put the two side by side and change only the attempt frequency.",
     "config": {
       "lattice_size": 128,
       "target_coverage_ml": 3.0,
       "target_time_s": null,
-      "temperature_k": 800.0,
+      "temperature_k": 900.0,
       "deposition_flux_ml_s": 0.5,
       "attempt_frequency_hz": 0.0,
       "diffusion_barrier_ev": 0.15,
       "lateral_bond_energy_ev": 0.05,
-      "step_barrier_ev": 0.05,
+      "step_barrier_ev": 0.0,
       "desorption_barrier_ev": 1.2,
       "max_isolated_hop_distance": 1,
       "sample_every_ml": 0.05,
@@ -190,10 +190,11 @@
     },
     "predicted_growth_rate_ml_s": null,
     "figure3_ratio": null,
+    "reconstruction": false,
     "final_roughness_ml": 1.7362742978861376,
     "oscillation_period_ml": null,
     "is_oscillatory": false,
     "frames": 62,
-    "bytes": 536393
+    "bytes": 536390
   }
 }

@@ -122,8 +122,8 @@ def _(IMAGES, mo):
             layer-by-layer growth the specular intensity therefore oscillates once per
             monolayer. **The signal plotted throughout is a step-density proxy, not a
             diffraction calculation** - it tracks the morphology the diffraction responds to,
-            and is defined in section 3. Section 3 also computes the kinematic diffraction
-            screen itself, as a separate observable that is never fed back into the proxy.
+            and is defined in section 3. Section 4 separates it from the kinematic diffraction
+            screen, which is computed from the same surfaces and never fed back into the proxy.
             """),
             mo.image(
                 IMAGES / "03_rheed_surface_patterns.png",
@@ -196,151 +196,188 @@ def _(mo):
 
 
 @app.cell
-def _(GALLERY, SAVED_DIR, controls, mo):
-    data_source, gallery_choice = controls.source_selector(GALLERY)
-    saved_browser = controls.saved_browser(SAVED_DIR)
-    preset_choice = controls.preset_selector(GALLERY)
-    mo.vstack(
-        [
-            mo.md(
-                "## 2. A layer-by-layer growth experiment\n"
-                "Grow a film and watch the surface. Hover any &#9432; for what a control does.\n\n"
-                "**Result source**"
-                + controls.info(
-                    "Pre-computed demo loads a stored trajectory instantly - use this when "
-                    "presenting. Simulate now runs the model live with the parameters below, "
-                    "single-threaded. Saved run reloads a trajectory stored under "
-                    "`outputs/saved/`."
-                )
-                + " picks where the trajectory comes from; **Start from**"
-                + controls.info(
-                    "Loads the parameters behind a stored demo into the form, so you can "
-                    "reproduce that scenario and then change one thing at a time."
-                )
-                + " loads a stored scenario into the form."
-            ),
-            mo.hstack(
-                [data_source, mo.vstack([gallery_choice, preset_choice], gap=1)],
-                justify="start",
-                gap=2,
-                wrap=True,
-            ),
-            mo.accordion({"Load a saved run (`.npz`)": saved_browser}),
-        ]
-    )
-    return data_source, gallery_choice, preset_choice, saved_browser
+def _(mo):
+    mo.md(r"""
+    ## 2. Five short experiments
+
+    Five small experiments come first, each changing one control and asking what the surface
+    does about it: **Question**, **Try** the control, **Observe** the figures, **Explanation**.
+    They read the stored trajectories in `data/gallery/`, so every click is instant and nothing
+    is simulated here. The full parameter panel is in section 7, once these have introduced
+    what its knobs do.
+    """)
+    return
 
 
 @app.cell
-def _(FIGURE3_NOMINAL_GA_N_RATIOS, GALLERY, controls, mo, preset_choice):
-    # Rebuilding the form is how a preset moves the sliders: marimo elements take their value
-    # at construction, so the cell that owns them re-runs when the preset changes.
-    _values = (
-        controls.preset_parameters(GALLERY[preset_choice.value])
-        if preset_choice.value
-        else controls.DEFAULT_PARAMETERS
-    )
-    get_parameters, _set_parameters = mo.state(_values)
-    parameter_form = controls.parameter_form(
-        FIGURE3_NOMINAL_GA_N_RATIOS,
-        on_change=lambda value: _set_parameters(value or _values),
-        values=_values,
-    )
-    parameter_form
-    return (get_parameters,)
+def _(GALLERY_DIR, SimulationResult):
+    # Loaded once. Every control in sections 2-5 only indexes into these, so it responds
+    # immediately even on a laptop that could not afford the 128x128 runs live.
+    TUTORIAL_RUNS = {
+        name: SimulationResult.load_npz(GALLERY_DIR / f"{name}.npz")
+        for name in ("no-diffusion", "island-growth", "step-barrier-mounding")
+    }
+    return (TUTORIAL_RUNS,)
+
+
+@app.cell
+def _(figures, mo):
+    def experiment_panel(result):
+        """Final surface of one stored run, beside the observables of its whole trajectory."""
+        _frame = len(result.snapshots) - 1
+        return mo.hstack(
+            [
+                # Fixed revision, so flipping between the two runs compares them from the same
+                # camera instead of resetting the view on every click.
+                figures.height_surface(
+                    result.snapshots[_frame],
+                    float(result.coverage_ml[_frame]),
+                    max(1, int(result.snapshots.max())),
+                ),
+                figures.observables(
+                    result.coverage_ml,
+                    result.roughness_ml,
+                    result.island_density_per_site,
+                    result.rheed_proxy,
+                    "film coverage (ML)",
+                ),
+            ],
+            widths="equal",
+            wrap=True,
+        )
+
+    def experiment_table(runs):
+        """The controlled comparison in numbers: the knobs first, then the end of the run."""
+        return mo.md(
+            "| run | T (K) | flux (ML/s) | attempt frequency (Hz) | "
+            "$E_{\\mathrm{step}}$ (eV) | seed | final roughness (ML) | final islands/site | "
+            "final $1-S_d$ |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|\n"
+            + "\n".join(
+                f"| {label} | {result.config.temperature_k:.0f} | "
+                f"{result.config.deposition_flux_ml_s:.2f} | "
+                f"{result.config.attempt_frequency_hz:.0f} | "
+                f"{result.config.step_barrier_ev:.2f} | {result.config.seed} | "
+                f"{result.roughness_ml[-1]:.3f} | "
+                f"{result.island_density_per_site[-1]:.4f} | {result.rheed_proxy[-1]:.3f} |"
+                for label, result in runs.items()
+            )
+        )
+    return experiment_panel, experiment_table
 
 
 @app.cell
 def _(mo):
-    # A run button lives in its own cell so reading its value does not reset it.
-    expensive_override = mo.ui.run_button(label="Run it anyway")
-    return (expensive_override,)
+    # Its own cell: a radio rebuilt by the cell that draws its own output would snap back to
+    # the constructor value on every click.
+    diffusion_choice = mo.ui.radio(
+        options={
+            "deposition only": "no-diffusion",
+            "deposition + diffusion": "island-growth",
+        },
+        value="deposition only",
+        inline=True,
+        label="**Try**",
+    )
+    return (diffusion_choice,)
 
 
 @app.cell
-def _(
-    GALLERY,
-    GALLERY_DIR,
-    SimulationResult,
-    controls,
-    data_source,
-    expensive_override,
-    gallery_choice,
-    get_parameters,
-    mo,
-    saved_browser,
-):
-    # Only a demo recorded for the regime turns the switch on; see the gallery branch below.
-    reconstruction_default = False
-    if data_source.value == controls.SAVED_RUN:
-        mo.stop(
-            not saved_browser.value,
-            mo.md("Pick a saved `.npz` file in **Load a saved run** above."),
-        )
-        _path = saved_browser.path(0)
-        simulation = SimulationResult.load_npz(_path)
-        growth_rate = None
-        experiment_name = _path.stem
-        experiment_detail = controls.saved_detail(simulation.config)
-        experiment_source = f"saved run `{_path}` - nothing was simulated"
-    elif data_source.value == controls.PRE_COMPUTED:
-        _entry = gallery_choice.value
-        _meta = GALLERY[_entry]
-        simulation = SimulationResult.load_npz(GALLERY_DIR / f"{_entry}.npz")
-        growth_rate = _meta["predicted_growth_rate_ml_s"]
-        experiment_name = _meta["title"]
-        experiment_detail = controls.gallery_detail(_meta, simulation.config)
-        experiment_source = f"stored trajectory `data/gallery/{_entry}.npz` - nothing was simulated"
-        # A demo recorded for the regime arrives with the switch already on, so the view it was
-        # built to show is the one that appears.
-        reconstruction_default = bool(_meta.get("reconstruction"))
-    else:
-        _config, _estimate, growth_rate, experiment_name, experiment_detail = controls.build_run(
-            get_parameters()
-        )
-        mo.stop(
-            controls.is_expensive(_config, _estimate) and not expensive_override.value,
-            controls.expensive_warning(_estimate, expensive_override),
-        )
-        try:
-            simulation = controls.run_with_progress(_config, f"Running KMC: {experiment_name}")
-        except RuntimeError as _error:
-            mo.stop(True, mo.callout(str(_error), kind="danger"))
-        experiment_source = (
-            f"live run, {_config.lattice_size}x{_config.lattice_size}, seed {_config.seed}"
-        )
+def _(TUTORIAL_RUNS, diffusion_choice, experiment_panel, experiment_table, mo):
+    mo.vstack(
+        [
+            mo.md(r"""
+            ### 2.1 Does diffusion change the surface, or only the timing?
 
-    coverage_axis = simulation.time_s * growth_rate if growth_rate else simulation.coverage_ml
-    coverage_axis_label = (
-        "paper-predicted film coverage (ML)" if growth_rate else "film coverage (ML)"
+            **Question.** Deposition alone already builds a film. If the arriving particles can
+            also hop, does the film end up any different?
+
+            **Try.** The two runs below share temperature, flux, barriers, lattice and seed. The
+            only difference is the attempt frequency $\nu$: zero on the left choice, 1 kHz on
+            the right, so the second run is the first plus diffusion.
+            """),
+            diffusion_choice,
+            experiment_panel(TUTORIAL_RUNS[diffusion_choice.value]),
+            experiment_table(
+                {
+                    "deposition only": TUTORIAL_RUNS["no-diffusion"],
+                    "deposition + diffusion": TUTORIAL_RUNS["island-growth"],
+                }
+            ),
+            mo.md(r"""
+            **Observe.** Without diffusion the surface is uncorrelated noise: roughness climbs
+            as $\sqrt{\theta}$ with no feature at any monolayer and the proxy decays
+            monotonically to 0.17. With diffusion the same deposited material is collected into
+            compact, flat-topped islands: half the island density (0.037 against 0.069 per
+            site), lower roughness (1.20 against 1.74 ML) and a proxy that ends at 0.36 with
+            structure the random film has none of.
+
+            **Explanation.** Diffusion is what couples neighbouring columns. Adatoms walk until
+            they meet a step edge and attach there, so material is collected into islands
+            instead of staying where it landed. That is the prerequisite for layer completion,
+            and therefore for anything oscillatory: a surface with no lateral transport can
+            never smooth itself. Smoother is not guaranteed, though - 2.2 keeps this same
+            diffusion switched on and produces the roughest surface in the gallery.
+            """),
+        ]
     )
-    return (
-        coverage_axis,
-        coverage_axis_label,
-        experiment_detail,
-        experiment_name,
-        experiment_source,
-        reconstruction_default,
-        simulation,
-    )
+    return
 
 
 @app.cell
-def _(experiment_detail, experiment_name, experiment_source, mo, simulation):
-    mo.md(f"""
-    **Active mode:** {experiment_name}
+def _(mo):
+    step_barrier_choice = mo.ui.radio(
+        options={
+            "no step barrier": "island-growth",
+            "finite step barrier": "step-barrier-mounding",
+        },
+        value="no step barrier",
+        inline=True,
+        label="**Try**",
+    )
+    return (step_barrier_choice,)
 
-    **Source:** {experiment_source}
 
-    {experiment_detail}
+@app.cell
+def _(TUTORIAL_RUNS, experiment_panel, experiment_table, mo, step_barrier_choice):
+    mo.vstack(
+        [
+            mo.md(r"""
+            ### 2.2 What does an Ehrlich-Schwoebel barrier do?
 
-    **Completed:** {simulation.deposited_events} deposition events,
-    {simulation.selected_diffusion_events} selected diffusion events
-    ({simulation.diffusion_events} nearest-neighbor hop equivalents), and
-    {simulation.desorbed_events} desorption events; simulated time
-    {simulation.time_s[-1]:.3f} s; final RMS roughness
-    {simulation.roughness_ml[-1]:.3f} ML.
-    """)
+            **Question.** An adatom on top of an island has to cross a descending step to reach
+            the layer below, and that crossing costs an extra barrier
+            $E_{\mathrm{step}}$. What does the surface look like when that crossing is
+            suppressed?
+
+            **Try.** Again one changed number: $E_{\mathrm{step}} = 0$ against
+            $E_{\mathrm{step}} = 0.25$ eV, everything else - including the diffusion that
+            experiment 2.1 just switched on - held fixed.
+            """),
+            step_barrier_choice,
+            experiment_panel(TUTORIAL_RUNS[step_barrier_choice.value]),
+            experiment_table(
+                {
+                    "no step barrier": TUTORIAL_RUNS["island-growth"],
+                    "finite step barrier": TUTORIAL_RUNS["step-barrier-mounding"],
+                }
+            ),
+            mo.md(r"""
+            **Observe.** With the barrier the surface breaks into tall mounds: final roughness
+            goes from 1.20 to 3.00 ML and the proxy falls back to 0.17, the level of the
+            diffusion-free film in 2.1. The island density barely moves (0.039 against 0.037
+            per site) - the mounds are not more numerous, they are taller. This is the roughest
+            run in the gallery.
+
+            **Explanation.** The rate of a downward hop carries an extra
+            $\exp(-E_{\mathrm{step}}/k_BT)$, so at 900 K a 0.25 eV barrier suppresses it by
+            about two orders of magnitude. Material that lands on an island effectively cannot
+            leave it, so upper layers keep growing on top of incomplete lower ones and the
+            height distribution runs away - the standard kinetic instability behind mounded
+            growth. It also shows why "more diffusion" is not the same as "smoother": here
+            adatoms are mobile, but not in the direction that would fill a layer.
+            """),
+        ]
+    )
     return
 
 
@@ -489,13 +526,15 @@ def _(
         1.5: "expected renewed roughening",
         2.0: "expected second-layer completion",
     }
-    _milestone_indices = {
-        (
-            f"{coverage:.1f} ML - {_cycle_labels[coverage]}"
-            if coverage in _cycle_labels
-            else f"{coverage:.1f} ML"
-        ): int(np.argmin(np.abs(display_coverage_axis - coverage)))
-        for coverage in np.arange(0.0, max(0.5, float(display_coverage_axis[-1])) + 0.01, 0.5)
+    # Only the layer-cycle checkpoints, and only the ones this run actually reaches: a
+    # checkpoint that resolves to the last recorded frame would claim a coverage the run
+    # never grew to.
+    _checkpoint_indices = {
+        f"{coverage:.1f} ML - {label}": int(
+            np.argmin(np.abs(display_coverage_axis - coverage))
+        )
+        for coverage, label in _cycle_labels.items()
+        if coverage <= float(display_coverage_axis[-1]) + 0.01
     }
     snapshot_slider = mo.ui.slider(
         0,
@@ -505,40 +544,55 @@ def _(
         show_value=True,
         on_change=set_frame,
     )
-    milestone_picker = mo.ui.dropdown(
-        options=_milestone_indices,
+    checkpoint_picker = mo.ui.radio(
+        options=_checkpoint_indices,
         value=min(
-            _milestone_indices,
+            _checkpoint_indices,
             key=lambda label: abs(
                 display_coverage_axis[current_frame] - float(label.split()[0])
             ),
         ),
-        label="Coverage milestone",
+        label="**Checkpoint**",
         on_change=set_frame,
     )
     mo.vstack(
         [
             mo.md(r"""
-            ## 3. From surface morphology to a RHEED proxy
+            ## 3. Experiment 3: where the RHEED oscillation comes from
 
-            The signal reported throughout this project is a morphology-based stand-in,
+            **Question.** The trace on the right oscillates once per monolayer. What is the
+            surface doing at the top and the bottom of that oscillation?
+
+            **Try.** The **Checkpoint** buttons jump to 0, 0.5, 1.0, 1.5 and 2.0 ML of the
+            active run - by default the stored layer-by-layer GaN run, so the jumps are
+            instant. At each one, read the surface on the left, switch **Surface view** to
+            **Step edges** to see the same surface as step density, and note where the marker
+            sits on the $1-S_d$ trace. **Recorded growth frame** scrubs between checkpoints and
+            **Play the growth** animates it.
+
+            **Observe.** At 0 ML the surface is flat, the step edges panel is empty and the
+            proxy is at its maximum. By 0.5 ML the layer is half filled, island edge is maximal
+            and the proxy is at its minimum. By 1.0 ML those islands have merged, the step
+            edges panel empties again and the proxy recovers. 1.5 and 2.0 ML repeat it one
+            layer up, with a little less contrast each time.
+
+            **Explanation.** The plotted signal is a morphology stand-in,
 
             $$I_{\mathrm{proxy}} = 1 - S_d,$$
 
             where $S_d$ is the fraction of unique nearest-neighbor bonds whose endpoint heights
-            differ. Smooth, nearly complete layers have fewer steps and a larger proxy.
+            differ. Roughening during layer filling adds step edges and pulls the proxy down;
+            layer completion removes them and pushes it back up. One oscillation is therefore
+            one layer cycle, and the damping across cycles is the layers falling out of step
+            with each other. The checkpoint labels are the *ideal* layer-by-layer hypothesis:
+            where this stochastic run disagrees with them, that disagreement is the result and
+            is not relabelled away.
 
-            Below it there is now also an actual diffraction calculation: the **kinematic**
-            detector image, $|\sum_j \exp(-i\,\mathbf{q}\cdot\mathbf{R}_j)|^2$ summed over
-            the column tops of the same surface. It is single scattering only - real RHEED
-            phase and amplitude also depend on refraction, absorption, surface reconstruction,
-            and strong multiple scattering, none of which are modelled - but it does produce
-            the screen, the streaks, and the specular oscillation from first principles rather
-            than by analogy.
-
-            The annotated 0–2 ML milestones encode the **ideal layer-by-layer hypothesis**. The
-            linked morphology and proxy show what this stochastic run actually produces;
-            disagreement is a result, not hidden by relabeling.
+            **Also on this figure.** The dashed curve is a real diffraction calculation, the
+            **kinematic** specular intensity
+            $|\sum_j \exp(-i\,\mathbf{q}\cdot\mathbf{R}_j)|^2$ over the column tops of the
+            same surfaces - single scattering only, so no refraction, absorption, reconstruction
+            or multiple scattering. Section 4 pulls the two apart.
 
             **Do try the Stranski-Krastanov regime.** The switch below carries the run past its
             target coverage into the ordered phase that strained GaN on AlN reaches once its
@@ -547,13 +601,13 @@ def _(
             therefore prescribed rather than simulated, and everything measured from them is
             measured the ordinary way; the panel under the surface views says exactly which is
             which. It needs a live run of 64x64 or larger to resolve, or the stored 256x256 demo
-            in section 2, which arrives with the switch already on. Then press play and watch the
+            in section 7, which arrives with the switch already on. Then press play and watch the
             camera come overhead as the surface orders.
             """),
             # Three rows: which frame is showing, then how it is drawn, then the play control
             # last so it sits directly above the figure it animates.
             mo.hstack(
-                [snapshot_slider, milestone_picker],
+                [checkpoint_picker, snapshot_slider],
                 justify="start",
                 gap=2,
                 wrap=True,
@@ -691,6 +745,32 @@ def _(
 def _(mo):
     mo.vstack(
         [
+            mo.md(r"""
+            ## 4. Experiment 4: four different things on one screen
+
+            **Question.** Four panels above describe the same surface. Which of them is model
+            state, which is a number derived from it, and which is a diffraction calculation?
+
+            **Try.** Hold a checkpoint fixed and step **Surface view** through its options,
+            watching the detector screen underneath.
+
+            **Observe.** They are not interchangeable:
+
+            | panel | what it is | computed from |
+            |---|---|---|
+            | **3D height surface** / **Hexagonal cells** | the state of the model, $h_i$ | KMC directly |
+            | **Step edges** | per-site count of stepped neighbours - the map $S_d$ averages | $h_i$ |
+            | $1-S_d$ **trace** | morphology proxy, a stand-in for the RHEED signal | $h_i$, one number per frame |
+            | **kinematic RHEED screen** | a diffraction calculation on the same surface | $\left|\sum_j e^{-i\mathbf{q}\cdot\mathbf{R}_j}\right|^2$ |
+
+            **Explanation.** The proxy is geometry: it counts step edges and never touches a
+            wavevector, which is why it is called a proxy and not an intensity. The screen is
+            the actual single-scattering sum over the same column tops, so it produces streaks,
+            a specular spot and its oscillation without any analogy - but it is still kinematic,
+            so absolute brightness, damping and anything requiring multiple scattering are out
+            of reach. The dashed specular curve on the trace is the bridge between them: same
+            surfaces, two different definitions of "the signal".
+            """),
             # Sits here rather than in the playback cell above so it does not dim on every tick.
             mo.callout(
                 mo.md(
@@ -870,6 +950,77 @@ def _(
 
 
 @app.cell
+def _(mo, rheed):
+    # Presets, not a slider: these are the phase-order angles the beam-condition control uses,
+    # and the point of the experiment is that crossing one of them changes what is reachable.
+    ewald_angle = mo.ui.radio(
+        options={
+            f"{rheed.antiphase_grazing_angle_deg(order):.2f}° (order {order})": (
+                rheed.antiphase_grazing_angle_deg(order)
+            )
+            for order in (1, 3, 5, 7, 9)
+        },
+        value=f"{rheed.antiphase_grazing_angle_deg(3):.2f}° (order 3)",
+        inline=True,
+        label="**Try** grazing angle",
+    )
+    return (ewald_angle,)
+
+
+@app.cell
+def _(ewald_angle, figures, mo, rheed):
+    _rods = sorted(
+        rheed.rod_orders(
+            grazing_angle_deg=ewald_angle.value, span_deg=figures.ORDERS_ACCEPTANCE_DEG
+        ),
+        key=lambda rod: (abs(rod.deflection_deg), rod.h, rod.k),
+    )
+    _rows = "\n".join(
+        f"| {rod.label} | {rod.deflection_deg:+.2f} | {rod.exit_angle_deg:.2f} |"
+        for rod in _rods
+    )
+    mo.vstack(
+        [
+            mo.md(r"""
+            ## 5. Experiment 5: which rods reach the Ewald sphere
+
+            **Question.** The screen above lists its Ewald-intersecting rods, and at the default
+            condition that list is just $(00)$. Is that a property of the surface or of the
+            beam?
+
+            **Try.** Step the grazing angle through the anti-phase presets. Nothing about the
+            surface changes; only $\mathbf{k}_i$ does.
+            """),
+            ewald_angle,
+            mo.md(
+                f"**Ewald-intersecting rods at {ewald_angle.value:.2f}° "
+                f"({len(_rods)} inside the drawn detector's "
+                f"±{figures.ORDERS_ACCEPTANCE_DEG:g}° acceptance):**\n\n"
+                "| $(hk)$ | deflection (°) | exit angle (°) |\n"
+                "|---|---:|---:|\n" + _rows
+            ),
+            mo.md(r"""
+            **Observe.** At the shallowest presets only $(00)$ is listed. Raising the angle
+            brings $(0,\pm1)$ in, then further orders, each appearing at its own angle and at a
+            larger deflection. The exit angle of a first order sits *below* the specular beam:
+            these are points on the zeroth Laue circle, not a second specular direction.
+
+            **Explanation.** A rod is reachable when
+            $|\mathbf{k}_{i,\parallel} + \mathbf{G}_{hk}| \le k$, so a rod at in-plane distance
+            $|\mathbf{G}_{hk}|$ needs $k\sin\theta_i \ge |\mathbf{G}_{hk}|$ - at 15 keV the
+            wavenumber is fixed and $\sin\theta_i$ is the only free factor. Below about 2.1° the
+            first order does not fit inside the sphere at all. This is exact geometry, not a
+            model output, which is why the table is computed straight from
+            `rheed.rod_orders()` rather than read off a simulated screen. What lands on the
+            screen either side of those directions is still kinematic single scattering from a
+            finite surface, not a dynamical calculation.
+            """),
+        ]
+    )
+    return
+
+
+@app.cell
 def _(ROOT, json):
     figure3_data = json.loads(
         (ROOT / "data/processed/figure3_simulated_reduced.json").read_text()
@@ -917,7 +1068,7 @@ def _(
     _provenance = figure3_data["provenance"]
     mo.vstack(
         [
-            mo.md("## 4. Partial reproduction of the published RHEED trends"),
+            mo.md("## 6. Partial reproduction of the published RHEED trends"),
             mo.callout(
                 mo.md(
                     "**Result.** "
@@ -990,7 +1141,7 @@ def _(ASSETS, figure3_data, mo):
                 "from ideal layer-by-layer filling.\n\n"
                 "Colour is column height. The step-edge view of the same surface - each site "
                 "coloured by how many of its six neighbours sit at a different height, which "
-                "is the quantity `S_d` averages - is available live in section 2 for any "
+                "is the quantity `S_d` averages - is available live in section 3 for any "
                 "surface you run there."
             ),
             mo.image(
@@ -1007,6 +1158,160 @@ def _(ASSETS, figure3_data, mo):
             ),
         ]
     )
+    return
+
+
+@app.cell
+def _(GALLERY, SAVED_DIR, controls, mo):
+    data_source, gallery_choice = controls.source_selector(GALLERY)
+    saved_browser = controls.saved_browser(SAVED_DIR)
+    preset_choice = controls.preset_selector(GALLERY)
+    mo.vstack(
+        [
+            mo.md(
+                "## 7. Free exploration\n"
+                "Everything above ran on stored trajectories. This is the generic panel: pick "
+                "any starting point, change **one** parameter, and compare against the run it "
+                "came from - a single changed knob is the only kind of comparison this model "
+                "supports cleanly, which is how the experiments in section 2 are built. The "
+                "views, checkpoints and screens in sections 3-5 follow whatever is selected "
+                "here. Hover any &#9432; for what a control does.\n\n"
+                "**Result source**"
+                + controls.info(
+                    "Pre-computed demo loads a stored trajectory instantly - use this when "
+                    "presenting. Simulate now runs the model live with the parameters below, "
+                    "single-threaded. Saved run reloads a trajectory stored under "
+                    "`outputs/saved/`."
+                )
+                + " picks where the trajectory comes from; **Start from**"
+                + controls.info(
+                    "Loads the parameters behind a stored demo into the form, so you can "
+                    "reproduce that scenario and then change one thing at a time."
+                )
+                + " loads a stored scenario into the form."
+            ),
+            mo.hstack(
+                [data_source, mo.vstack([gallery_choice, preset_choice], gap=1)],
+                justify="start",
+                gap=2,
+                wrap=True,
+            ),
+            mo.accordion({"Load a saved run (`.npz`)": saved_browser}),
+        ]
+    )
+    return data_source, gallery_choice, preset_choice, saved_browser
+
+
+@app.cell
+def _(FIGURE3_NOMINAL_GA_N_RATIOS, GALLERY, controls, mo, preset_choice):
+    # Rebuilding the form is how a preset moves the sliders: marimo elements take their value
+    # at construction, so the cell that owns them re-runs when the preset changes.
+    _values = (
+        controls.preset_parameters(GALLERY[preset_choice.value])
+        if preset_choice.value
+        else controls.DEFAULT_PARAMETERS
+    )
+    get_parameters, _set_parameters = mo.state(_values)
+    parameter_form = controls.parameter_form(
+        FIGURE3_NOMINAL_GA_N_RATIOS,
+        on_change=lambda value: _set_parameters(value or _values),
+        values=_values,
+    )
+    parameter_form
+    return (get_parameters,)
+
+
+@app.cell
+def _(mo):
+    # A run button lives in its own cell so reading its value does not reset it.
+    expensive_override = mo.ui.run_button(label="Run it anyway")
+    return (expensive_override,)
+
+
+@app.cell
+def _(
+    GALLERY,
+    GALLERY_DIR,
+    SimulationResult,
+    controls,
+    data_source,
+    expensive_override,
+    gallery_choice,
+    get_parameters,
+    mo,
+    saved_browser,
+):
+    # Only a demo recorded for the regime turns the switch on; see the gallery branch below.
+    reconstruction_default = False
+    if data_source.value == controls.SAVED_RUN:
+        mo.stop(
+            not saved_browser.value,
+            mo.md("Pick a saved `.npz` file in **Load a saved run** above."),
+        )
+        _path = saved_browser.path(0)
+        simulation = SimulationResult.load_npz(_path)
+        growth_rate = None
+        experiment_name = _path.stem
+        experiment_detail = controls.saved_detail(simulation.config)
+        experiment_source = f"saved run `{_path}` - nothing was simulated"
+    elif data_source.value == controls.PRE_COMPUTED:
+        _entry = gallery_choice.value
+        _meta = GALLERY[_entry]
+        simulation = SimulationResult.load_npz(GALLERY_DIR / f"{_entry}.npz")
+        growth_rate = _meta["predicted_growth_rate_ml_s"]
+        experiment_name = _meta["title"]
+        experiment_detail = controls.gallery_detail(_meta, simulation.config)
+        experiment_source = f"stored trajectory `data/gallery/{_entry}.npz` - nothing was simulated"
+        # A demo recorded for the regime arrives with the switch already on, so the view it was
+        # built to show is the one that appears.
+        reconstruction_default = bool(_meta.get("reconstruction"))
+    else:
+        _config, _estimate, growth_rate, experiment_name, experiment_detail = controls.build_run(
+            get_parameters()
+        )
+        mo.stop(
+            controls.is_expensive(_config, _estimate) and not expensive_override.value,
+            controls.expensive_warning(_estimate, expensive_override),
+        )
+        try:
+            simulation = controls.run_with_progress(_config, f"Running KMC: {experiment_name}")
+        except RuntimeError as _error:
+            mo.stop(True, mo.callout(str(_error), kind="danger"))
+        experiment_source = (
+            f"live run, {_config.lattice_size}x{_config.lattice_size}, seed {_config.seed}"
+        )
+
+    coverage_axis = simulation.time_s * growth_rate if growth_rate else simulation.coverage_ml
+    coverage_axis_label = (
+        "paper-predicted film coverage (ML)" if growth_rate else "film coverage (ML)"
+    )
+    return (
+        coverage_axis,
+        coverage_axis_label,
+        experiment_detail,
+        experiment_name,
+        experiment_source,
+        reconstruction_default,
+        simulation,
+    )
+
+
+@app.cell
+def _(experiment_detail, experiment_name, experiment_source, mo, simulation):
+    mo.md(f"""
+    **Active mode:** {experiment_name}
+
+    **Source:** {experiment_source}
+
+    {experiment_detail}
+
+    **Completed:** {simulation.deposited_events} deposition events,
+    {simulation.selected_diffusion_events} selected diffusion events
+    ({simulation.diffusion_events} nearest-neighbor hop equivalents), and
+    {simulation.desorbed_events} desorption events; simulated time
+    {simulation.time_s[-1]:.3f} s; final RMS roughness
+    {simulation.roughness_ml[-1]:.3f} ML.
+    """)
     return
 
 
@@ -1049,7 +1354,7 @@ def _(ROOT, json, mo):
     mo.vstack(
         [
             mo.md(
-                "## 5. Beyond the paper: how temperature and flux affect surface roughening\n"
+                "## 8. Beyond the paper: how temperature and flux affect surface roughening\n"
                 "A small exploratory sweep, not a second result. The paper fixes the growth "
                 "condition; the model does not, so the same machinery can ask how the *surface* "
                 "responds to temperature and flux. The map below is final RMS roughness, a "
@@ -1116,7 +1421,7 @@ def _(figures, mo, np, selected_sweep_result, sweep_data, sweep_selection):
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 6. Numerical reliability and model limits
+    ## 9. Numerical reliability and model limits
 
     The seed makes a run exactly reproducible, but one trajectory is not an uncertainty
     estimate. The scripted workflows aggregate fixed seed ensembles instead: `make figure3`
@@ -1127,7 +1432,7 @@ def _(mo):
     **Finite size is the binding limitation.** Detrended proxy amplitude remains strongly
     lattice-size dependent and is not converged through 64x64, so the Figure 3 comparison runs
     at 7x7 as a reduced-scale check and no amplitude claim is made from it. Period and phase are
-    far less size-sensitive, which is why they carry the comparison in section 4.
+    far less size-sensitive, which is why they carry the comparison in section 6.
 
     **Approximations.** Isolated adatoms may hop several sites in one selected event above hop
     limit 1; `make validate-acceleration` measures that 100-seed ensembles stay within a
@@ -1153,7 +1458,7 @@ def _(
         else "Not every condition tested produced an oscillation in both signals."
     )
     mo.md(f"""
-    ## 7. Conclusions
+    ## 10. Conclusions
 
     1. **A four-event solid-on-solid KMC is enough to produce layer-by-layer oscillations.**
        {_oscillation_line}
@@ -1161,7 +1466,7 @@ def _(
        density that oscillates; the linked morphology view in section 3 shows the islands that
        create those steps forming and merging once per monolayer.
     3. **Growth conditions change the surface.** The paper's Ga/N series changes the
-       oscillation; the exploratory temperature/flux sweep in section 5 changes final
+       oscillation; the exploratory temperature/flux sweep in section 8 changes final
        roughness without producing oscillations at all, and is reported as such.
     4. **Agreement with the published data is qualitative, not quantitative.** Periods match
        within {worst_period_gap_ml:.2f} ML, but the experimental traces damp

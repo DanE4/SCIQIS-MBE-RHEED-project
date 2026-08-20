@@ -131,9 +131,13 @@ ENTRIES = {
             "Switching diffusion off leaves uncorrelated random deposition, whose roughness "
             "grows as the square root of coverage and never oscillates at all. Note it is not "
             "the roughest run here: weak-but-nonzero diffusion builds islands and mounds that "
-            "are rougher than random noise."
+            "are rougher than random noise. Temperature, flux, barriers and seed match the "
+            "island-growth entry, so the notebook can put the two side by side and change only "
+            "the attempt frequency."
         ),
-        "config": replace(BASE, attempt_frequency_hz=0.0),
+        "config": replace(
+            BASE, temperature_k=900.0, step_barrier_ev=0.0, attempt_frequency_hz=0.0
+        ),
     },
 }
 
