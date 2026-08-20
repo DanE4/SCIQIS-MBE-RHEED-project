@@ -249,3 +249,17 @@ def test_the_appended_frames_never_touch_the_real_result() -> None:
     # `final_heights` stays the real last surface, so no figure reporting a final can be fed one
     # of the prescribed fields.
     np.testing.assert_array_equal(extended.final_heights, result.final_heights)
+
+
+def test_camera_swing_starts_from_the_active_view_and_ends_facing() -> None:
+    """Every mode's swing begins at its own default eye and lands overhead, centre preserved."""
+    for start in (figures.SURFACE_CAMERA, figures.GEOMETRY_CAMERA, figures.GEOMETRY_ORDERS_CAMERA):
+        begun = reconstruction._eye(0.0, start)
+        assert np.allclose(
+            [begun["eye"][axis] for axis in "xyz"],
+            [start["eye"][axis] for axis in "xyz"],
+        ), start
+        # Overhead: the eye is almost all z, which is what makes the label legible.
+        ended = reconstruction._eye(1.0, start)["eye"]
+        assert ended["z"] > 5.0 * np.hypot(ended["x"], ended["y"])
+        assert reconstruction._eye(0.5, start).get("center") == start.get("center")

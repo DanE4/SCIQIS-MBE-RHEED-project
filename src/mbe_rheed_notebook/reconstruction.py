@@ -31,6 +31,7 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
+from mbe_rheed_notebook.figures import SURFACE_CAMERA
 from mbe_rheed_sim.kmc import SimulationResult
 from mbe_rheed_sim.observables import (
     coverage_ml,
@@ -100,17 +101,16 @@ _GLYPHS = {
 _LABEL = ("NEVER GONNA", "GIVE YOU UP")
 _GLYPH_PITCH = 5
 
-# Camera geometry for the ordered phase. The oblique pair matches `height_surface`'s default eye,
-# so a frame with no ordering starts from the view the viewer already had. Facing means high
-# elevation looking along +y, which is the only azimuth that puts the structure upright on screen -
-# a full orbit would spin it onto its side for most of the sequence, so the motion is a small sway
-# around that heading instead.
+# Camera geometry for the ordered phase. The swing starts from the active view's own default eye,
+# passed in by the caller, so a frame with no ordering starts from the view the viewer already had -
+# the geometry views look from downstream-left, and interpolating those from a hardcoded oblique
+# would flip the scene at the first emerging frame. Facing means high elevation looking along +y,
+# which is the only azimuth that puts the structure upright on screen - a full orbit would spin it
+# onto its side for most of the sequence, so the motion is a small sway around that heading instead.
 _CAMERA_DISTANCE = 2.2
-_ELEVATION_OBLIQUE_DEG = 27.0
 # Measured, not guessed: the label's strokes are one site wide, so below about 85 degrees their
 # vertical walls hide their tops and two legible lines render as a picket fence.
 _ELEVATION_FACING_DEG = 87.0
-_AZIMUTH_OBLIQUE_DEG = 45.0
 _AZIMUTH_FACING_DEG = -90.0
 # `height_surface`'s own revision, and the one the ordered phase parks on.
 _DEFAULT_REVISION = "surface-playback"
@@ -237,6 +237,7 @@ def scene(
     frame: int,
     displayed_snapshots: NDArray[np.int64],
     recorded_snapshots: NDArray[np.int64],
+    default_camera: dict | None = None,
 ) -> Scene:
     """Camera, revision, colour scale and title for one frame of the surface view.
 
@@ -260,34 +261,49 @@ def scene(
     if order is None or frame < order.first_appended_frame:
         return Scene(None, _DEFAULT_REVISION, _zmax(recorded_snapshots), None)
 
+    start = default_camera or SURFACE_CAMERA
     zmax = _zmax(displayed_snapshots[order.transition_frame :])
     if past_transition(order, frame):
-        return Scene(_eye(1.0), _ORDERED_REVISION, zmax, _ORDERED_TITLE)
+        return Scene(_eye(1.0, start), _ORDERED_REVISION, zmax, _ORDERED_TITLE)
     ordering = float(np.clip(order.r_sk[frame] / CRITICAL_ORDER_PARAMETER, 0.0, 1.0))
-    return Scene(_eye(ordering), f"reconstruction-emerging-{frame}", zmax, None)
+    return Scene(_eye(ordering, start), f"reconstruction-emerging-{frame}", zmax, None)
 
 
 def _zmax(snapshots: NDArray[np.int64]) -> int:
     return max(1, int(snapshots.max()))
 
 
-def _eye(ordering: float) -> dict:
-    """Camera `ordering` of the way from the default oblique view to facing the structure."""
+def _eye(ordering: float, start: dict = SURFACE_CAMERA) -> dict:
+    """Camera `ordering` of the way from `start`'s eye to facing the structure.
+
+    The start view is read as spherical angles rather than assumed, so any mode's default eye is a
+    valid beginning; the distance is carried across too, since the geometry views sit closer than
+    the height surface and jumping the zoom reads as a cut. Whatever `center` the start view uses is
+    kept: a view recentred on the downstream half must not drift back mid-swing.
+    """
+    eye = start["eye"]
+    radius = float(np.linalg.norm([eye["x"], eye["y"], eye["z"]])) or _CAMERA_DISTANCE
     elevation = np.radians(
-        _ELEVATION_OBLIQUE_DEG + ordering * (_ELEVATION_FACING_DEG - _ELEVATION_OBLIQUE_DEG)
+        np.degrees(np.arcsin(eye["z"] / radius)) * (1.0 - ordering)
+        + ordering * _ELEVATION_FACING_DEG
     )
     azimuth = np.radians(
-        _AZIMUTH_OBLIQUE_DEG + ordering * (_AZIMUTH_FACING_DEG - _AZIMUTH_OBLIQUE_DEG)
+        np.degrees(np.arctan2(eye["y"], eye["x"])) * (1.0 - ordering)
+        + ordering * _AZIMUTH_FACING_DEG
     )
-    horizontal = _CAMERA_DISTANCE * np.cos(elevation)
-    return {
+    distance = radius + ordering * (_CAMERA_DISTANCE - radius)
+    horizontal = distance * np.cos(elevation)
+    moved = {
         "eye": {
             "x": float(horizontal * np.cos(azimuth)),
             "y": float(horizontal * np.sin(azimuth)),
-            "z": float(_CAMERA_DISTANCE * np.sin(elevation)),
+            "z": float(distance * np.sin(elevation)),
         },
         "up": {"x": 0.0, "y": 0.0, "z": 1.0},
     }
+    if "center" in start:
+        moved["center"] = start["center"]
+    return moved
 
 
 def past_transition(order: ReconstructionOrder | None, frame: int) -> bool:

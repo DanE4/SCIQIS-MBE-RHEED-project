@@ -367,7 +367,13 @@ def _():
 
 
 @app.cell
-def _(coverage_axis, playback_cursor, reconstruction, reconstruction_toggle, simulation):
+def _(
+    coverage_axis,
+    playback_cursor,
+    reconstruction,
+    reconstruction_toggle,
+    simulation,
+):
     # Continues the trajectory past its target coverage with a prescribed ordered phase.
     # `reconstruction.extend` is the identity until the switch above is set, so by default every
     # cell below sees the recorded run exactly as it was simulated. See the module for what the
@@ -571,6 +577,18 @@ def _(
 
 
 @app.cell
+def _(beam_condition, display_simulation, rheed):
+    # Every frame's specular intensity, so the trace below is not recomputing the whole
+    # trajectory on every playback tick: it depends on the run and the beam angle, not on which
+    # frame is showing. That recompute was most of the tick, and the cells waiting behind it
+    # sat dimmed while it ran.
+    specular_curve = rheed.specular_intensity(
+        display_simulation.snapshots, grazing_angle_deg=beam_condition.value
+    )
+    return (specular_curve,)
+
+
+@app.cell
 def _(
     beam_condition,
     coverage_axis_label,
@@ -585,13 +603,23 @@ def _(
     rheed,
     sample_azimuth,
     simulation,
+    specular_curve,
 ):
     _heights = display_simulation.snapshots[current_frame]
     _coverage = float(display_coverage_axis[current_frame])
     # Camera, colour scale and title for this frame. Without the extension this is just the
-    # recorded run's own height range and the builder's default view.
+    # recorded run's own height range and the builder's default view. The swing has to start from
+    # the active mode's own default eye, or switching modes mid-sequence flips the view.
+    _default_camera = {
+        "RHEED beam geometry": figures.GEOMETRY_CAMERA,
+        "Reachable diffraction orders": figures.GEOMETRY_ORDERS_CAMERA,
+    }.get(display_mode.value, figures.SURFACE_CAMERA)
     _scene = reconstruction.scene(
-        reconstruction_order, current_frame, display_simulation.snapshots, simulation.snapshots
+        reconstruction_order,
+        current_frame,
+        display_simulation.snapshots,
+        simulation.snapshots,
+        _default_camera,
     )
     _zmax = _scene.zmax
     screen_pattern = rheed.diffraction_screen(
@@ -609,6 +637,8 @@ def _(
             azimuth_deg=float(sample_azimuth.value),
             pattern=screen_pattern,
             show_orders=display_mode.value == "Reachable diffraction orders",
+            camera=_scene.camera,
+            revision=_scene.revision,
         )
     elif display_mode.value == "3D height surface":
         surface_figure = figures.height_surface(
@@ -620,15 +650,21 @@ def _(
             "Step edges": figures.step_edges,
         }[display_mode.value](_heights, _coverage, _zmax)
     if _scene.title:
-        surface_figure.update_layout(title=_scene.title)
+        # Kept above whatever the mode's own title said rather than replacing it: the geometry
+        # views carry the kinematic-scattering disclosure and the disclosed z stretch up there,
+        # and a prescribed frame is the last one to drop them.
+        surface_figure.update_layout(
+            title={
+                "automargin": True,
+                "text": f"{_scene.title}<br><sub>{surface_figure.layout.title.text}</sub>",
+            }
+        )
     rheed_figure = figures.rheed_trace(
         display_coverage_axis,
         display_simulation.rheed_proxy,
         current_frame,
         coverage_axis_label,
-        specular=rheed.specular_intensity(
-            display_simulation.snapshots, grazing_angle_deg=beam_condition.value
-        ),
+        specular=specular_curve,
     )
     mo.vstack(
         [
@@ -640,17 +676,14 @@ def _(
                 </style>
             """),
             mo.hstack([surface_figure, rheed_figure], widths="equal", wrap=True, align="center"),
+            # Drawn here, not in a cell of its own: marimo runs cells one at a time, so a cell
+            # downstream of `screen_pattern` could not start until this one had finished and sat
+            # dimmed for the whole tick - which read as the screen greying out while nothing was
+            # being computed. The static prose below still lives in its own cell, which playback
+            # never touches.
+            figures.detector_screen(screen_pattern, _coverage),
         ]
     )
-    return (screen_pattern,)
-
-
-@app.cell
-def _(current_frame, display_coverage_axis, figures, screen_pattern):
-    # Only the figure lives in this frame-following cell. The prose below is static, and a
-    # marimo cell dims while it reruns - three paragraphs greying out on every playback tick
-    # reads as a stall, so they sit in their own cell that playback never touches.
-    figures.detector_screen(screen_pattern, float(display_coverage_axis[current_frame]))
     return
 
 
@@ -785,7 +818,13 @@ def _(
 
 
 @app.cell
-def _(coverage_axis_label, display_coverage_axis, display_simulation, figures, mo):
+def _(
+    coverage_axis_label,
+    display_coverage_axis,
+    display_simulation,
+    figures,
+    mo,
+):
     observable_figure = figures.observables(
         display_coverage_axis,
         display_simulation.roughness_ml,

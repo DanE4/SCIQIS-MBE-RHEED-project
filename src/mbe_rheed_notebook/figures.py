@@ -32,7 +32,9 @@ GRAZING_ANGLE_DEG = 2.0
 # The geometry view paints the computed screen, so its label must not claim nothing was
 # calculated (the retired BEAM_GEOMETRY_LABEL said exactly that). What it must still say is that
 # the rays and the plane are drawn for explanation, at a disclosed distortion.
-GEOMETRY_LABEL = "geometry view only - rays and plane are explanatory, the painted screen is the computed one"
+GEOMETRY_LABEL = (
+    "geometry view only - rays and plane are explanatory, the painted screen is the computed one"
+)
 
 # Angular acceptance of the drawn detector in the reachable-orders mode, matching the span the
 # azimuth sweep and validate_rheed.py already use. rod_orders still decides what is reachable
@@ -48,6 +50,17 @@ ORDERS_Z_EXAGGERATION = 3.0
 # Shown wherever a computed pattern is displayed, so a kinematic image is never mistaken for
 # the dynamical scattering a real RHEED screen records.
 DIFFRACTION_LABEL = "kinematic single scattering only - not dynamical RHEED"
+
+
+# Default views, named because the reconstruction overlay swings away from whichever one the
+# active mode started in: interpolating from the wrong start flips the scene at the first
+# emerging frame.
+SURFACE_CAMERA = {"eye": {"x": 1.4, "y": 1.4, "z": 1.0}}
+GEOMETRY_CAMERA = {"eye": {"x": -1.22, "y": -1.02, "z": 0.5}, "center": {"z": -0.05}}
+GEOMETRY_ORDERS_CAMERA = {
+    "eye": {"x": -0.95, "y": -0.79, "z": 0.40},
+    "center": {"x": 0.22, "y": 0.0, "z": 0.04},
+}
 
 
 def _axial_to_cartesian(heights: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -94,7 +107,7 @@ def height_surface(
             "zaxis": {"title": "height (ML)", "range": [0, zmax], "autorange": False},
             "aspectmode": "manual",
             "aspectratio": {"x": 1, "y": 1, "z": 0.55},
-            "camera": camera or {"eye": {"x": 1.4, "y": 1.4, "z": 1.0}},
+            "camera": camera or SURFACE_CAMERA,
         },
     )
     return figure
@@ -221,8 +234,7 @@ def detector_screen(pattern: ScreenPattern, coverage: float) -> go.Figure:
                 "tickvals": list(range(-int(SCREEN_LOG_DECADES), 1)),
             },
             hovertemplate=(
-                "deflection=%{x:.2f}°<br>exit angle=%{y:.2f}°"
-                "<br>log10 I=%{z:.2f}<extra></extra>"
+                "deflection=%{x:.2f}°<br>exit angle=%{y:.2f}°<br>log10 I=%{z:.2f}<extra></extra>"
             ),
             name="detector screen",
         )
@@ -311,7 +323,7 @@ def _detector_inset(
     """
     figure.update_layout(
         xaxis3={
-            "domain": [0.63, 0.99],
+            "domain": [0.70, 0.99],
             "anchor": "y3",
             "title": {"text": "deflection (\u00b0)", "font": {"size": 10}},
             "tickfont": {"size": 9},
@@ -319,7 +331,7 @@ def _detector_inset(
             "zeroline": False,
         },
         yaxis3={
-            "domain": [0.52, 0.99],
+            "domain": [0.46, 0.86],
             "anchor": "x3",
             "scaleanchor": "x3",
             "scaleratio": 1.0,
@@ -342,9 +354,7 @@ def _detector_inset(
             yaxis="y3",
             showlegend=False,
             name="inset: reachable (hk)",
-            hovertemplate=(
-                "%{text}<br>deflection=%{x:.2f}°<br>exit=%{y:.2f}°<extra></extra>"
-            ),
+            hovertemplate=("%{text}<br>deflection=%{x:.2f}°<br>exit=%{y:.2f}°<extra></extra>"),
         )
     )
     figure.add_trace(
@@ -401,7 +411,7 @@ def _side_view_inset(
     readers misread. Owns its own axis pair, as the detector inset does."""
     figure.update_layout(
         xaxis2={
-            "domain": [0.015, 0.30],
+            "domain": [0.02, 0.26],
             "anchor": "y2",
             "title": {
                 "text": f"true {grazing_angle_deg:.2f}\u00b0 grazing (1:1)",
@@ -412,7 +422,7 @@ def _side_view_inset(
             "showgrid": False,
         },
         yaxis2={
-            "domain": [0.80, 0.97],
+            "domain": [0.87, 0.99],
             "anchor": "x2",
             "scaleanchor": "x2",
             "scaleratio": 1.0,
@@ -461,6 +471,8 @@ def rheed_geometry(
     azimuth_deg: float = 0.0,
     pattern: ScreenPattern | None = None,
     show_orders: bool = False,
+    camera: dict | None = None,
+    revision: str = "beam-geometry",
 ) -> go.Figure:
     """The surface, the beam, the detector plane, and the computed screen painted on it.
 
@@ -486,9 +498,7 @@ def rheed_geometry(
     """
     if heights.ndim != 2 or min(heights.shape) < 2 or not 0 < grazing_angle_deg < 45:
         raise ValueError("beam geometry needs a 2D lattice and a grazing angle in (0, 45)")
-    geometry = rheed.beam_geometry(
-        grazing_angle_deg=grazing_angle_deg, azimuth_deg=azimuth_deg
-    )
+    geometry = rheed.beam_geometry(grazing_angle_deg=grazing_angle_deg, azimuth_deg=azimuth_deg)
     rows, columns = heights.shape
 
     # Physical surface positions, not array indices: the diffraction code places the scatterer
@@ -577,7 +587,20 @@ def rheed_geometry(
             colorscale="Viridis",
             cmin=0,
             cmax=zmax,
-            colorbar={"title": "height (ML)", "len": 0.55, "x": 1.02},
+            colorbar=(
+                # Orders mode hands the right-hand column to the detector inset, so the bar
+                # tucks in underneath it instead of sitting on top of its axis labels.
+                {
+                    "title": "height (ML)",
+                    "len": 0.34,
+                    "thickness": 14,
+                    "x": 0.72,
+                    "y": 0.0,
+                    "yanchor": "bottom",
+                }
+                if show_orders
+                else {"title": "height (ML)", "len": 0.55, "x": 1.02}
+            ),
             # Slightly translucent in orders mode so a ray crossing the surface stays visible.
             opacity=0.82 if show_orders else 1.0,
             hovertemplate="lab x=%{x:.1f}<br>lab y=%{y:.1f}<br>height=%{z} ML<extra></extra>",
@@ -586,10 +609,20 @@ def rheed_geometry(
     )
 
     for label, xs, ys, zs, colour in (
-        ("incident beam k_i", (entry_x, centre_x), (centre_y, centre_y), (entry_z, impact_z),
-         BEAM_COLOR),
-        ("nominal specular k_f (00)", (centre_x, screen_x), (centre_y, specular_y),
-         (impact_z, specular_z), SPECULAR_COLOR),
+        (
+            "incident beam k_i",
+            (entry_x, centre_x),
+            (centre_y, centre_y),
+            (entry_z, impact_z),
+            BEAM_COLOR,
+        ),
+        (
+            "nominal specular k_f (00)",
+            (centre_x, screen_x),
+            (centre_y, specular_y),
+            (impact_z, specular_z),
+            SPECULAR_COLOR,
+        ),
     ):
         figure.add_trace(
             go.Scatter3d(
@@ -774,19 +807,30 @@ def rheed_geometry(
         else f"z exaggerated {stretch:.0f}x; displayed ray angles not to scale"
     )
     figure.update_layout(
-        uirevision="beam-geometry",
-        height=560,
-        margin={"l": 0, "r": 0, "t": 92, "b": 0},
+        uirevision=revision,
+        height=580,
+        margin={"l": 0, "r": 0, "t": 110, "b": 0},
         legend={"orientation": "h", "y": -0.02},
-        title=(
-            f"Beam geometry at {coverage:.2f} ML - {condition}{grazing_angle_deg:.2f}° grazing, "
-            f"{azimuth_deg:g}° sample azimuth{orders_note}"
-            f"<br><sub>{GEOMETRY_LABEL}</sub>"
-            f"<br><sub><b>{scale_note}</b> - the inset is the same beam at 1:1</sub>"
-        ),
+        title={
+            # automargin wraps the long title instead of clipping it at the paper edge;
+            # anchoring to the container top keeps the first line inside the figure.
+            "automargin": True,
+            "yref": "container",
+            "y": 1.0,
+            "yanchor": "top",
+            "pad": {"t": 12},
+            "text": (
+                f"Beam geometry at {coverage:.2f} ML - {condition}{grazing_angle_deg:.2f}° grazing, "
+                f"{azimuth_deg:g}° sample azimuth"
+                f"<br><sub>{GEOMETRY_LABEL}{orders_note}</sub>"
+                f"<br><sub><b>{scale_note}</b> - the inset is the same beam at 1:1</sub>"
+            ),
+        },
         scene={
-            "domain": {"x": [0.0, 1.0], "y": [0.0, 1.0]},
-            "uirevision": "beam-geometry",
+            # Insets own their strips of the paper: the scene stops short of them rather
+            # than drawing the surface and its rays over their labels.
+            "domain": {"x": [0.0, 0.68 if show_orders else 1.0], "y": [0.0, 0.86]},
+            "uirevision": revision,
             "xaxis": {
                 "title": "lab x (beam axis)",
                 "range": [entry_x, screen_x],
@@ -801,14 +845,7 @@ def rheed_geometry(
             # side-on view gives. Drag to taste: uirevision above keeps whatever you set.
             # Orders mode pulls in and recentres on the downstream half, where every ray, the
             # hit points and the plane are; the sample is context there, not the subject.
-            "camera": (
-                {
-                    "eye": {"x": -0.72, "y": -0.60, "z": 0.30},
-                    "center": {"x": 0.22, "y": 0.0, "z": 0.04},
-                }
-                if show_orders
-                else {"eye": {"x": -1.22, "y": -1.02, "z": 0.5}, "center": {"z": -0.05}}
-            ),
+            "camera": camera or (GEOMETRY_ORDERS_CAMERA if show_orders else GEOMETRY_CAMERA),
         },
     )
     return figure
@@ -879,9 +916,7 @@ def rheed_trace(
                 mode="lines",
                 line={"color": SPECULAR_COLOR, "width": 3},
                 name="kinematic specular (00) intensity",
-                hovertemplate=(
-                    "coverage=%{x:.2f} ML<br>specular=%{y:.3f} of flat<extra></extra>"
-                ),
+                hovertemplate=("coverage=%{x:.2f} ML<br>specular=%{y:.3f} of flat<extra></extra>"),
             )
         )
     figure.add_trace(
@@ -1128,4 +1163,3 @@ def figure3_comparison(figure3_data: dict) -> tuple[go.Figure, str]:
         legend={"orientation": "h", "x": 0, "y": -0.08},
     )
     return figure, "\n".join(rows)
-
