@@ -289,7 +289,7 @@ def detector_screen(pattern: ScreenPattern, coverage: float) -> go.Figure:
             f"{pattern.azimuth_deg:g}° azimuth · "
             f"q_z d / π = {pattern.phase_order:.2f} ({pattern.condition}) · "
             f"{pattern.coherence_length_nm:g} nm coherence · "
-            f"rods in view: {', '.join(rod.label for rod in pattern.rods)}"
+            f"Ewald-intersecting rods: {', '.join(rod.label for rod in pattern.rods)}"
             f"<br>{DIFFRACTION_LABEL}</sub>"
         ),
         # Equal angular scales, and `constrain` shrinks the drawing area to the data rather

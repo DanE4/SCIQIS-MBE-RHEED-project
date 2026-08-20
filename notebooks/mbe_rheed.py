@@ -691,6 +691,29 @@ def _(
 def _(mo):
     mo.vstack(
         [
+            # Sits here rather than in the playback cell above so it does not dim on every tick.
+            mo.callout(
+                mo.md(
+                    "**Why the subtitle can list one rod while three streaks show.** RHEED is "
+                    "read off the Ewald construction: because the crystal is finite along the "
+                    "surface normal, each 2D reciprocal-lattice point extends into a rod, and an "
+                    "order is geometrically accessible exactly when its rod cuts the Ewald "
+                    "sphere. At this example condition - 15 keV, 1.65° grazing - only the "
+                    "specular $(00)$ rod does, which is all **Ewald-intersecting rods** claims; "
+                    "it is not a count of what is bright on the screen. The side intensity is "
+                    "real all the same: the simulated surface and its illumination are finite, "
+                    "rough and coherence-limited, so reciprocal-space features have finite width "
+                    "instead of being delta functions. All of it is kinematic single scattering, "
+                    "not full dynamical RHEED.\n\n"
+                    '<img src="https://gisaxs.com/images/6/6b/3D_ewald_example.png" '
+                    'alt="Ewald sphere cutting a reciprocal lattice, with the scattered rays '
+                    'reaching a detector" style="max-width: 340px; width: 100%;">\n\n'
+                    "*Textbook Ewald construction - **not** a simulated image, and not output of "
+                    "this notebook. Source: [gisaxs.com](https://gisaxs.com/index.php/Ewald_sphere), "
+                    "CC BY-SA 3.0.*"
+                ),
+                kind="info",
+            ),
             mo.md(
                 "**The surface views.** The 3D height view uses array coordinates. "
                 "**Hexagonal cells** maps the same periodic axial lattice to Cartesian "
