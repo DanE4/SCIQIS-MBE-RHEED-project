@@ -67,7 +67,7 @@ and automated test, check, export, and reproduction commands.
 3. **Paper-derived Figure 3 parameters:** these correctly use the paper's effective-flux and
    activation-energy equations, but correct inputs alone do not remove finite-size,
    acceleration, seed, initialization, or normalization uncertainty.
-4. **Model limitations:** `1-S_d` is morphology-derived, not electron diffraction. The model
+4. **Model limitations:** $1 - S_d$ is morphology-derived, not electron diffraction. The model
    omits beam geometry, reconstruction, multiple scattering, and other experimental physics.
    Strain is irrelevant to this homoepitaxial target and must not be added as a patch.
 5. **Visualization limitations:** the continuous height field is drawn in rectangular index
@@ -233,12 +233,12 @@ without local paths or undocumented dependencies. **Met.**
 - [x] Implement deposition, surface diffusion, nucleation/island formation, and observables.
 - [x] Allow single-step upward and downward nearest-neighbor hops; forbid multi-step jumps.
 - [x] Apply
-  `E_diff = E_diff^(0) + n E_b + m E_step`, with `m = 1` only for downward crossings.
+  $E_{\mathrm{diff}} = E_{\mathrm{diff}}^{(0)} + n E_b + m E_{\mathrm{step}}$, with $m = 1$ only for downward crossings.
 - [x] Add Arrhenius desorption and enforce
-  `film mass = deposited events - desorbed events`.
+  film mass = deposited events - desorbed events.
 - [x] Expose temperature, flux, diffusion, step, and desorption controls using explicitly
   uncalibrated demonstration defaults.
-- [x] Define the normalized step-density RHEED proxy as `I_proxy = 1 - S_d`, where `S_d` is
+- [x] Define the normalized step-density RHEED proxy as $I_{\mathrm{proxy}} = 1 - S_d$, where $S_d$ is
   the fraction of unique neighbor bonds with unequal endpoint heights.
 - [x] Keep the proxy labelled as morphology-based, not as electron diffraction.
 
@@ -247,9 +247,9 @@ and the canonical baseline all pass. **Met.**
 
 ### Stage 2 - Figure 3 homoepitaxial reproduction (complete at reduced scale)
 
-Goal: establish `KMC growth -> step density -> 1-S_d -> Figure 3 comparison` without the
+Goal: establish KMC growth $\rightarrow$ step density $\rightarrow$ $1 - S_d$ $\rightarrow$ Figure 3 comparison, without the
 GaN/AlN strain model. Figure 3 is the main target because the homoepitaxial calculation omits
-`E_str`.
+$E_{\mathrm{str}}$.
 
 #### 2A - Paper data and provenance
 
@@ -263,8 +263,8 @@ GaN/AlN strain model. Figure 3 is the main target because the homoepitaxial calc
 #### 2B - GaN homoepitaxy parameterization
 
 - [x] Implement the paper's Appendix A effective-flux conversion.
-- [x] Implement the paper's Ga/N-ratio-dependent `E_diff^(0)`, `E_b`, `E_des^(0)`, and
-  `E_step` expressions in tested source code.
+- [x] Implement the paper's Ga/N-ratio-dependent $E_{\mathrm{diff}}^{(0)}$, $E_b$, $E_{\mathrm{des}}^{(0)}$, and
+  $E_{\mathrm{step}}$ expressions in tested source code.
 - [x] Add named Figure 3 parameter sets separate from the fast demonstration preset.
 - [x] Add `make figure3-parameters` to reproduce the conversion and rate diagnostics.
 - [x] Verify rate magnitudes and competing deposition/diffusion/desorption timescales before
@@ -279,7 +279,7 @@ GaN/AlN strain model. Figure 3 is the main target because the homoepitaxial calc
 
 #### 2C - Scientific reproduction
 
-- [x] Reproduce simulated `1-S_d` traces for the reported Ga/N ratios with
+- [x] Reproduce simulated $1 - S_d$ traces for the reported Ga/N ratios with
   `make reproduce-figure3`.
 - [x] Replace the rough generic regime for Figure 3 work with the paper-derived parameter sets;
   retain the generic baseline only as a software fingerprint.
@@ -438,7 +438,7 @@ not a sequence of unrelated controls and plots.
 - [x] Document normalization and use identical or clearly related time/coverage domains.
 - [x] Compare phase, period, damping, and relative amplitude explicitly.
 - [x] Preserve configuration provenance for every curve and artifact.
-- [x] Clearly distinguish experimental RHEED intensity, morphology-derived `1-S_d`, and every
+- [x] Clearly distinguish experimental RHEED intensity, morphology-derived $1 - S_d$, and every
   normalized/detrended signal; never imply that they are the same physical quantity.
 - [x] Build a Figure 4-inspired morphology sequence at selected coverages, while avoiding any
   claim of the strain-driven transition until strain exists.
@@ -477,7 +477,7 @@ logic into JavaScript or breaking notebook portability.
 
 ### Stage 7 - Optional strain-driven GaN/AlN extension
 
-- [ ] Add `E_str` only after homoepitaxial Figure 3 convergence and quantitative validation are
+- [ ] Add $E_{\mathrm{str}}$ only after homoepitaxial Figure 3 convergence and quantitative validation are
   complete; imperfect current morphology is not justification to add strain.
 - [ ] Specify and validate the elastic/strain approximation before implementation.
 - [ ] Investigate the reported 2D-to-3D transition near 2.25 ML.
@@ -546,11 +546,11 @@ repeatability, not scientific agreement.
 - Six-neighbor connectivity is hexagonal; the continuous height-field view is rectangular
   index space, while the optional lattice view maps axial coordinates to hexagonal geometry.
 - Energetic defaults are demonstration parameters, not calibrated GaN values.
-- `1-S_d` is a normalized morphology proxy, not an electron-diffraction calculation.
+- $1 - S_d$ is a normalized morphology proxy, not an electron-diffraction calculation.
 - No strain, multiple species, reconstruction, or electron scattering is implemented.
 - Optional isolated-adatom long-hop acceleration is implemented and validated only for the
   documented small-lattice ensemble observables; exact nearest-neighbor KMC remains available.
-- Figure 3 homoepitaxial GaN is the near-term target because it does not require `E_str`.
+- Figure 3 homoepitaxial GaN is the near-term target because it does not require $E_{\mathrm{str}}$.
 - A fixed seed gives repeatability; uncertainty claims require seed ensembles.
 - The generic reproducible baseline is too rough and does not show the target oscillation.
 - The 7x7 Figure 3 amplitude is a finite-size result, not a publication observable.

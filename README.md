@@ -36,9 +36,9 @@ extra simulation (`make figure3`).
 
 ![Top-down morphology at 0.5 and 1.0 ML for three Ga/N ratios](assets/figure3_morphology_montage.png)
 
-At 0.50 ML the surface is islanded and `S_d` peaks; at 1.00 ML the layer has closed and `S_d`
+At 0.50 ML the surface is islanded and $S_d$ peaks; at 1.00 ML the layer has closed and $S_d$
 drops by roughly half, which is the whole of why the proxy oscillates. Across the columns the
-trend is monotonic in both rows: raising Ga/N from 0.68 to 0.89 lowers `S_d` from 0.113 to 0.079
+trend is monotonic in both rows: raising Ga/N from 0.68 to 0.89 lowers $S_d$ from 0.113 to 0.079
 at half coverage and from 0.056 to 0.030 at layer completion, so the richer Ga conditions sit
 closer to ideal layer-by-layer filling. This is homoepitaxial GaN throughout - no strain, no
 Stranski-Krastanov transition and no quantum dots are modelled or claimed.
@@ -81,23 +81,23 @@ coordinates on a periodic square array ([`lattice.py`](src/mbe_rheed_sim/lattice
 
 Three things can happen to that surface:
 
-- **Deposition:** an atom lands on a uniformly random site, at total rate `F * N` for flux `F`
-  (ML/s) and `N` sites. It does not depend on the surface.
+- **Deposition:** an atom lands on a uniformly random site, at total rate $F N$ for flux $F$
+  (ML/s) and $N$ sites. It does not depend on the surface.
 - **Diffusion:** a top atom hops to one of its six neighbours, allowed only when the two columns
   end up within one height of each other. That constraint is what keeps the surface single-valued.
 - **Desorption:** a top atom leaves the surface.
 
 Diffusion and desorption are thermally activated, so each site gets an Arrhenius rate
-`v * exp(-E / kT)` with the barrier built up from the local environment
+$\nu\, e^{-E / k_B T}$ with the barrier built up from the local environment
 ([`kmc.py`](src/mbe_rheed_sim/kmc.py)):
 
 | Event | Barrier |
 |---|---|
-| Diffusion | `E_diff + n_bonds * E_bond`, plus `E_step` when the hop goes down a step edge |
-| Desorption | `E_des + n_bonds * E_bond` |
+| Diffusion | $E_{\mathrm{diff}} + n_b E_b$, plus $E_{\mathrm{step}}$ when the hop goes down a step edge |
+| Desorption | $E_{\mathrm{des}} + n_b E_b$ |
 
-`n_bonds` is the number of same-height neighbours. An atom with many neighbours is harder to move
-or remove, which is what makes islands stable and edges grow. `E_step` is the extra cost of
+$n_b$ is the number of same-height neighbours. An atom with many neighbours is harder to move
+or remove, which is what makes islands stable and edges grow. $E_{\mathrm{step}}$ is the extra cost of
 hopping down an edge (the Ehrlich-Schwoebel barrier); raising it traps atoms on top of islands and
 produces mounds instead of flat layers.
 
@@ -154,9 +154,9 @@ drawn from. Only independent runs parallelise, which is why the batch workflows 
 
 ### The RHEED proxy
 
-`S_d` is the fraction of neighbour bonds whose two sites have different heights, so it measures
+$S_d$ is the fraction of neighbour bonds whose two sites have different heights, so it measures
 how much step edge the surface has ([`observables.py`](src/mbe_rheed_sim/observables.py)). The
-plotted signal is `1 - S_d`: high on a completed, flat layer, low when a layer is half filled and
+plotted signal is $1 - S_d$: high on a completed, flat layer, low when a layer is half filled and
 covered in island edges. One oscillation per monolayer follows from that, which is the same
 argument used for real specular RHEED intensity. It stays a morphology measure: no electron
 scattering enters it. The kinematic diffraction calculation below is a separate observable,
@@ -169,57 +169,59 @@ signals are different quantities.
 
 ### Where the interference is
 
-`1 - S_d` counts step edges and stops there. The reason a step-edge count tracks a measured
+$1 - S_d$ counts step edges and stops there. The reason a step-edge count tracks a measured
 intensity at all is interference, which is what the diffraction module below actually computes, so
 it is worth writing out once.
 
-The probe is a fast electron, so it arrives as a plane wave `exp(i k_i . r)` and, in the kinematic
-approximation, scatters once off each surface scatterer. The scattered amplitudes add with the
-phase of the position they came from, and the detector measures the squared modulus:
+The probe is a fast electron, so it arrives as a plane wave $e^{i\mathbf{k}_i \cdot \mathbf{r}}$
+and, in the kinematic approximation, scatters once off each surface scatterer. The scattered
+amplitudes add with the phase of the position they came from, and the detector measures the squared
+modulus:
 
-```text
-A(q) = sum_j f_j exp(-i q . R_j),    q = k_f - k_i,    I(q) = |A(q)|^2
-```
+$$
+A(\mathbf{q}) = \sum_j f_j\, e^{-i \mathbf{q} \cdot \mathbf{R}_j},
+\qquad \mathbf{q} = \mathbf{k}_f - \mathbf{k}_i,
+\qquad I(\mathbf{q}) = |A(\mathbf{q})|^2
+$$
 
-Squaring the sum is where the quantum mechanics enters. `|A|^2` is not a count of scatterers: it
-carries one cross term `2 f_i f_j cos(q . (R_i - R_j))` per pair, so the screen reports relative
-positions. Nothing else in this project uses the phases; `S_d` throws them away.
+Squaring the sum is where the quantum mechanics enters. $|A|^2$ is not a count of scatterers: it
+carries one cross term $2 f_i f_j \cos(\mathbf{q} \cdot (\mathbf{R}_i - \mathbf{R}_j))$ per pair,
+so the screen reports relative positions. Nothing else in this project uses the phases; $S_d$
+throws them away.
 
-On the specular `(00)` beam the in-plane part of `q` vanishes, `q = (0, 0, q_z)` with
-`q_z = 2 k sin(incidence)`, so every in-plane position drops out and only the column heights
-survive. That is why the specular trace is a *layer-occupancy* interferometer. For two terraces one
-monolayer `d` apart, covering fractions `1 - theta` and `theta` of the surface:
+On the specular $(00)$ beam the in-plane part of $\mathbf{q}$ vanishes,
+$\mathbf{q} = (0, 0, q_z)$ with $q_z = 2 k \sin\theta_{\mathrm{inc}}$, so every in-plane position
+drops out and only the column heights survive. That is why the specular trace is a
+*layer-occupancy* interferometer. For two terraces one monolayer $d$ apart, covering fractions
+$1 - \theta$ and $\theta$ of the surface:
 
-```text
-delta_phi = q_z d
-A         = A_1 + A_2 exp(-i delta_phi)
-I         = |A_1|^2 + |A_2|^2 + 2 A_1 A_2 cos(q_z d)
-```
+$$
+\Delta\phi = q_z d,
+\qquad A = A_1 + A_2 e^{-i \Delta\phi},
+\qquad I = |A_1|^2 + |A_2|^2 + 2 A_1 A_2 \cos(q_z d)
+$$
 
-That last term is the oscillation. At the **anti-phase** condition `q_z d = pi` (or any odd
-multiple) the cosine is `-1`, the two populations subtract, and normalizing on a flat surface
+That last term is the oscillation. At the **anti-phase** condition $q_z d = \pi$ (or any odd
+multiple) the cosine is $-1$, the two populations subtract, and normalizing on a flat surface
 leaves the closed form
 
-```text
-I_00(theta) = (1 - 2 theta)^2
-```
+$$
+I_{00}(\theta) = (1 - 2\theta)^2
+$$
 
 which is 1 on a closed layer, 0 at half coverage, and 1 again when the next layer closes: one
 oscillation per monolayer, with no morphology argument anywhere in it. At the **in-phase**
-condition `q_z d = 2 pi` the cosine is `+1`, filling a layer changes nothing, and the oscillation
+condition $q_z d = 2\pi$ the cosine is $+1$, filling a layer changes nothing, and the oscillation
 disappears - which is why the grazing angle is an experimental knob and why
 `antiphase_grazing_angle_deg` exists. Because KMC heights are integers, only the parity of
-`q_z d / pi` reaches the specular intensity: orders 1, 3, 5 give the same trace.
+$q_z d / \pi$ reaches the specular intensity: orders 1, 3, 5 give the same trace.
 
-`1 - S_d` is the classical shadow of that cosine. It is large when one height dominates and small
+$1 - S_d$ is the classical shadow of that cosine. It is large when one height dominates and small
 when two heights share the surface, so it follows the same flat -> mixed -> flat sequence for a
 geometric reason instead of an interference one - which is also why its amplitude is a different
-quantity from a measured intensity. Both come off the same height field:
-
-```text
-KMC height field  ->  1 - S_d                              morphology proxy, no wave
-                  ->  |sum_j f_j exp(-i q . R_j)|^2        kinematic interference
-```
+quantity from a measured intensity. Both come off the same height field: the morphology proxy
+$1 - S_d$ carries no wave, while $\left|\sum_j f_j e^{-i \mathbf{q} \cdot \mathbf{R}_j}\right|^2$
+is kinematic interference.
 
 The two-level formula above is only the illustrative case; `rheed.py` sums the real height
 distribution over the whole illuminated patch, which is what produces damping as the surface
@@ -231,12 +233,12 @@ Separately from the proxy, [`rheed.py`](src/mbe_rheed_sim/rheed.py) computes wha
 would actually collect, in the kinematic (single-scattering) approximation: each occupied column
 contributes one scatterer at the top of its stack, and the screen follows the exact Ewald
 construction of Liu, Chang and Zou (2022) rather than a flat-Ewald approximation. It gives the
-full angular screen, the specular `(00)` intensity against coverage, and which `(h, k)` rods are
+full angular screen, the specular $(00)$ intensity against coverage, and which $(h, k)$ rods are
 reachable at a given beam energy, grazing angle and azimuth. Dynamical (multiple) scattering is
 still not computed, so absolute intensities remain model quantities.
 
 The notebook paints the computed screen on the beam-geometry view, and the specular trace sits
-beside `1 - S_d` so the two observables can be compared. `make validate-rheed` checks the
+beside $1 - S_d$ so the two observables can be compared. `make validate-rheed` checks the
 geometry against analytic and published values with tolerances; `make rheed-visuals` is the
 picture companion, on surfaces whose answer is known.
 
@@ -469,7 +471,7 @@ display-only Stranski-Krastanov template in `data/reconstruction/`.
 `make digitize-figure3` re-extracts the reference curves from page 10 of the paper. It is the
 only command that needs a non-Python tool (`pdftocairo` from Poppler), and it is not part of
 setup, CI or normal reproduction. What it extracts are panel coordinates read off the figure, not
-raw experimental values, and they stay separate from the model's own `1-S_d`.
+raw experimental values, and they stay separate from the model's own $1 - S_d$.
 
 ## Execution details
 

@@ -135,7 +135,13 @@ def _(IMAGES, mo):
                     "Schematic RHEED patterns for smooth, rough/stepped, and 3D-island "
                     "surfaces (generic, not GaN/AlN-specific). "
                     '<a href="https://commons.wikimedia.org/wiki/File:RHEED_patterns_for_'
-                    'different_surfaces.png">EWEp, Wikimedia Commons, CC BY-SA 4.0</a>.'
+                    'different_surfaces.png">EWEp, Wikimedia Commons, CC BY-SA 4.0</a>. '
+                    "A GaN version of the same correspondence, which also covers the "
+                    "polycrystalline ring case, is in "
+                    '<a href="https://doi.org/10.18452/17409">Musolino, "Growth, fabrication, '
+                    'and investigation of light-emitting diodes based on GaN nanowires" '
+                    "(PhD thesis, 2016)</a> - linked rather than reproduced here, because that "
+                    "thesis is published in copyright."
                 ),
             ),
         ]
@@ -391,7 +397,11 @@ def _(
 def _(mo, simulation):
     # Deliberately keyed on the recorded run, not on whatever the cell above extended it into:
     # re-running this cell would rebuild the state at its last frame and jump the view there.
-    get_frame, set_frame = mo.state(len(simulation.snapshots) - 1, allow_self_loops=True)
+    # A non-flat substrate opens at frame 0 instead: its whole point is the surface you started
+    # from, and by the last frame the growth has buried it.
+    _last = len(simulation.snapshots) - 1
+    _opening_frame = _last if simulation.config.initial_surface == "flat" else 0
+    get_frame, set_frame = mo.state(_opening_frame, allow_self_loops=True)
     return get_frame, set_frame
 
 
@@ -716,7 +726,11 @@ def _(
 
 
 @app.cell
-def _(mo):
+def _(IMAGES, mo):
+    # Both credited figures are line art on transparent/white, so they need a light plate to
+    # stay readable when the notebook runs in dark mode. Capped and placed side by side, so the
+    # pair costs one figure's height instead of stacking two full-width ones.
+    _credit_panel = {"background": "#fff", "padding": "6px", "max-width": "380px"}
     mo.vstack(
         [
             # Sits here rather than in the playback cell above so it does not dim on every tick.
@@ -741,6 +755,79 @@ def _(mo):
                     "CC BY-SA 3.0.*"
                 ),
                 kind="info",
+            ),
+            mo.callout(
+                mo.vstack(
+                    [
+                        mo.md(
+                            "**The same construction, drawn for a grazing-incidence "
+                            "experiment.** These are GISAXS figures - x-rays off a grating, "
+                            "not electrons off a growing surface - but the geometry is the one "
+                            "`rheed.py` implements, and every angle in them is a variable in "
+                            "this notebook. In the first figure $\\mathbf{k}_i$ arrives at "
+                            "the grazing angle $\\alpha_i$ (`grazing_angle_deg`) and "
+                            "$\\mathbf{k}_f$ leaves at exit angle $\\alpha_f$ "
+                            "(`exit_angle_deg`) and in-plane deflection $\\theta_f$ "
+                            "(`deflection_deg`), while $\\varphi$ turns the sample about its "
+                            "own normal (`azimuth_deg`); the momentum transfer is "
+                            "$\\mathbf q=\\mathbf k_f-\\mathbf k_i$, exactly as above. "
+                            "The second figure is the reciprocal-space picture: because the "
+                            "scatterer is confined along the surface normal, its reciprocal "
+                            "lattice is a set of **rods**, and an order is observed where a rod "
+                            "cuts the Ewald sphere - the intersections falling on a circle is "
+                            "the same zeroth Laue zone `rod_orders()` solves for. Panel (b) is "
+                            "the finite-size case: a bounded scatterer broadens each rod into a "
+                            "sheet, so the intersections stretch into arcs instead of points. "
+                            "That is the same mechanism that gives the streaks here a finite "
+                            "width, set by `coherence_length_nm` rather than by a grating "
+                            "length. What does *not* carry over is the x-ray part: refraction "
+                            "at the surface, the critical angle and the Yoneda line have no "
+                            "counterpart in this model, and electrons scatter far more "
+                            "strongly, which is why real RHEED needs dynamical theory."
+                        ),
+                        mo.hstack(
+                            [
+                                mo.image(
+                                    IMAGES / "04_gisaxs_scattering_geometry.jpg",
+                                    alt=(
+                                        "Grazing-incidence scattering geometry: incident and exit "
+                                        "wavevectors, grazing angle, exit angle, in-plane deflection, "
+                                        "sample azimuth, and an area detector"
+                                    ),
+                                    width="100%",
+                                    rounded=True,
+                                    style=_credit_panel,
+                                    caption=(
+                                        "The geometry, with measured x-ray data on the detector "
+                                        "- not output of this notebook. Pflüger *et al.*, "
+                                        '<a href="https://doi.org/10.1107/S2052252517006297">'
+                                        "IUCrJ <b>4</b> (2017) 431-438</a>, Fig. 1, CC BY."
+                                    ),
+                                ),
+                                mo.image(
+                                    IMAGES / "05_ewald_sphere_rod_construction.jpg",
+                                    alt=(
+                                        "Ewald sphere cut by reciprocal-space rods: sharp rods give "
+                                        "point intersections, broadened rod sheets give arcs"
+                                    ),
+                                    width="100%",
+                                    rounded=True,
+                                    style=_credit_panel | {"max-width": "460px"},
+                                    caption=(
+                                        "Rods cutting the sphere give the orders (a); finite "
+                                        "size broadens rods into sheets and orders into arcs "
+                                        "(b). Same paper, Fig. 3, CC BY."
+                                    ),
+                                ),
+                            ],
+                            widths=[1.0, 1.2],
+                            gap=1,
+                            wrap=True,
+                            align="start",
+                        ),
+                    ]
+                ),
+                kind="neutral",
             ),
             mo.md(
                 "**The surface views.** The 3D height view uses array coordinates. "
@@ -773,7 +860,7 @@ def _(mo):
             mo.md(
                 "**The detector screen.** This is the detector image the surface above would "
                 "produce, built from the "
-                "exact Ewald construction: each `(h k)` reciprocal rod is intersected with "
+                "exact Ewald construction: each $(h,k)$ reciprocal rod is intersected with "
                 "the sphere $|\\mathbf{k}_f| = |\\mathbf{k}_i|$, and the crosses mark where "
                 "that intersection lands. **Only orders the geometry actually reaches are "
                 "drawn.** A rod exists only when $|\\mathbf{G}_{hk}| \\le k\\sin\\theta_i$, "
@@ -899,9 +986,7 @@ def _(
 
 @app.cell
 def _(ROOT, json):
-    figure3_data = json.loads(
-        (ROOT / "data/processed/figure3_simulated_reduced.json").read_text()
-    )
+    figure3_data = json.loads((ROOT / "data/processed/figure3_simulated_reduced.json").read_text())
     return (figure3_data,)
 
 
@@ -911,7 +996,9 @@ def _(figure3_data):
     # drift away from the data the figures below are drawn from.
     _comparisons = figure3_data["comparisons"]
     oscillatory_everywhere = all(
-        entry[signal]["is_oscillatory"] for entry in _comparisons for signal in ("reference", "simulation")
+        entry[signal]["is_oscillatory"]
+        for entry in _comparisons
+        for signal in ("reference", "simulation")
     )
     worst_period_gap_ml = max(
         abs(entry["simulation_minus_reference_period_ml"]) for entry in _comparisons
@@ -949,7 +1036,11 @@ def _(
             mo.callout(
                 mo.md(
                     "**Result.** "
-                    + ("Every reference and simulated trace oscillates. " if oscillatory_everywhere else "")
+                    + (
+                        "Every reference and simulated trace oscillates. "
+                        if oscillatory_everywhere
+                        else ""
+                    )
                     + f"Simulated oscillation periods sit within **{worst_period_gap_ml:.2f} ML** "
                     f"of the figure-derived periods and peak phases within "
                     f"**{worst_phase_gap_ml:.2f} ML**, so the model reproduces the *existence* "
@@ -966,7 +1057,7 @@ def _(
             figure3_figure,
             mo.md(
                 "The red curves are **figure-derived experimental RHEED panel coordinates**; "
-                "the blue curves are this model's raw morphology-derived `1-S_d` with a "
+                "the blue curves are this model's raw morphology-derived $1-S_d$ with a "
                 "three-seed standard-deviation band. They share time but intentionally use "
                 "separate panels and are not the same physical quantity."
             ),
@@ -1011,21 +1102,19 @@ def _(ASSETS, figure3_data, mo):
                 "paper's three Ga/N ratios, all from the same ensemble the comparison above "
                 "uses, so no extra simulation is involved.\n\n"
                 "At **0.50 ML** a layer is half filled, so the surface carries the most island "
-                "edge and `1-S_d` sits at its minimum. At **1.00 ML** that layer has closed "
+                "edge and $1-S_d$ sits at its minimum. At **1.00 ML** that layer has closed "
                 "and the surface smooths back out, which is the half of the cycle that puts "
                 "the oscillation there at all. Across the columns, the paper-derived Ga/N "
                 "conditions change the effective Ga flux and so how far the surface gets "
                 "from ideal layer-by-layer filling.\n\n"
                 "Colour is column height. The step-edge view of the same surface - each site "
                 "coloured by how many of its six neighbours sit at a different height, which "
-                "is the quantity `S_d` averages - is available live in section 2 for any "
+                "is the quantity $S_d$ averages - is available live in section 2 for any "
                 "surface you run there."
             ),
             mo.image(
                 ASSETS / "figure3_morphology_montage.png",
-                alt=(
-                    "Top-down height maps at 0.5 and 1.0 ML for Ga/N = 0.68, 0.82 and 0.89"
-                ),
+                alt=("Top-down height maps at 0.5 and 1.0 ML for Ga/N = 0.68, 0.82 and 0.89"),
                 width="100%",
                 rounded=True,
             ),
@@ -1115,7 +1204,9 @@ def _(SimulationConfig, get_sweep_selection, run):
 def _(figures, mo, np, selected_sweep_result, sweep_data, sweep_selection):
     sweep_figure = figures.sweep_panels(sweep_data, sweep_selection, selected_sweep_result)
     _row = int(
-        np.flatnonzero(np.asarray(sweep_data["temperatures_k"]) == sweep_selection["temperature_k"])[0]
+        np.flatnonzero(
+            np.asarray(sweep_data["temperatures_k"]) == sweep_selection["temperature_k"]
+        )[0]
     )
     _column = int(
         np.flatnonzero(np.asarray(sweep_data["fluxes_ml_s"]) == sweep_selection["flux_ml_s"])[0]
@@ -1197,7 +1288,7 @@ def _(
        simulated proxy does not ({min(simulated_damping):+.2f} to
        {max(simulated_damping):+.2f} per ML).
     5. **Finite size and the proxy definition delimit the claims.** Amplitude is not converged
-       through 64x64 and `1-S_d` is not a diffracted intensity, so neither absolute amplitudes
+       through 64x64 and $1-S_d$ is not a diffracted intensity, so neither absolute amplitudes
        nor damping should be read as physical predictions of this model.
     """)
     return

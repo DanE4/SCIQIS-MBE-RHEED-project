@@ -240,3 +240,7 @@ __marimo__/
 # scripts/build_reconstruction_frames.py; only the reduction is committed.
 /*.gif
 data/reconstruction/*.png
+
+# Downloaded source figures. The two CC BY ones are vendored into notebooks/public with
+# their credit lines; the thesis figure is in copyright, so this folder stays out of the repo.
+rheed_gisaxs_figures/
